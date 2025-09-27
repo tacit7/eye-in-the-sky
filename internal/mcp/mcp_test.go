@@ -188,8 +188,3 @@ func TestMCPServer(t *testing.T) {
 		t.Error("Expected error for unknown tool")
 	}
 }
-
-// Helper function
-func stringPtr(s string) *string {
-	return &s
-}

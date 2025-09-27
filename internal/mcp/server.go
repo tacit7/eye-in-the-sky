@@ -87,3 +87,29 @@ func (s *Server) HandleTool(toolName string, argsJSON []byte) (interface{}, erro
 		return nil, fmt.Errorf("unknown tool: %s", toolName)
 	}
 }
+
+// GetToolList returns a list of available MCP tools
+func (s *Server) GetToolList() []Tool {
+	return []Tool{
+		{
+			Name:        "register_agent",
+			Description: "Register a new Claude Code agent",
+		},
+		{
+			Name:        "update_status",
+			Description: "Update agent status and current task",
+		},
+		{
+			Name:        "log_action",
+			Description: "Log agent activities",
+		},
+		{
+			Name:        "log_commits",
+			Description: "Track git commits",
+		},
+		{
+			Name:        "end_session",
+			Description: "Complete agent session",
+		},
+	}
+}

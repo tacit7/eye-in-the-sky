@@ -128,3 +128,149 @@ func (db *DB) EndAgentSession(agentID, summary string, finalStatus string) error
 
 	return nil
 }
+
+// GetActionsForAgent retrieves all actions for a specific agent
+func (db *DB) GetActionsForAgent(agentID string, limit int) ([]*Action, error) {
+	query := `
+		SELECT id, agent_id, timestamp, action_type, description, details
+		FROM actions
+		WHERE agent_id = ?
+		ORDER BY timestamp DESC
+		LIMIT ?
+	`
+
+	rows, err := db.conn.Query(query, agentID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get actions: %w", err)
+	}
+	defer rows.Close()
+
+	var actions []*Action
+	for rows.Next() {
+		var action Action
+		err := rows.Scan(
+			&action.ID,
+			&action.AgentID,
+			&action.Timestamp,
+			&action.ActionType,
+			&action.Description,
+			&action.Details,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan action: %w", err)
+		}
+		actions = append(actions, &action)
+	}
+
+	return actions, nil
+}
+
+// GetCommitsForAgent retrieves all commits for a specific agent
+func (db *DB) GetCommitsForAgent(agentID string) ([]*Commit, error) {
+	query := `
+		SELECT id, agent_id, commit_hash, commit_message, timestamp
+		FROM commits
+		WHERE agent_id = ?
+		ORDER BY timestamp DESC
+	`
+
+	rows, err := db.conn.Query(query, agentID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get commits: %w", err)
+	}
+	defer rows.Close()
+
+	var commits []*Commit
+	for rows.Next() {
+		var commit Commit
+		err := rows.Scan(
+			&commit.ID,
+			&commit.AgentID,
+			&commit.CommitHash,
+			&commit.CommitMessage,
+			&commit.Timestamp,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan commit: %w", err)
+		}
+		commits = append(commits, &commit)
+	}
+
+	return commits, nil
+}
+
+// GetAgentStats returns basic statistics about agents
+func (db *DB) GetAgentStats() (map[string]int, error) {
+	query := `
+		SELECT status, COUNT(*) as count
+		FROM agents
+		GROUP BY status
+	`
+
+	rows, err := db.conn.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get agent stats: %w", err)
+	}
+	defer rows.Close()
+
+	stats := make(map[string]int)
+	for rows.Next() {
+		var status string
+		var count int
+		err := rows.Scan(&status, &count)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan stats: %w", err)
+		}
+		stats[status] = count
+	}
+
+	return stats, nil
+}
+
+// ListAgents retrieves all agents, optionally filtered by status
+func (db *DB) ListAgents(status string) ([]*Agent, error) {
+	var query string
+	var args []interface{}
+
+	if status != "" {
+		query = `
+			SELECT id, status, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at
+			FROM agents WHERE status = ?
+			ORDER BY updated_at DESC
+		`
+		args = append(args, status)
+	} else {
+		query = `
+			SELECT id, status, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at
+			FROM agents
+			ORDER BY updated_at DESC
+		`
+	}
+
+	rows, err := db.conn.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list agents: %w", err)
+	}
+	defer rows.Close()
+
+	var agents []*Agent
+	for rows.Next() {
+		var agent Agent
+		err := rows.Scan(
+			&agent.ID,
+			&agent.Status,
+			&agent.CreatedAt,
+			&agent.UpdatedAt,
+			&agent.GitWorktreePath,
+			&agent.FeatureDescription,
+			&agent.CurrentTask,
+			&agent.LastActivityAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan agent: %w", err)
+		}
+		agents = append(agents, &agent)
+	}
+
+	return agents, nil
+}

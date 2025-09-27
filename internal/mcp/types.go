@@ -60,3 +60,9 @@ type EndSessionResult struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`
 }
+
+// Tool represents an MCP tool descriptor
+type Tool struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}

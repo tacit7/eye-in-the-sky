@@ -24,7 +24,7 @@ func TestDatabase(t *testing.T) {
 
 	// Test agent operations
 	testAgent := &Agent{
-		ID:                 "test123",
+		ID:                 "test123a",
 		Status:             StatusActive,
 		GitWorktreePath:    stringPtr("/path/to/worktree"),
 		FeatureDescription: stringPtr("Test feature"),
@@ -38,23 +38,23 @@ func TestDatabase(t *testing.T) {
 	}
 
 	// Get agent
-	retrieved, err := db.GetAgent("test123")
+	retrieved, err := db.GetAgent("test123a")
 	if err != nil {
 		t.Fatalf("Failed to get agent: %v", err)
 	}
 
-	if retrieved.ID != "test123" || retrieved.Status != StatusActive {
+	if retrieved.ID != "test123a" || retrieved.Status != StatusActive {
 		t.Errorf("Agent data mismatch: %+v", retrieved)
 	}
 
 	// Update agent status
-	if err := db.UpdateAgentStatus("test123", StatusWorking, stringPtr("New task")); err != nil {
+	if err := db.UpdateAgentStatus("test123a", StatusWorking, stringPtr("New task")); err != nil {
 		t.Fatalf("Failed to update agent status: %v", err)
 	}
 
 	// Test action operations
 	testAction := &Action{
-		AgentID:     "test123",
+		AgentID:     "test123a",
 		ActionType:  ActionTaskStart,
 		Description: "Started testing",
 		Details:     stringPtr(`{"test": true}`),
@@ -65,7 +65,7 @@ func TestDatabase(t *testing.T) {
 	}
 
 	// Get actions
-	actions, err := db.GetActionsForAgent("test123", 10)
+	actions, err := db.GetActionsForAgent("test123a", 10)
 	if err != nil {
 		t.Fatalf("Failed to get actions: %v", err)
 	}
@@ -78,12 +78,12 @@ func TestDatabase(t *testing.T) {
 	commitHashes := []string{"abc123", "def456"}
 	commitMessages := []string{"First commit", "Second commit"}
 
-	if err := db.CreateCommits("test123", commitHashes, commitMessages); err != nil {
+	if err := db.CreateCommits("test123a", commitHashes, commitMessages); err != nil {
 		t.Fatalf("Failed to create commits: %v", err)
 	}
 
 	// Get commits
-	commits, err := db.GetCommitsForAgent("test123")
+	commits, err := db.GetCommitsForAgent("test123a")
 	if err != nil {
 		t.Fatalf("Failed to get commits: %v", err)
 	}
@@ -93,12 +93,12 @@ func TestDatabase(t *testing.T) {
 	}
 
 	// Test session end
-	if err := db.EndAgentSession("test123", "Test completed", StatusCompleted); err != nil {
+	if err := db.EndAgentSession("test123a", "Test completed", StatusCompleted); err != nil {
 		t.Fatalf("Failed to end session: %v", err)
 	}
 
 	// Verify agent status updated
-	final, err := db.GetAgent("test123")
+	final, err := db.GetAgent("test123a")
 	if err != nil {
 		t.Fatalf("Failed to get final agent: %v", err)
 	}
@@ -116,13 +116,4 @@ func TestDatabase(t *testing.T) {
 	if stats[StatusCompleted] != 1 {
 		t.Errorf("Expected 1 completed agent, got %d", stats[StatusCompleted])
 	}
-}
-
-// Helper functions for pointer creation
-func stringPtr(s string) *string {
-	return &s
-}
-
-func timePtr(t time.Time) *time.Time {
-	return &t
 }
