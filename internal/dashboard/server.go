@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/urielmaldonado/eye-in-the-sky/internal/database"
 	"github.com/urielmaldonado/eye-in-the-sky/internal/window"
 )
 
@@ -17,6 +18,7 @@ type Server struct {
 	templates     *template.Template
 	port          string
 	windowManager *window.Manager
+	db            *database.DB
 }
 
 // Agent represents an agent for template rendering
@@ -48,10 +50,11 @@ type DashboardStats struct {
 }
 
 // NewServer creates a new dashboard server
-func NewServer(port string) *Server {
+func NewServer(port string, db *database.DB) *Server {
 	return &Server{
 		port:          port,
 		windowManager: window.NewManager(),
+		db:            db,
 	}
 }
 
@@ -99,50 +102,40 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Mock data for now - this will be replaced with actual database queries
-	mockAgents := []Agent{
-		{
-			ID:                     "a3f7d2e1",
-			Status:                 "active",
-			WorktreePath:          "/Users/dev/project1",
-			FeatureDescription:    "User authentication system",
-			CurrentTask:           "Implementing JWT token validation",
-			LastActivityAt:        time.Now().Add(-10 * time.Minute),
-			LastActivityFormatted: "10m ago",
-			StatusIcon:            "circle-fill",
-		},
-		{
-			ID:                     "b8c9e4f2",
-			Status:                 "working",
-			WorktreePath:          "/Users/dev/project2",
-			FeatureDescription:    "API endpoint development",
-			CurrentTask:           "Creating user registration endpoint",
-			LastActivityAt:        time.Now().Add(-5 * time.Minute),
-			LastActivityFormatted: "5m ago",
-			StatusIcon:            "play-circle-fill",
-		},
-		{
-			ID:                     "c1d5a7b3",
-			Status:                 "idle",
-			WorktreePath:          "/Users/dev/project3",
-			FeatureDescription:    "Frontend component library",
-			CurrentTask:           "",
-			LastActivityAt:        time.Now().Add(-2 * time.Hour),
-			LastActivityFormatted: "2h ago",
-			StatusIcon:            "pause-circle-fill",
-		},
+	// Get all agents from database
+	dbAgents, err := s.db.ListAgents("")
+	if err != nil {
+		log.Printf("Error fetching agents: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	// Convert database agents to dashboard agents
+	var agents []Agent
+	for _, dbAgent := range dbAgents {
+		agent := Agent{
+			ID:                     dbAgent.ID,
+			Status:                 dbAgent.Status,
+			WorktreePath:          getStringValue(dbAgent.GitWorktreePath),
+			FeatureDescription:    getStringValue(dbAgent.FeatureDescription),
+			CurrentTask:           getStringValue(dbAgent.CurrentTask),
+			LastActivityAt:        getTimeValue(dbAgent.LastActivityAt, dbAgent.UpdatedAt),
+			LastActivityFormatted: formatTimeAgo(getTimeValue(dbAgent.LastActivityAt, dbAgent.UpdatedAt)),
+			StatusIcon:            getStatusIcon(dbAgent.Status),
+		}
+		agents = append(agents, agent)
 	}
 
 	data := DashboardData{
 		Title:  "Agent Dashboard",
-		Agents: mockAgents,
+		Agents: agents,
 		Stats: DashboardStats{
-			TotalActive:   len(mockAgents),
-			TotalToday:    5,
-			AvgDuration:   "2h 15m",
-			InactiveCount: 1,
+			TotalActive:   len(agents), // TODO: Calculate actual stats
+			TotalToday:    len(agents),
+			AvgDuration:   "N/A",
+			InactiveCount: 0,
 		},
-		RecentlyCompleted: []Agent{},
+		RecentlyCompleted: []Agent{}, // TODO: Get completed agents
 	}
 
 	if err := s.templates.ExecuteTemplate(w, "base.html", data); err != nil {
@@ -388,4 +381,58 @@ func (s *Server) handleListWindows(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(resp)
+}
+
+// Helper functions for converting database values
+
+// getStringValue safely gets string value from pointer
+func getStringValue(ptr *string) string {
+	if ptr == nil {
+		return ""
+	}
+	return *ptr
+}
+
+// getTimeValue safely gets time value from pointer, with fallback
+func getTimeValue(ptr *time.Time, fallback time.Time) time.Time {
+	if ptr == nil {
+		return fallback
+	}
+	return *ptr
+}
+
+// formatTimeAgo formats a time as "X ago" format
+func formatTimeAgo(t time.Time) string {
+	duration := time.Since(t)
+
+	if duration.Hours() >= 24 {
+		days := int(duration.Hours() / 24)
+		return fmt.Sprintf("%dd ago", days)
+	} else if duration.Hours() >= 1 {
+		hours := int(duration.Hours())
+		return fmt.Sprintf("%dh ago", hours)
+	} else if duration.Minutes() >= 1 {
+		minutes := int(duration.Minutes())
+		return fmt.Sprintf("%dm ago", minutes)
+	} else {
+		return "just now"
+	}
+}
+
+// getStatusIcon returns the appropriate Bootstrap icon for an agent status
+func getStatusIcon(status string) string {
+	switch status {
+	case database.StatusActive:
+		return "circle-fill"
+	case database.StatusWorking:
+		return "play-circle-fill"
+	case database.StatusIdle:
+		return "pause-circle-fill"
+	case database.StatusCompleted:
+		return "check-circle-fill"
+	case database.StatusFailed:
+		return "x-circle-fill"
+	default:
+		return "question-circle-fill"
+	}
 }

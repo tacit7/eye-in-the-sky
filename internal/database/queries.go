@@ -128,3 +128,51 @@ func (db *DB) EndAgentSession(agentID, summary string, finalStatus string) error
 
 	return nil
 }
+
+// ListAgents retrieves all agents, optionally filtered by status
+func (db *DB) ListAgents(status string) ([]*Agent, error) {
+	var query string
+	var args []interface{}
+
+	if status != "" {
+		query = `
+			SELECT id, status, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at
+			FROM agents WHERE status = ?
+			ORDER BY updated_at DESC
+		`
+		args = append(args, status)
+	} else {
+		query = `
+			SELECT id, status, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at
+			FROM agents
+			ORDER BY updated_at DESC
+		`
+	}
+
+	rows, err := db.conn.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list agents: %w", err)
+	}
+	defer rows.Close()
+
+	var agents []*Agent
+	for rows.Next() {
+		var agent Agent
+		err := rows.Scan(
+			&agent.ID,
+			&agent.Status,
+			&agent.CreatedAt,
+			&agent.UpdatedAt,
+			&agent.GitWorktreePath,
+			&agent.FeatureDescription,
+			&agent.CurrentTask,
+			&agent.LastActivityAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan agent: %w", err)
+		}
+		agents = append(agents, &agent)
+	}
+
+	return agents, nil
+}
