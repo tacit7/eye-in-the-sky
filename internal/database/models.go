@@ -1,8 +1,6 @@
 package database
 
-import (
-	"time"
-)
+import "time"
 
 // Agent represents a Claude Code instance
 type Agent struct {
