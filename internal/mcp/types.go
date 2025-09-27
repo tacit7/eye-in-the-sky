@@ -61,8 +61,33 @@ type EndSessionResult struct {
 	Message string `json:"message"`
 }
 
+// SyncCommitsArgs represents the arguments for sync_commits tool
+type SyncCommitsArgs struct {
+	AgentID string `json:"agent_id"`
+	Count   *int   `json:"count,omitempty"` // Number of recent commits to sync (default: 5)
+}
+
+type SyncCommitsResult struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
 // Tool represents an MCP tool descriptor
 type Tool struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
+	Name        string            `json:"name"`
+	Description string            `json:"description"`
+	Instructions string           `json:"instructions,omitempty"`
+	Parameters  map[string]string `json:"parameters,omitempty"`
+	Examples    []string          `json:"examples,omitempty"`
+}
+
+// HelpArgs represents the arguments for help tool
+type HelpArgs struct {
+	Tool *string `json:"tool,omitempty"`
+}
+
+type HelpResult struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+	Tools   []Tool `json:"tools,omitempty"`
 }

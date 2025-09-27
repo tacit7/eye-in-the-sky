@@ -37,6 +37,12 @@ func (s *Server) Start(ctx context.Context) error {
 	log.Println("  - log_action: Log agent activities")
 	log.Println("  - log_commits: Track git commits")
 	log.Println("  - end_session: Complete agent session")
+	log.Println("  - help: Get detailed help and usage instructions")
+	log.Println("")
+	log.Println("💡 Use the 'help' tool for detailed instructions:")
+	log.Println("   - Get all help: {}")
+	log.Println("   - Specific tool: {\"tool\": \"register_agent\"}")
+	log.Println("📊 Dashboard available at: http://localhost:8080")
 
 	// Keep running until context is cancelled
 	<-ctx.Done()
@@ -76,6 +82,13 @@ func (s *Server) HandleTool(toolName string, argsJSON []byte) (interface{}, erro
 		}
 		return s.tools.LogCommits(args)
 
+	case "sync_commits":
+		var args SyncCommitsArgs
+		if err := json.Unmarshal(argsJSON, &args); err != nil {
+			return nil, fmt.Errorf("invalid arguments for sync_commits: %w", err)
+		}
+		return s.tools.SyncCommits(args)
+
 	case "end_session":
 		var args EndSessionArgs
 		if err := json.Unmarshal(argsJSON, &args); err != nil {
@@ -83,12 +96,19 @@ func (s *Server) HandleTool(toolName string, argsJSON []byte) (interface{}, erro
 		}
 		return s.tools.EndSession(args)
 
+	case "help":
+		var args HelpArgs
+		if err := json.Unmarshal(argsJSON, &args); err != nil {
+			return nil, fmt.Errorf("invalid arguments for help: %w", err)
+		}
+		return s.tools.Help(args)
+
 	default:
 		return nil, fmt.Errorf("unknown tool: %s", toolName)
 	}
 }
 
-// GetToolList returns a list of available MCP tools
+// GetToolList returns a list of available MCP tools with basic info
 func (s *Server) GetToolList() []Tool {
 	return []Tool{
 		{
@@ -111,5 +131,14 @@ func (s *Server) GetToolList() []Tool {
 			Name:        "end_session",
 			Description: "Complete agent session",
 		},
+		{
+			Name:        "help",
+			Description: "Get detailed help and usage instructions",
+		},
 	}
+}
+
+// GetDetailedToolList returns tools with comprehensive documentation
+func (s *Server) GetDetailedToolList() []Tool {
+	return s.tools.getAllToolsWithHelp()
 }
