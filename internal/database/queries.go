@@ -129,7 +129,7 @@ func (db *DB) EndAgentSession(agentID, summary string, finalStatus string) error
 	return nil
 }
 
-// GetActionsForAgent retrieves all actions for a specific agent
+// GetActionsForAgent retrieves all actions for a specific agent with limit
 func (db *DB) GetActionsForAgent(agentID string, limit int) ([]*Action, error) {
 	query := `
 		SELECT id, agent_id, timestamp, action_type, description, details
@@ -226,7 +226,6 @@ func (db *DB) GetAgentStats() (map[string]int, error) {
 
 	return stats, nil
 }
-
 // ListAgents retrieves all agents, optionally filtered by status
 func (db *DB) ListAgents(status string) ([]*Agent, error) {
 	var query string
@@ -273,4 +272,71 @@ func (db *DB) ListAgents(status string) ([]*Agent, error) {
 	}
 
 	return agents, nil
+}
+
+// ListActions retrieves all actions for a specific agent
+func (db *DB) ListActions(agentID string) ([]*Action, error) {
+	query := `
+		SELECT id, agent_id, action_type, description, details, created_at
+		FROM actions
+		WHERE agent_id = ?
+		ORDER BY created_at DESC
+	`
+	rows, err := db.conn.Query(query, agentID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list actions: %w", err)
+	}
+	defer rows.Close()
+
+	var actions []*Action
+	for rows.Next() {
+		var action Action
+		err := rows.Scan(
+			&action.ID,
+			&action.AgentID,
+			&action.ActionType,
+			&action.Description,
+			&action.Details,
+			&action.Timestamp,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan action: %w", err)
+		}
+		actions = append(actions, &action)
+	}
+
+	return actions, nil
+}
+
+// ListCommits retrieves all commits for a specific agent
+func (db *DB) ListCommits(agentID string) ([]*Commit, error) {
+	query := `
+		SELECT id, agent_id, commit_hash, commit_message, created_at
+		FROM commits
+		WHERE agent_id = ?
+		ORDER BY created_at DESC
+	`
+	rows, err := db.conn.Query(query, agentID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list commits: %w", err)
+	}
+	defer rows.Close()
+
+	var commits []*Commit
+	for rows.Next() {
+		var commit Commit
+		err := rows.Scan(
+			&commit.ID,
+			&commit.AgentID,
+			&commit.CommitHash,
+			&commit.CommitMessage,
+			&commit.Timestamp,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan commit: %w", err)
+		}
+		commits = append(commits, &commit)
+	}
+
+	return commits, nil
 }

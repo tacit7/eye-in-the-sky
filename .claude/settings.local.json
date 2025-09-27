@@ -1,9 +1,13 @@
 {
   "permissions": {
     "allow": [
+      "Bash(lsof:*)",
+      "WebSearch",
+      "Bash(go mod:*)",
       "Bash(gh repo list:*)",
       "Bash(git rm:*)",
-      "Bash(./scripts/build.sh:*)"
+      "Bash(./scripts/build.sh:*)",
+      "Bash(sqlite3:*)"
     ],
     "deny": [],
     "ask": []
