@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(gh repo list:*)"
+      "Bash(gh repo list:*)",
+      "Bash(git rm:*)",
+      "Bash(./scripts/build.sh:*)"
     ],
     "deny": [],
     "ask": []

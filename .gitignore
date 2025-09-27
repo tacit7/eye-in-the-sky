@@ -27,6 +27,14 @@ go.work.sum
 # env file
 .env
 
+# Database files
+data/
+*.db
+*.sqlite
+
+# Build artifacts
+bin/
+
 # Editor/IDE
 # .idea/
 # .vscode/

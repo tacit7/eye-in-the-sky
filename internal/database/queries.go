@@ -21,6 +21,10 @@ func (db *DB) CreateAgent(agent *Agent) error {
 
 // GetAgent retrieves an agent by ID
 func (db *DB) GetAgent(id string) (*Agent, error) {
+	if len(id) != 8 {
+		return nil, NewValidationError("agent_id", id, ErrInvalidAgentID)
+	}
+
 	query := `
 		SELECT id, status, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at
 		FROM agents WHERE id = ?
@@ -31,9 +35,9 @@ func (db *DB) GetAgent(id string) (*Agent, error) {
 		&agent.GitWorktreePath, &agent.FeatureDescription, &agent.CurrentTask, &agent.LastActivityAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("agent not found: %s", id)
+			return nil, NewAgentError(id, "get", ErrAgentNotFound)
 		}
-		return nil, fmt.Errorf("failed to get agent: %w", err)
+		return nil, NewAgentError(id, "get", err)
 	}
 	return &agent, nil
 }
@@ -41,7 +45,7 @@ func (db *DB) GetAgent(id string) (*Agent, error) {
 // UpdateAgentStatus updates an agent's status
 func (db *DB) UpdateAgentStatus(id, status string, currentTask *string) error {
 	query := `
-		UPDATE agents SET status = ?, current_task = ?, updated_at = CURRENT_TIMESTAMP, last_activity_at = CURRENT_TIMESTAMP
+		UPDATE agents SET status = ?, current_task = ?, last_activity_at = CURRENT_TIMESTAMP
 		WHERE id = ?
 	`
 	result, err := db.conn.Exec(query, status, currentTask, id)
@@ -116,7 +120,7 @@ func (db *DB) EndAgentSession(agentID, summary string, finalStatus string) error
 		status = StatusCompleted
 	}
 
-	query := `UPDATE agents SET status = ?, updated_at = CURRENT_TIMESTAMP, last_activity_at = CURRENT_TIMESTAMP WHERE id = ?`
+	query := `UPDATE agents SET status = ?, last_activity_at = CURRENT_TIMESTAMP WHERE id = ?`
 	_, err := db.conn.Exec(query, status, agentID)
 	if err != nil {
 		return fmt.Errorf("failed to update agent status: %w", err)

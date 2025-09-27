@@ -42,16 +42,8 @@ func (db *DB) Close() error {
 }
 
 func (db *DB) initSchema() error {
-	schemaBytes, err := schemaSQL.ReadFile("schema.sql")
-	if err != nil {
-		return fmt.Errorf("failed to read schema file: %w", err)
-	}
-
-	if _, err := db.conn.Exec(string(schemaBytes)); err != nil {
-		return fmt.Errorf("failed to execute schema: %w", err)
-	}
-
-	return nil
+	// Use migrations instead of embedded schema
+	return db.RunMigrations()
 }
 
 func (db *DB) Health() error {

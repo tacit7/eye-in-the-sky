@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -27,7 +28,7 @@ func (t *Tools) RegisterAgent(args RegisterAgentArgs) (RegisterAgentResult, erro
 		return RegisterAgentResult{Success: false, Message: fmt.Sprintf("Agent %s already exists", args.AgentID)}, nil
 	}
 
-	// Create new agent
+	// Create new agent and log registration action atomically
 	agent := &database.Agent{
 		ID:                 args.AgentID,
 		Status:             database.StatusActive,
@@ -36,19 +37,14 @@ func (t *Tools) RegisterAgent(args RegisterAgentArgs) (RegisterAgentResult, erro
 		LastActivityAt:     timePtr(time.Now()),
 	}
 
-	if err := t.db.CreateAgent(agent); err != nil {
-		return RegisterAgentResult{Success: false, Message: fmt.Sprintf("Failed to register agent: %v", err)}, fmt.Errorf("database error: %w", err)
-	}
-
-	// Log registration action
 	action := &database.Action{
 		AgentID:     args.AgentID,
 		ActionType:  database.ActionStatusUpdate,
 		Description: fmt.Sprintf("Agent registered: %s", args.Description),
 	}
 
-	if err := t.db.CreateAction(action); err != nil {
-		fmt.Printf("Warning: Failed to log registration action: %v\n", err)
+	if err := t.db.RegisterAgentWithAction(context.Background(), agent, action); err != nil {
+		return RegisterAgentResult{Success: false, Message: fmt.Sprintf("Failed to register agent: %v", err)}, fmt.Errorf("database error: %w", err)
 	}
 
 	return RegisterAgentResult{Success: true, Message: fmt.Sprintf("Agent %s registered successfully", args.AgentID)}, nil
@@ -65,7 +61,19 @@ func (t *Tools) UpdateStatus(args UpdateStatusArgs) (UpdateStatusResult, error) 
 		return UpdateStatusResult{Success: false, Message: fmt.Sprintf("Invalid status: %s", args.Status)}, nil
 	}
 
-	if err := t.db.UpdateAgentStatus(args.AgentID, args.Status, args.CurrentTask); err != nil {
+	// Update status and log action atomically
+	description := fmt.Sprintf("Status updated to: %s", args.Status)
+	if args.CurrentTask != nil {
+		description += fmt.Sprintf(" (Task: %s)", *args.CurrentTask)
+	}
+
+	action := &database.Action{
+		AgentID:     args.AgentID,
+		ActionType:  database.ActionStatusUpdate,
+		Description: description,
+	}
+
+	if err := t.db.UpdateStatusWithAction(context.Background(), args.AgentID, args.Status, args.CurrentTask, action); err != nil {
 		return UpdateStatusResult{Success: false, Message: fmt.Sprintf("Failed to update status: %v", err)}, nil
 	}
 
@@ -103,7 +111,12 @@ func (t *Tools) LogCommits(args LogCommitsArgs) (LogCommitsResult, error) {
 		return LogCommitsResult{Success: false, Message: "No commit hashes provided"}, nil
 	}
 
-	if err := t.db.CreateCommits(args.AgentID, args.CommitHashes, args.CommitMessages); err != nil {
+	// Use transaction-safe method
+	err := t.db.WithTransaction(context.Background(), func(tx *database.Tx) error {
+		return tx.CreateCommitsTx(args.AgentID, args.CommitHashes, args.CommitMessages)
+	})
+
+	if err != nil {
 		return LogCommitsResult{Success: false, Message: fmt.Sprintf("Failed to log commits: %v", err)}, nil
 	}
 
