@@ -3,7 +3,10 @@
     "allow": [
       "Bash(lsof:*)",
       "WebSearch",
-      "Bash(go mod:*)"
+      "Bash(go mod:*)",
+      "Bash(gh repo list:*)",
+      "Bash(git rm:*)",
+      "Bash(./scripts/build.sh:*)"
     ],
     "deny": [],
     "ask": []
