@@ -9,8 +9,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/urielmaldonado/eye-in-the-sky/internal/database"
-	"github.com/urielmaldonado/eye-in-the-sky/internal/window"
+	"github.com/tacit7/eye-in-the-sky/internal/database"
+	"github.com/tacit7/eye-in-the-sky/internal/mcp"
+	"github.com/tacit7/eye-in-the-sky/internal/window"
 )
 
 // Server represents the dashboard HTTP server
@@ -19,6 +20,7 @@ type Server struct {
 	port          string
 	windowManager *window.Manager
 	db            *database.DB
+	mcpServer     *mcp.Server
 }
 
 // Agent represents an agent for template rendering
@@ -55,6 +57,7 @@ func NewServer(port string, db *database.DB) *Server {
 		port:          port,
 		windowManager: window.NewManager(),
 		db:            db,
+		mcpServer:     mcp.NewServer(db),
 	}
 }
 
@@ -85,6 +88,9 @@ func (s *Server) Start() error {
 
 	// API routes for AJAX calls
 	http.HandleFunc("/api/agents/", s.handleAPIAgents)
+
+	// MCP tool API routes
+	http.HandleFunc("/api/mcp/tools/", s.handleMCPTools)
 
 	// Window management API routes
 	http.HandleFunc("/api/window/get-id", s.handleGetWindowID)
@@ -154,19 +160,27 @@ func (s *Server) handleAgentDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Mock agent data - this will be replaced with actual database queries
-	mockAgent := Agent{
-		ID:                     agentID,
-		Status:                 "active",
-		WorktreePath:          "/Users/dev/project1",
-		FeatureDescription:    "User authentication system",
-		CurrentTask:           "Implementing JWT token validation",
-		LastActivityAt:        time.Now().Add(-10 * time.Minute),
-		LastActivityFormatted: "10m ago",
-		StatusIcon:            "circle-fill",
+	// Get agent from database
+	dbAgent, err := s.db.GetAgent(agentID)
+	if err != nil {
+		log.Printf("Error fetching agent %s: %v", agentID, err)
+		http.NotFound(w, r)
+		return
 	}
 
-	// Mock action data
+	// Convert database agent to dashboard agent
+	agent := Agent{
+		ID:                     dbAgent.ID,
+		Status:                 dbAgent.Status,
+		WorktreePath:          getStringValue(dbAgent.GitWorktreePath),
+		FeatureDescription:    getStringValue(dbAgent.FeatureDescription),
+		CurrentTask:           getStringValue(dbAgent.CurrentTask),
+		LastActivityAt:        getTimeValue(dbAgent.LastActivityAt, dbAgent.UpdatedAt),
+		LastActivityFormatted: formatTimeAgo(getTimeValue(dbAgent.LastActivityAt, dbAgent.UpdatedAt)),
+		StatusIcon:            getStatusIcon(dbAgent.Status),
+	}
+
+	// Get actions from database
 	type Action struct {
 		Description        string
 		ActionType         string
@@ -176,50 +190,46 @@ func (s *Server) handleAgentDetail(w http.ResponseWriter, r *http.Request) {
 		Details            string
 	}
 
-	mockActions := []Action{
-		{
-			Description:        "Started working on JWT token validation",
-			ActionType:         "task_start",
-			TimestampFormatted: "10m ago",
-			TypeIcon:          "play-fill",
-			TypeColor:         "primary",
-			Details:           "Beginning implementation of token validation middleware",
-		},
-		{
-			Description:        "Created auth middleware file",
-			ActionType:         "file_operation",
-			TimestampFormatted: "8m ago",
-			TypeIcon:          "file-earmark-plus",
-			TypeColor:         "success",
-			Details:           "Created middleware/auth.go",
-		},
-		{
-			Description:        "Updated status to active",
-			ActionType:         "status_update",
-			TimestampFormatted: "15m ago",
-			TypeIcon:          "arrow-clockwise",
-			TypeColor:         "info",
-		},
+	dbActions, err := s.db.ListActions(agentID)
+	if err != nil {
+		log.Printf("Error fetching actions for agent %s: %v", agentID, err)
+		// Continue with empty actions rather than failing
 	}
 
-	// Mock commit data
+	var actions []Action
+	for _, dbAction := range dbActions {
+		action := Action{
+			Description:        dbAction.Description,
+			ActionType:         dbAction.ActionType,
+			TimestampFormatted: formatTimeAgo(dbAction.Timestamp),
+			TypeIcon:          getActionTypeIcon(dbAction.ActionType),
+			TypeColor:         getActionTypeColor(dbAction.ActionType),
+			Details:           getStringValue(dbAction.Details),
+		}
+		actions = append(actions, action)
+	}
+
+	// Get commits from database
 	type Commit struct {
 		Hash               string
 		Message            string
 		TimestampFormatted string
 	}
 
-	mockCommits := []Commit{
-		{
-			Hash:               "a3f7d2e1",
-			Message:            "Add JWT token validation middleware",
-			TimestampFormatted: "12m ago",
-		},
-		{
-			Hash:               "b8c9e4f2",
-			Message:            "Update authentication routes",
-			TimestampFormatted: "25m ago",
-		},
+	dbCommits, err := s.db.ListCommits(agentID)
+	if err != nil {
+		log.Printf("Error fetching commits for agent %s: %v", agentID, err)
+		// Continue with empty commits rather than failing
+	}
+
+	var commits []Commit
+	for _, dbCommit := range dbCommits {
+		commit := Commit{
+			Hash:               dbCommit.CommitHash,
+			Message:            getStringValue(dbCommit.CommitMessage),
+			TimestampFormatted: formatTimeAgo(dbCommit.Timestamp),
+		}
+		commits = append(commits, commit)
 	}
 
 	data := struct {
@@ -229,9 +239,9 @@ func (s *Server) handleAgentDetail(w http.ResponseWriter, r *http.Request) {
 		Commits []Commit
 	}{
 		Title:   "Agent Detail",
-		Agent:   mockAgent,
-		Actions: mockActions,
-		Commits: mockCommits,
+		Agent:   agent,
+		Actions: actions,
+		Commits: commits,
 	}
 
 	if err := s.templates.ExecuteTemplate(w, "base.html", data); err != nil {
@@ -383,6 +393,48 @@ func (s *Server) handleListWindows(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
+// handleMCPTools handles MCP tool calls via the dashboard
+func (s *Server) handleMCPTools(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Extract tool name from URL path
+	toolName := r.URL.Path[len("/api/mcp/tools/"):]
+	if toolName == "" {
+		http.Error(w, "Tool name required", http.StatusBadRequest)
+		return
+	}
+
+	// Read request body
+	var requestBody json.RawMessage
+	if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	// Call MCP tool
+	result, err := s.mcpServer.HandleTool(toolName, requestBody)
+	if err != nil {
+		resp := map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+		}
+		json.NewEncoder(w).Encode(resp)
+		return
+	}
+
+	// Return result
+	resp := map[string]interface{}{
+		"success": true,
+		"result":  result,
+	}
+	json.NewEncoder(w).Encode(resp)
+}
+
 // Helper functions for converting database values
 
 // getStringValue safely gets string value from pointer
@@ -434,5 +486,37 @@ func getStatusIcon(status string) string {
 		return "x-circle-fill"
 	default:
 		return "question-circle-fill"
+	}
+}
+
+// getActionTypeIcon returns the appropriate Bootstrap icon for an action type
+func getActionTypeIcon(actionType string) string {
+	switch actionType {
+	case database.ActionTaskStart:
+		return "play-fill"
+	case database.ActionFileOperation:
+		return "file-earmark-plus"
+	case database.ActionGitCommit:
+		return "git"
+	case database.ActionStatusUpdate:
+		return "arrow-clockwise"
+	default:
+		return "activity"
+	}
+}
+
+// getActionTypeColor returns the appropriate Bootstrap color for an action type
+func getActionTypeColor(actionType string) string {
+	switch actionType {
+	case database.ActionTaskStart:
+		return "primary"
+	case database.ActionFileOperation:
+		return "success"
+	case database.ActionGitCommit:
+		return "warning"
+	case database.ActionStatusUpdate:
+		return "info"
+	default:
+		return "secondary"
 	}
 }
