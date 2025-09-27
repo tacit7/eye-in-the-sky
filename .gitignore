@@ -27,6 +27,28 @@ go.work.sum
 # env file
 .env
 
+# Database files
+data/
+*.db
+*.sqlite
+
 # Editor/IDE
-# .idea/
-# .vscode/
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+tmp/
+temp/
+
+# Build artifacts
+bin/
+wt-dashboard/
