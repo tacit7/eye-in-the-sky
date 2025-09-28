@@ -6,12 +6,14 @@ import "time"
 type Agent struct {
 	ID                 string     `json:"id"`
 	Status             string     `json:"status"`
+	Source             string     `json:"source"`
 	CreatedAt          time.Time  `json:"created_at"`
 	UpdatedAt          time.Time  `json:"updated_at"`
 	GitWorktreePath    *string    `json:"git_worktree_path,omitempty"`
 	FeatureDescription *string    `json:"feature_description,omitempty"`
 	CurrentTask        *string    `json:"current_task,omitempty"`
 	LastActivityAt     *time.Time `json:"last_activity_at,omitempty"`
+	WindowID           *string    `json:"window_id,omitempty"`
 }
 
 // Action represents an activity performed by an agent
@@ -40,6 +42,12 @@ const (
 	StatusWorking   = "working"
 	StatusCompleted = "completed"
 	StatusFailed    = "failed"
+)
+
+// Valid agent sources
+const (
+	SourceWorktree = "worktree"
+	SourceDesktop  = "desktop"
 )
 
 // Valid action types

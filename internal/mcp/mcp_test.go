@@ -23,7 +23,7 @@ func TestMCPTools(t *testing.T) {
 
 	// Test register_agent
 	registerArgs := RegisterAgentArgs{
-		AgentID:      "test456a",
+		AgentID:      stringPtr("1e51456a"),
 		Description:  "Testing MCP tools",
 		WorktreePath: stringPtr("/test/path"),
 	}
@@ -49,7 +49,7 @@ func TestMCPTools(t *testing.T) {
 
 	// Test update_status
 	updateArgs := UpdateStatusArgs{
-		AgentID:     "test456a",
+		AgentID:     "1e51456a",
 		Status:      "working",
 		CurrentTask: stringPtr("Running tests"),
 	}
@@ -65,7 +65,7 @@ func TestMCPTools(t *testing.T) {
 
 	// Test log_action
 	actionArgs := LogActionArgs{
-		AgentID:     "test456a",
+		AgentID:     "1e51456a",
 		ActionType:  "task_start",
 		Description: "Started testing MCP tools",
 		Details:     stringPtr(`{"test": true}`),
@@ -82,7 +82,7 @@ func TestMCPTools(t *testing.T) {
 
 	// Test log_commits
 	commitsArgs := LogCommitsArgs{
-		AgentID:        "test456a",
+		AgentID:        "1e51456a",
 		CommitHashes:   []string{"abc123", "def456"},
 		CommitMessages: []string{"Test commit 1", "Test commit 2"},
 	}
@@ -98,7 +98,7 @@ func TestMCPTools(t *testing.T) {
 
 	// Test end_session
 	endArgs := EndSessionArgs{
-		AgentID:     "test456a",
+		AgentID:     "1e51456a",
 		Summary:     stringPtr("Testing completed successfully"),
 		FinalStatus: stringPtr("completed"),
 	}
@@ -113,7 +113,7 @@ func TestMCPTools(t *testing.T) {
 	}
 
 	// Verify agent is completed
-	agent, err := db.GetAgent("test456a")
+	agent, err := db.GetAgent("1e51456a")
 	if err != nil {
 		t.Fatalf("Failed to get agent after session end: %v", err)
 	}
@@ -139,17 +139,19 @@ func TestMCPServer(t *testing.T) {
 
 	// Test tool list
 	tools := server.GetToolList()
-	if len(tools) != 5 {
-		t.Errorf("Expected 5 tools, got %d", len(tools))
+	if len(tools) != 7 {
+		t.Errorf("Expected 7 tools, got %d", len(tools))
 	}
 
 	// Test tool names
 	expectedTools := map[string]bool{
-		"register_agent": false,
-		"update_status":  false,
-		"log_action":     false,
-		"log_commits":    false,
-		"end_session":    false,
+		"register_agent":              false,
+		"register_claude_desktop_agent": false,
+		"update_status":               false,
+		"log_action":                  false,
+		"log_commits":                 false,
+		"end_session":                 false,
+		"help":                        false,
 	}
 
 	for _, tool := range tools {
@@ -167,7 +169,7 @@ func TestMCPServer(t *testing.T) {
 	}
 
 	// Test HandleTool with register_agent
-	registerJSON := `{"agent_id":"test789b","description":"Server test","worktree_path":"/test"}`
+	registerJSON := `{"agent_id":"1e51789b","description":"Server test","worktree_path":"/test"}`
 	result, err := server.HandleTool("register_agent", []byte(registerJSON))
 	if err != nil {
 		t.Fatalf("Failed to handle register_agent tool: %v", err)
@@ -180,6 +182,22 @@ func TestMCPServer(t *testing.T) {
 
 	if !registerResult.Success {
 		t.Errorf("Expected tool success, got: %s", registerResult.Message)
+	}
+
+	// Test HandleTool with register_claude_desktop_agent
+	desktopJSON := `{"agent_id":"de5c456c","description":"Desktop test","project_name":"TestProject"}`
+	result2, err := server.HandleTool("register_claude_desktop_agent", []byte(desktopJSON))
+	if err != nil {
+		t.Fatalf("Failed to handle register_claude_desktop_agent tool: %v", err)
+	}
+
+	desktopResult, ok := result2.(RegisterDesktopAgentResult)
+	if !ok {
+		t.Fatalf("Expected RegisterDesktopAgentResult, got %T", result2)
+	}
+
+	if !desktopResult.Success {
+		t.Errorf("Expected tool success, got: %s", desktopResult.Message)
 	}
 
 	// Test unknown tool

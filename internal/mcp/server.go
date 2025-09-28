@@ -33,10 +33,14 @@ func (s *Server) Start(ctx context.Context) error {
 	log.Println("✅ MCP Server started successfully")
 	log.Println("📋 Available tools:")
 	log.Println("  - register_agent: Register a new Claude Code agent")
+	log.Println("  - register_claude_desktop_agent: Register a new Claude Desktop agent")
 	log.Println("  - update_status: Update agent status and current task")
 	log.Println("  - log_action: Log agent activities")
 	log.Println("  - log_commits: Track git commits")
 	log.Println("  - end_session: Complete agent session")
+	log.Println("  - save_session_context: Save session state for resumption")
+	log.Println("  - load_session_context: Load previous session state")
+	log.Println("  - add_session_note: Add contextual notes to session")
 	log.Println("  - help: Get detailed help and usage instructions")
 	log.Println("")
 	log.Println("💡 Use the 'help' tool for detailed instructions:")
@@ -60,6 +64,13 @@ func (s *Server) HandleTool(toolName string, argsJSON []byte) (interface{}, erro
 			return nil, fmt.Errorf("invalid arguments for register_agent: %w", err)
 		}
 		return s.tools.RegisterAgent(args)
+
+	case "register_claude_desktop_agent":
+		var args RegisterDesktopAgentArgs
+		if err := json.Unmarshal(argsJSON, &args); err != nil {
+			return nil, fmt.Errorf("invalid arguments for register_claude_desktop_agent: %w", err)
+		}
+		return s.tools.RegisterDesktopAgent(args)
 
 	case "update_status":
 		var args UpdateStatusArgs
@@ -96,6 +107,27 @@ func (s *Server) HandleTool(toolName string, argsJSON []byte) (interface{}, erro
 		}
 		return s.tools.EndSession(args)
 
+	case "save_session_context":
+		var args SaveSessionContextArgs
+		if err := json.Unmarshal(argsJSON, &args); err != nil {
+			return nil, fmt.Errorf("invalid arguments for save_session_context: %w", err)
+		}
+		return s.tools.SaveSessionContext(args)
+
+	case "load_session_context":
+		var args LoadSessionContextArgs
+		if err := json.Unmarshal(argsJSON, &args); err != nil {
+			return nil, fmt.Errorf("invalid arguments for load_session_context: %w", err)
+		}
+		return s.tools.LoadSessionContext(args)
+
+	case "add_session_note":
+		var args AddSessionNoteArgs
+		if err := json.Unmarshal(argsJSON, &args); err != nil {
+			return nil, fmt.Errorf("invalid arguments for add_session_note: %w", err)
+		}
+		return s.tools.AddSessionNote(args)
+
 	case "help":
 		var args HelpArgs
 		if err := json.Unmarshal(argsJSON, &args); err != nil {
@@ -116,6 +148,10 @@ func (s *Server) GetToolList() []Tool {
 			Description: "Register a new Claude Code agent",
 		},
 		{
+			Name:        "register_claude_desktop_agent",
+			Description: "Register a new Claude Desktop agent",
+		},
+		{
 			Name:        "update_status",
 			Description: "Update agent status and current task",
 		},
@@ -130,6 +166,18 @@ func (s *Server) GetToolList() []Tool {
 		{
 			Name:        "end_session",
 			Description: "Complete agent session",
+		},
+		{
+			Name:        "save_session_context",
+			Description: "Save current session state for resumption",
+		},
+		{
+			Name:        "load_session_context",
+			Description: "Load previous session state",
+		},
+		{
+			Name:        "add_session_note",
+			Description: "Add contextual notes to session",
 		},
 		{
 			Name:        "help",

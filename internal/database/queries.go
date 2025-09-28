@@ -8,11 +8,11 @@ import (
 // CreateAgent inserts a new agent
 func (db *DB) CreateAgent(agent *Agent) error {
 	query := `
-		INSERT INTO agents (id, status, git_worktree_path, feature_description, current_task, last_activity_at)
-		VALUES (?, ?, ?, ?, ?, ?)
+		INSERT INTO agents (id, status, source, git_worktree_path, feature_description, current_task, last_activity_at, window_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`
-	_, err := db.conn.Exec(query, agent.ID, agent.Status, agent.GitWorktreePath,
-		agent.FeatureDescription, agent.CurrentTask, agent.LastActivityAt)
+	_, err := db.conn.Exec(query, agent.ID, agent.Status, agent.Source, agent.GitWorktreePath,
+		agent.FeatureDescription, agent.CurrentTask, agent.LastActivityAt, agent.WindowID)
 	if err != nil {
 		return fmt.Errorf("failed to create agent: %w", err)
 	}
@@ -26,13 +26,13 @@ func (db *DB) GetAgent(id string) (*Agent, error) {
 	}
 
 	query := `
-		SELECT id, status, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at
+		SELECT id, status, source, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id
 		FROM agents WHERE id = ?
 	`
 	var agent Agent
 	row := db.conn.QueryRow(query, id)
-	err := row.Scan(&agent.ID, &agent.Status, &agent.CreatedAt, &agent.UpdatedAt,
-		&agent.GitWorktreePath, &agent.FeatureDescription, &agent.CurrentTask, &agent.LastActivityAt)
+	err := row.Scan(&agent.ID, &agent.Status, &agent.Source, &agent.CreatedAt, &agent.UpdatedAt,
+		&agent.GitWorktreePath, &agent.FeatureDescription, &agent.CurrentTask, &agent.LastActivityAt, &agent.WindowID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, NewAgentError(id, "get", ErrAgentNotFound)
@@ -233,14 +233,14 @@ func (db *DB) ListAgents(status string) ([]*Agent, error) {
 
 	if status != "" {
 		query = `
-			SELECT id, status, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at
+			SELECT id, status, source, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id
 			FROM agents WHERE status = ?
 			ORDER BY updated_at DESC
 		`
 		args = append(args, status)
 	} else {
 		query = `
-			SELECT id, status, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at
+			SELECT id, status, source, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id
 			FROM agents
 			ORDER BY updated_at DESC
 		`
@@ -258,12 +258,14 @@ func (db *DB) ListAgents(status string) ([]*Agent, error) {
 		err := rows.Scan(
 			&agent.ID,
 			&agent.Status,
+			&agent.Source,
 			&agent.CreatedAt,
 			&agent.UpdatedAt,
 			&agent.GitWorktreePath,
 			&agent.FeatureDescription,
 			&agent.CurrentTask,
 			&agent.LastActivityAt,
+			&agent.WindowID,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan agent: %w", err)

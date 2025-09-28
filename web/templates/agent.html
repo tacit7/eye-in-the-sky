@@ -28,9 +28,19 @@
                     </div>
                     <div class="card-body">
                         <div class="row">
+                            <div class="col-sm-4"><strong>Source:</strong></div>
+                            <div class="col-sm-8">
+                                <span class="badge bg-{{.Agent.SourceColor}}">
+                                    <i class="bi bi-{{.Agent.SourceIcon}}"></i> {{.Agent.SourceBadge}}
+                                </span>
+                            </div>
+                        </div>
+                        {{if .Agent.WorktreePath}}
+                        <div class="row mt-2">
                             <div class="col-sm-4"><strong>Worktree Path:</strong></div>
                             <div class="col-sm-8"><code>{{.Agent.WorktreePath}}</code></div>
                         </div>
+                        {{end}}
                         <div class="row mt-2">
                             <div class="col-sm-4"><strong>Feature:</strong></div>
                             <div class="col-sm-8">{{.Agent.FeatureDescription}}</div>

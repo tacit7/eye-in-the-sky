@@ -2,12 +2,25 @@ package mcp
 
 // RegisterAgentArgs represents the arguments for register_agent tool
 type RegisterAgentArgs struct {
-	AgentID      string  `json:"agent_id"`
+	AgentID      *string `json:"agent_id,omitempty"`
 	Description  string  `json:"description"`
 	WorktreePath *string `json:"worktree_path,omitempty"`
 }
 
 type RegisterAgentResult struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+// RegisterDesktopAgentArgs represents the arguments for register_claude_desktop_agent tool
+type RegisterDesktopAgentArgs struct {
+	AgentID     *string `json:"agent_id,omitempty"`
+	Description string  `json:"description"`
+	ProjectName string  `json:"project_name"`
+	WindowID    *string `json:"window_id,omitempty"`
+}
+
+type RegisterDesktopAgentResult struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`
 }

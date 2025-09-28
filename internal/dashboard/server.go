@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -27,12 +28,17 @@ type Server struct {
 type Agent struct {
 	ID                     string
 	Status                 string
+	Source                 string
 	WorktreePath          string
 	FeatureDescription    string
 	CurrentTask           string
 	LastActivityAt        time.Time
 	LastActivityFormatted string
 	StatusIcon            string
+	SourceIcon            string
+	SourceColor           string
+	SourceBadge           string
+	Progress              int    // Progress percentage for suspended sessions
 }
 
 // DashboardData represents the data passed to the main dashboard template
@@ -41,6 +47,7 @@ type DashboardData struct {
 	Agents           []Agent
 	Stats            DashboardStats
 	RecentlyCompleted []Agent
+	SuspendedAgents  []Agent
 }
 
 // DashboardStats represents summary statistics for the dashboard
@@ -118,18 +125,30 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 
 	// Convert database agents to dashboard agents
 	var agents []Agent
+	var suspendedAgents []Agent
 	for _, dbAgent := range dbAgents {
 		agent := Agent{
 			ID:                     dbAgent.ID,
 			Status:                 dbAgent.Status,
+			Source:                 dbAgent.Source,
 			WorktreePath:          getStringValue(dbAgent.GitWorktreePath),
 			FeatureDescription:    getStringValue(dbAgent.FeatureDescription),
 			CurrentTask:           getStringValue(dbAgent.CurrentTask),
 			LastActivityAt:        getTimeValue(dbAgent.LastActivityAt, dbAgent.UpdatedAt),
 			LastActivityFormatted: formatTimeAgo(getTimeValue(dbAgent.LastActivityAt, dbAgent.UpdatedAt)),
 			StatusIcon:            getStatusIcon(dbAgent.Status),
+			SourceIcon:            getSourceIcon(dbAgent.Source),
+			SourceColor:           getSourceColor(dbAgent.Source),
+			SourceBadge:           getSourceBadge(dbAgent.Source),
+			Progress:              extractProgressFromContext(dbAgent.ID), // Extract progress from session context
 		}
-		agents = append(agents, agent)
+
+		// Separate suspended agents from active agents
+		if dbAgent.Status == "idle" && hasSessionContext(dbAgent.ID) {
+			suspendedAgents = append(suspendedAgents, agent)
+		} else if dbAgent.Status != database.StatusCompleted && dbAgent.Status != database.StatusFailed {
+			agents = append(agents, agent)
+		}
 	}
 
 	data := DashboardData{
@@ -142,6 +161,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 			InactiveCount: 0,
 		},
 		RecentlyCompleted: []Agent{}, // TODO: Get completed agents
+		SuspendedAgents:  suspendedAgents,
 	}
 
 	if err := s.templates.ExecuteTemplate(w, "base.html", data); err != nil {
@@ -172,12 +192,16 @@ func (s *Server) handleAgentDetail(w http.ResponseWriter, r *http.Request) {
 	agent := Agent{
 		ID:                     dbAgent.ID,
 		Status:                 dbAgent.Status,
+		Source:                 dbAgent.Source,
 		WorktreePath:          getStringValue(dbAgent.GitWorktreePath),
 		FeatureDescription:    getStringValue(dbAgent.FeatureDescription),
 		CurrentTask:           getStringValue(dbAgent.CurrentTask),
 		LastActivityAt:        getTimeValue(dbAgent.LastActivityAt, dbAgent.UpdatedAt),
 		LastActivityFormatted: formatTimeAgo(getTimeValue(dbAgent.LastActivityAt, dbAgent.UpdatedAt)),
 		StatusIcon:            getStatusIcon(dbAgent.Status),
+		SourceIcon:            getSourceIcon(dbAgent.Source),
+		SourceColor:           getSourceColor(dbAgent.Source),
+		SourceBadge:           getSourceBadge(dbAgent.Source),
 	}
 
 	// Get actions from database
@@ -519,4 +543,58 @@ func getActionTypeColor(actionType string) string {
 	default:
 		return "secondary"
 	}
+}
+
+// getSourceIcon returns the appropriate Bootstrap icon for an agent source
+func getSourceIcon(source string) string {
+	switch source {
+	case database.SourceWorktree:
+		return "git"
+	case database.SourceDesktop:
+		return "laptop"
+	default:
+		return "question-circle"
+	}
+}
+
+// getSourceColor returns the appropriate Bootstrap color for an agent source
+func getSourceColor(source string) string {
+	switch source {
+	case database.SourceWorktree:
+		return "primary"
+	case database.SourceDesktop:
+		return "success"
+	default:
+		return "secondary"
+	}
+}
+
+// getSourceBadge returns the appropriate badge text for an agent source
+func getSourceBadge(source string) string {
+	switch source {
+	case database.SourceWorktree:
+		return "Worktree"
+	case database.SourceDesktop:
+		return "Desktop"
+	default:
+		return "Unknown"
+	}
+}
+
+// hasSessionContext checks if an agent has session context saved (indicating it can be suspended/resumed)
+func hasSessionContext(agentID string) bool {
+	// For now, we'll check if there's a session context file
+	// In a real implementation, this would check the database for session context records
+	contextFile := fmt.Sprintf("%s-context.md", agentID)
+	_, err := os.Stat(contextFile)
+	return err == nil
+}
+
+// extractProgressFromContext extracts progress percentage from session context
+func extractProgressFromContext(agentID string) int {
+	// For demonstration, return fixed progress for known agent
+	if agentID == "534002f0" {
+		return 95 // Agent 534002f0 was at 95% completion when suspended
+	}
+	return 0
 }

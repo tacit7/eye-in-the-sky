@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/tacit7/eye-in-the-sky/internal/database"
+	"github.com/tacit7/eye-in-the-sky/internal/utils"
 )
 
 type Tools struct {
@@ -20,27 +21,36 @@ func NewTools(db *database.DB) *Tools {
 
 // RegisterAgent implements the register_agent MCP tool
 func (t *Tools) RegisterAgent(args RegisterAgentArgs) (RegisterAgentResult, error) {
-	if len(args.AgentID) != 8 {
-		return RegisterAgentResult{Success: false, Message: "Agent ID must be exactly 8 characters"}, nil
+	// Generate git-style agent ID if not provided
+	var agentID string
+	if args.AgentID == nil || *args.AgentID == "" {
+		agentID = utils.GenerateGitStyleAgentID()
+	} else {
+		agentID = *args.AgentID
+		// Validate provided ID
+		if !utils.ValidateAgentID(agentID) {
+			return RegisterAgentResult{Success: false, Message: "Agent ID must be exactly 8 hex characters"}, nil
+		}
 	}
 
 	// Check if agent already exists
-	existing, err := t.db.GetAgent(args.AgentID)
+	existing, err := t.db.GetAgent(agentID)
 	if err == nil && existing != nil {
-		return RegisterAgentResult{Success: false, Message: fmt.Sprintf("Agent %s already exists", args.AgentID)}, nil
+		return RegisterAgentResult{Success: false, Message: fmt.Sprintf("Agent %s already exists", agentID)}, nil
 	}
 
 	// Create new agent and log registration action atomically
 	agent := &database.Agent{
-		ID:                 args.AgentID,
+		ID:                 agentID,
 		Status:             database.StatusActive,
+		Source:             database.SourceWorktree,
 		GitWorktreePath:    args.WorktreePath,
 		FeatureDescription: &args.Description,
 		LastActivityAt:     timePtr(time.Now()),
 	}
 
 	action := &database.Action{
-		AgentID:     args.AgentID,
+		AgentID:     agentID,
 		ActionType:  database.ActionStatusUpdate,
 		Description: fmt.Sprintf("Agent registered: %s", args.Description),
 	}
@@ -49,7 +59,51 @@ func (t *Tools) RegisterAgent(args RegisterAgentArgs) (RegisterAgentResult, erro
 		return RegisterAgentResult{Success: false, Message: fmt.Sprintf("Failed to register agent: %v", err)}, fmt.Errorf("database error: %w", err)
 	}
 
-	return RegisterAgentResult{Success: true, Message: fmt.Sprintf("Agent %s registered successfully", args.AgentID)}, nil
+	return RegisterAgentResult{Success: true, Message: fmt.Sprintf("Agent %s registered successfully", agentID)}, nil
+}
+
+// RegisterDesktopAgent implements the register_claude_desktop_agent MCP tool
+func (t *Tools) RegisterDesktopAgent(args RegisterDesktopAgentArgs) (RegisterDesktopAgentResult, error) {
+	// Generate git-style agent ID if not provided
+	var agentID string
+	if args.AgentID == nil || *args.AgentID == "" {
+		agentID = utils.GenerateGitStyleAgentID()
+	} else {
+		agentID = *args.AgentID
+		// Validate provided ID
+		if !utils.ValidateAgentID(agentID) {
+			return RegisterDesktopAgentResult{Success: false, Message: "Agent ID must be exactly 8 hex characters"}, nil
+		}
+	}
+
+	// Check if agent already exists
+	existing, err := t.db.GetAgent(agentID)
+	if err == nil && existing != nil {
+		return RegisterDesktopAgentResult{Success: false, Message: fmt.Sprintf("Agent %s already exists", agentID)}, nil
+	}
+
+	// Create new Claude Desktop agent and log registration action atomically
+	agent := &database.Agent{
+		ID:                 agentID,
+		Status:             database.StatusActive,
+		Source:             database.SourceDesktop,
+		GitWorktreePath:    nil, // Desktop agents don't have worktree paths
+		FeatureDescription: &args.Description,
+		LastActivityAt:     timePtr(time.Now()),
+		WindowID:           args.WindowID,
+	}
+
+	action := &database.Action{
+		AgentID:     agentID,
+		ActionType:  database.ActionStatusUpdate,
+		Description: fmt.Sprintf("Claude Desktop agent registered: %s (Project: %s)", args.Description, args.ProjectName),
+	}
+
+	if err := t.db.RegisterAgentWithAction(context.Background(), agent, action); err != nil {
+		return RegisterDesktopAgentResult{Success: false, Message: fmt.Sprintf("Failed to register agent: %v", err)}, fmt.Errorf("database error: %w", err)
+	}
+
+	return RegisterDesktopAgentResult{Success: true, Message: fmt.Sprintf("Claude Desktop agent %s registered successfully", agentID)}, nil
 }
 
 // UpdateStatus implements the update_status MCP tool
@@ -260,23 +314,49 @@ func (t *Tools) getAllToolsWithHelp() []Tool {
 		{
 			Name:        "register_agent",
 			Description: "Register a new Claude Code agent to start tracking activities",
-			Instructions: `Register a new agent before starting any work. The agent ID must be exactly 8 characters (letters and numbers).
+			Instructions: `Register a new agent before starting any work. If no agent_id is provided, a git-style 8-character hash will be auto-generated.
 
 This tool:
 - Creates a new agent record in the database
+- Auto-generates git-style hash ID if not provided
 - Sets initial status to 'active'
 - Logs the registration action
 - Enables tracking for all subsequent activities
 
 Required before using any other tools for this agent.`,
 			Parameters: map[string]string{
-				"agent_id":      "Unique 8-character identifier (required)",
+				"agent_id":      "Unique 8-character hex identifier (optional - auto-generated if not provided)",
 				"description":   "Brief description of what the agent will work on (required)",
 				"worktree_path": "Path to the git repository (optional)",
 			},
 			Examples: []string{
+				`{"description": "Working on user authentication system"}`,
 				`{"agent_id": "abc123de", "description": "Working on user authentication system"}`,
-				`{"agent_id": "web45678", "description": "Frontend dashboard development", "worktree_path": "/path/to/project"}`,
+				`{"description": "Frontend dashboard development", "worktree_path": "/path/to/project"}`,
+			},
+		},
+		{
+			Name:        "register_claude_desktop_agent",
+			Description: "Register a new Claude Desktop agent to start tracking activities",
+			Instructions: `Register a new Claude Desktop agent before starting any work. This tool is specifically for agents running in Claude Desktop (not git worktrees). If no agent_id is provided, a git-style 8-character hash will be auto-generated.
+
+This tool:
+- Creates a new agent record with 'desktop' source
+- Auto-generates git-style hash ID if not provided
+- Sets initial status to 'active'
+- Logs the registration action with project context
+- Does not require git worktree paths`,
+			Parameters: map[string]string{
+				"agent_id":     "Unique 8-character hex identifier (optional - auto-generated if not provided)",
+				"description":  "Brief description of what the agent will work on (required)",
+				"project_name": "Name of the project being worked on (required)",
+				"window_id":    "Claude Desktop window identifier for window management (optional)",
+			},
+			Examples: []string{
+				`{"description": "Building user authentication system", "project_name": "MyApp"}`,
+				`{"agent_id": "desk1234", "description": "Building user authentication system", "project_name": "MyApp"}`,
+				`{"description": "Frontend component development", "project_name": "Dashboard"}`,
+				`{"description": "Working on API endpoints", "project_name": "Backend", "window_id": "win_abc123"}`,
 			},
 		},
 		{
@@ -378,6 +458,81 @@ This tool provides comprehensive documentation including parameters, examples, a
 				`{}`,
 				`{"tool": "register_agent"}`,
 				`{"tool": "log_action"}`,
+			},
+		},
+		{
+			Name:        "save_session_context",
+			Description: "Save current session state for resumption later",
+			Instructions: `Save the current session context to enable resuming work later. This captures:
+- Current progress and phase
+- Completed and pending tasks
+- Important decisions and notes
+- Key files and dependencies
+- Metrics and environment state
+
+This enables pausing and resuming sessions across different Claude Code instances.`,
+			Parameters: map[string]string{
+				"agent_id":         "8-character agent identifier (required)",
+				"current_phase":    "Current work phase or milestone (required)",
+				"progress":         "Progress information with completion percentage and goals (optional)",
+				"next_actions":     "Array of next steps to take (optional)",
+				"completed_tasks":  "Array of completed tasks (optional)",
+				"pending_tasks":    "Array of remaining tasks (optional)",
+				"key_decisions":    "Array of important decisions made (optional)",
+				"important_files":  "Array of key files modified or created (optional)",
+				"dependencies":     "Array of dependencies or blockers (optional)",
+				"notes":           "Array of contextual notes and observations (optional)",
+				"environment":     "Key-value pairs of environment info (optional)",
+				"metrics":         "Performance and progress metrics (optional)",
+				"auto_save":       "Whether to automatically update agent status to idle (optional)",
+			},
+			Examples: []string{
+				`{"agent_id": "abc123de", "current_phase": "Authentication implementation", "next_actions": ["Implement JWT validation", "Add password hashing"]}`,
+				`{"agent_id": "web45678", "current_phase": "Dashboard frontend", "completed_tasks": ["User login component", "Navigation bar"], "pending_tasks": ["User profile page"], "auto_save": true}`,
+			},
+		},
+		{
+			Name:        "load_session_context",
+			Description: "Load previous session state to resume work",
+			Instructions: `Load the most recent session context for an agent to resume work where it was left off. This retrieves:
+- Progress and current phase
+- Completed and pending tasks
+- Important decisions and notes
+- Key files and dependencies
+- Previous metrics and environment
+
+Enables seamless session resumption across Claude Code instances.`,
+			Parameters: map[string]string{
+				"agent_id":   "8-character agent identifier (required)",
+				"session_id": "Specific session ID to load (optional - loads latest if not provided)",
+			},
+			Examples: []string{
+				`{"agent_id": "abc123de"}`,
+				`{"agent_id": "web45678", "session_id": "web45678_1696847200"}`,
+			},
+		},
+		{
+			Name:        "add_session_note",
+			Description: "Add contextual notes to the current session",
+			Instructions: `Add timestamped notes to the current session context. Useful for:
+- Recording insights and observations
+- Noting important decisions
+- Leaving reminders for later
+- Documenting blockers or issues
+
+Note types: insight, reminder, warning, idea
+Priority levels: low, medium, high`,
+			Parameters: map[string]string{
+				"agent_id": "8-character agent identifier (required)",
+				"type":     "Note type: insight, reminder, warning, idea (required)",
+				"content":  "Note content and description (required)",
+				"priority": "Priority level: low, medium, high (optional, defaults to medium)",
+				"tags":     "Array of tags for categorization (optional)",
+			},
+			Examples: []string{
+				`{"agent_id": "abc123de", "type": "insight", "content": "JWT token validation works better with async/await pattern"}`,
+				`{"agent_id": "web45678", "type": "reminder", "content": "Need to add error handling for API calls", "priority": "high"}`,
+				`{"agent_id": "api67890", "type": "warning", "content": "Database migration needed before deploy", "priority": "high", "tags": ["deployment", "database"]}`,
 			},
 		},
 	}

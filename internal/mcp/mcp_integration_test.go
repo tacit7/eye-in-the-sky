@@ -21,7 +21,7 @@ func TestMCPToolsErrorHandling(t *testing.T) {
 
 	t.Run("RegisterAgent with invalid ID", func(t *testing.T) {
 		args := RegisterAgentArgs{
-			AgentID:      "invalid", // Too short
+			AgentID:      stringPtr("invalid1"), // Invalid character
 			Description:  "Test agent",
 			WorktreePath: stringPtr("/test/path"),
 		}
@@ -56,7 +56,7 @@ func TestMCPToolsErrorHandling(t *testing.T) {
 	t.Run("UpdateStatus with invalid status", func(t *testing.T) {
 		// First create a valid agent
 		registerArgs := RegisterAgentArgs{
-			AgentID:      "testagen",
+			AgentID:      stringPtr("1e51a9e1"),
 			Description:  "Test agent",
 			WorktreePath: stringPtr("/test/path"),
 		}
@@ -68,7 +68,7 @@ func TestMCPToolsErrorHandling(t *testing.T) {
 
 		// Now try to update with invalid status
 		updateArgs := UpdateStatusArgs{
-			AgentID:     "testagen",
+			AgentID:     "1e51a9e1",
 			Status:      "invalid_status",
 			CurrentTask: stringPtr("Testing"),
 		}
@@ -85,7 +85,7 @@ func TestMCPToolsErrorHandling(t *testing.T) {
 
 	t.Run("LogAction with invalid action type", func(t *testing.T) {
 		args := LogActionArgs{
-			AgentID:     "testagen",
+			AgentID:     "1e51a9e1",
 			ActionType:  "invalid_action",
 			Description: "Testing invalid action",
 			Details:     stringPtr(`{"test": true}`),
@@ -103,7 +103,7 @@ func TestMCPToolsErrorHandling(t *testing.T) {
 
 	t.Run("LogCommits with empty hashes", func(t *testing.T) {
 		args := LogCommitsArgs{
-			AgentID:        "testagen",
+			AgentID:        "1e51a9e1",
 			CommitHashes:   []string{},
 			CommitMessages: []string{},
 		}
@@ -120,7 +120,7 @@ func TestMCPToolsErrorHandling(t *testing.T) {
 
 	t.Run("EndSession with invalid final status", func(t *testing.T) {
 		args := EndSessionArgs{
-			AgentID:     "testagen",
+			AgentID:     "1e51a9e1",
 			Summary:     stringPtr("Test completed"),
 			FinalStatus: stringPtr("invalid_final"),
 		}
@@ -147,12 +147,12 @@ func TestMCPWorkflowIntegration(t *testing.T) {
 	defer db.Close()
 
 	tools := NewTools(db)
-	agentID := "workflow"
+	agentID := "abc12345"
 
 	// Step 1: Register agent
 	t.Run("1. Register Agent", func(t *testing.T) {
 		args := RegisterAgentArgs{
-			AgentID:      agentID,
+			AgentID:      stringPtr(agentID),
 			Description:  "Full workflow test agent",
 			WorktreePath: stringPtr("/test/workflow"),
 		}
@@ -297,7 +297,7 @@ func TestMCPServerJSONHandling(t *testing.T) {
 
 	t.Run("Valid JSON for register_agent", func(t *testing.T) {
 		jsonData := `{
-			"agent_id": "jsontest",
+			"agent_id": "12345678",
 			"description": "JSON handling test",
 			"worktree_path": "/test/json"
 		}`
@@ -318,7 +318,7 @@ func TestMCPServerJSONHandling(t *testing.T) {
 	})
 
 	t.Run("Invalid JSON", func(t *testing.T) {
-		invalidJSON := `{"agent_id": "test", invalid json`
+		invalidJSON := `{"agent_id": "12345678", invalid json`
 
 		_, err := server.HandleTool("register_agent", []byte(invalidJSON))
 		if err == nil {
@@ -326,10 +326,10 @@ func TestMCPServerJSONHandling(t *testing.T) {
 		}
 	})
 
-	t.Run("Missing required fields", func(t *testing.T) {
-		incompleteJSON := `{"description": "Missing agent_id"}`
+	t.Run("Auto-generated agent ID", func(t *testing.T) {
+		autoGenJSON := `{"description": "Auto-generated ID test"}`
 
-		result, err := server.HandleTool("register_agent", []byte(incompleteJSON))
+		result, err := server.HandleTool("register_agent", []byte(autoGenJSON))
 		if err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}
@@ -339,8 +339,8 @@ func TestMCPServerJSONHandling(t *testing.T) {
 			t.Fatalf("Expected RegisterAgentResult, got %T", result)
 		}
 
-		if registerResult.Success {
-			t.Error("Expected failure for missing required fields")
+		if !registerResult.Success {
+			t.Errorf("Expected success with auto-generated ID, got: %s", registerResult.Message)
 		}
 	})
 

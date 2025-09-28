@@ -70,6 +70,33 @@ async function refreshDashboard() {
     }
 }
 
+// Session management functions
+async function resumeSession(agentId) {
+    if (!confirm(`Resume suspended session for agent ${agentId}?`)) {
+        return;
+    }
+
+    try {
+        showToast(`Resuming session for agent ${agentId}...`, 'info');
+
+        // Copy resume command to clipboard for user convenience
+        const resumeCommand = `restart session with agent_id ${agentId}`;
+        await navigator.clipboard.writeText(resumeCommand);
+
+        showToast(`Resume command copied to clipboard: "${resumeCommand}"`, 'success');
+        showToast('Paste this command in Claude Code to resume the session', 'info');
+
+        // Optional: Try to bring Claude Code window to front if available
+        setTimeout(() => {
+            bringToFront('code');
+        }, 1000);
+
+    } catch (error) {
+        console.error('Error resuming session:', error);
+        showToast(`To resume: Say "restart session with agent_id ${agentId}" in Claude Code`, 'info');
+    }
+}
+
 // Agent management functions
 async function endSession(agentId) {
     if (!confirm(`Are you sure you want to end the session for agent ${agentId}?`)) {
@@ -417,6 +444,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Export functions for global access
 window.dashboardFunctions = {
+    resumeSession,
     endSession,
     updateStatus,
     markIdle,

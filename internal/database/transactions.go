@@ -33,11 +33,11 @@ func (tx *Tx) Rollback() error {
 // CreateAgentTx creates an agent within a transaction
 func (tx *Tx) CreateAgentTx(agent *Agent) error {
 	query := `
-		INSERT INTO agents (id, status, git_worktree_path, feature_description, current_task, last_activity_at)
-		VALUES (?, ?, ?, ?, ?, ?)
+		INSERT INTO agents (id, status, source, git_worktree_path, feature_description, current_task, last_activity_at, window_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 	`
-	_, err := tx.tx.Exec(query, agent.ID, agent.Status, agent.GitWorktreePath,
-		agent.FeatureDescription, agent.CurrentTask, agent.LastActivityAt)
+	_, err := tx.tx.Exec(query, agent.ID, agent.Status, agent.Source, agent.GitWorktreePath,
+		agent.FeatureDescription, agent.CurrentTask, agent.LastActivityAt, agent.WindowID)
 	if err != nil {
 		return fmt.Errorf("failed to create agent in transaction: %w", err)
 	}
