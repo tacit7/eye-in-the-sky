@@ -14,6 +14,7 @@ type Agent struct {
 	CurrentTask        *string    `json:"current_task,omitempty"`
 	LastActivityAt     *time.Time `json:"last_activity_at,omitempty"`
 	WindowID           *string    `json:"window_id,omitempty"`
+	ProjectName        *string    `json:"project_name,omitempty"`
 }
 
 // Action represents an activity performed by an agent

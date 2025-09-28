@@ -39,6 +39,7 @@ type Agent struct {
 	SourceColor           string
 	SourceBadge           string
 	Progress              int    // Progress percentage for suspended sessions
+	ProjectName           string // Project name for better identification
 }
 
 // DashboardData represents the data passed to the main dashboard template
@@ -141,6 +142,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 			SourceColor:           getSourceColor(dbAgent.Source),
 			SourceBadge:           getSourceBadge(dbAgent.Source),
 			Progress:              extractProgressFromContext(dbAgent.ID), // Extract progress from session context
+			ProjectName:           getStringValue(dbAgent.ProjectName),
 		}
 
 		// Separate suspended agents from active agents
@@ -202,6 +204,7 @@ func (s *Server) handleAgentDetail(w http.ResponseWriter, r *http.Request) {
 		SourceIcon:            getSourceIcon(dbAgent.Source),
 		SourceColor:           getSourceColor(dbAgent.Source),
 		SourceBadge:           getSourceBadge(dbAgent.Source),
+		ProjectName:           getStringValue(dbAgent.ProjectName),
 	}
 
 	// Get actions from database

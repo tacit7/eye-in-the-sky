@@ -47,6 +47,7 @@ func (t *Tools) RegisterAgent(args RegisterAgentArgs) (RegisterAgentResult, erro
 		Source:             database.SourceWorktree,
 		GitWorktreePath:    args.WorktreePath,
 		FeatureDescription: &args.Description,
+		ProjectName:        args.ProjectName,
 		LastActivityAt:     timePtr(time.Now()),
 	}
 
@@ -90,6 +91,7 @@ func (t *Tools) RegisterDesktopAgent(args RegisterDesktopAgentArgs) (RegisterDes
 		Source:             database.SourceDesktop,
 		GitWorktreePath:    nil, // Desktop agents don't have worktree paths
 		FeatureDescription: &args.Description,
+		ProjectName:        &args.ProjectName,
 		LastActivityAt:     timePtr(time.Now()),
 		WindowID:           args.WindowID,
 	}
@@ -427,11 +429,12 @@ Required before using any other tools for this agent.`,
 				"agent_id":      "Unique 8-character hex identifier (optional - auto-generated if not provided)",
 				"description":   "Brief description of what the agent will work on (required)",
 				"worktree_path": "Path to the git repository (optional)",
+				"project_name":  "Name of the project being worked on (optional)",
 			},
 			Examples: []string{
 				`{"description": "Working on user authentication system"}`,
-				`{"agent_id": "abc123de", "description": "Working on user authentication system"}`,
-				`{"description": "Frontend dashboard development", "worktree_path": "/path/to/project"}`,
+				`{"agent_id": "abc123de", "description": "Working on user authentication system", "project_name": "MyApp"}`,
+				`{"description": "Frontend dashboard development", "worktree_path": "/path/to/project", "project_name": "Eye in the Sky"}`,
 			},
 		},
 		{

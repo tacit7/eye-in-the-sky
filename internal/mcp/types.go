@@ -5,6 +5,7 @@ type RegisterAgentArgs struct {
 	AgentID      *string `json:"agent_id,omitempty"`
 	Description  string  `json:"description"`
 	WorktreePath *string `json:"worktree_path,omitempty"`
+	ProjectName  *string `json:"project_name,omitempty"`
 }
 
 type RegisterAgentResult struct {

@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "eye-in-the-sky": {
+      "command": "/Users/urielmaldonado/projects/eye-in-the-sky/bin/eye-in-the-sky",
+      "args": ["-db", "/Users/urielmaldonado/projects/eye-in-the-sky/data/agents.db"],
+      "env": {
+        "PATH": "/usr/local/bin:/usr/bin:/bin",
+        "HOME": "/Users/urielmaldonado"
+      }
+    }
+  }
+}

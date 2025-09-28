@@ -35,6 +35,12 @@
                                 </span>
                             </div>
                         </div>
+                        {{if .Agent.ProjectName}}
+                        <div class="row mt-2">
+                            <div class="col-sm-4"><strong>Project:</strong></div>
+                            <div class="col-sm-8"><strong>{{.Agent.ProjectName}}</strong></div>
+                        </div>
+                        {{end}}
                         {{if .Agent.WorktreePath}}
                         <div class="row mt-2">
                             <div class="col-sm-4"><strong>Worktree Path:</strong></div>

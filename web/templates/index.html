@@ -55,6 +55,7 @@
                             <tr>
                                 <th>Agent ID</th>
                                 <th>Status</th>
+                                <th>Project</th>
                                 <th>Source</th>
                                 <th>Current Task</th>
                                 <th>Last Activity</th>
@@ -71,6 +72,20 @@
                                     <span class="badge status-badge status-{{.Status}}">
                                         <i class="bi bi-{{.StatusIcon}}"></i> {{.Status}}
                                     </span>
+                                </td>
+                                <td>
+                                    {{if .ProjectName}}
+                                        <strong>{{.ProjectName}}</strong>
+                                        {{if .FeatureDescription}}
+                                        <br><small class="text-muted">{{.FeatureDescription}}</small>
+                                        {{end}}
+                                    {{else}}
+                                        {{if .FeatureDescription}}
+                                        <span class="text-muted">{{.FeatureDescription}}</span>
+                                        {{else}}
+                                        <em class="text-muted">No project specified</em>
+                                        {{end}}
+                                    {{end}}
                                 </td>
                                 <td>
                                     <span class="badge bg-{{.SourceColor}} me-2">
