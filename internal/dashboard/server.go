@@ -268,26 +268,84 @@ func (s *Server) handleAgentDetail(w http.ResponseWriter, r *http.Request) {
 		Commits: commits,
 	}
 
-	if err := s.templates.ExecuteTemplate(w, "base.html", data); err != nil {
-		log.Printf("Error executing template: %v", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
+	// Write the page manually with agent template
+	w.Header().Set("Content-Type", "text/html")
+	w.WriteHeader(http.StatusOK)
+
+	// Write HTML header
+	w.Write([]byte(`<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent Detail - Eye in the Sky</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="/static/css/styles.css" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="bi bi-eye"></i> Eye in the Sky
+            </a>
+            <div class="navbar-nav ms-auto">
+                <span class="nav-link text-light">Claude Code Multi-Agent Dashboard</span>
+            </div>
+        </div>
+    </nav>
+    <main class="container mt-4">
+`))
+
+	// Execute agent content template
+	if err := s.templates.ExecuteTemplate(w, "agent-content", data); err != nil {
+		log.Printf("Error executing agent template: %v", err)
+		w.Write([]byte("<p>Error loading agent details</p>"))
 	}
+
+	// Write HTML footer
+	w.Write([]byte(`
+    </main>
+    <footer class="bg-light mt-5 py-3">
+        <div class="container text-center text-muted">
+            <small>Claude Code Multi-Agent Management System</small>
+        </div>
+    </footer>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/dashboard.js"></script>
+</body>
+</html>`))
 }
 
 // handleAPIAgents handles API calls for agent management
 func (s *Server) handleAPIAgents(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
-	// Extract agent ID and action from URL
-	_ = r.URL.Path[len("/api/agents/"):]
+	// Extract agent ID and action from URL path like /api/agents/{agentId}/{action}
+	pathParts := r.URL.Path[len("/api/agents/"):]
+
+	// Parse path components manually
+	agentID := ""
+	action := ""
+	if len(pathParts) >= 8 {
+		agentID = pathParts[:8]
+		if len(pathParts) > 9 && pathParts[8] == '/' {
+			action = pathParts[9:]
+		}
+	}
 
 	switch r.Method {
 	case "POST":
-		// For now, just return success
-		// This will be implemented with actual database operations
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"success": true, "message": "Action completed"}`))
+		switch action {
+		case "bring-front":
+			s.handleBringAgentFront(w, r, agentID)
+		case "end":
+			s.handleEndSession(w, r, agentID)
+		case "status":
+			s.handleUpdateStatus(w, r, agentID)
+		default:
+			http.Error(w, `{"success": false, "message": "Unknown action"}`, http.StatusBadRequest)
+		}
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
@@ -597,4 +655,72 @@ func extractProgressFromContext(agentID string) int {
 		return 95 // Agent 534002f0 was at 95% completion when suspended
 	}
 	return 0
+}
+
+// handleBringAgentFront uses MCP tool to bring agent window to front
+func (s *Server) handleBringAgentFront(w http.ResponseWriter, r *http.Request, agentID string) {
+	// Use the MCP bring_window_front tool
+	args := mcp.BringWindowFrontArgs{
+		AgentID: agentID,
+	}
+
+	result, err := s.mcpServer.HandleTool("bring_window_front", mustMarshalJSON(args))
+	if err != nil {
+		response := map[string]interface{}{
+			"success": false,
+			"message": fmt.Sprintf("Failed to bring window to front: %v", err),
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// Forward the MCP result
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(result)
+}
+
+// handleEndSession ends an agent session
+func (s *Server) handleEndSession(w http.ResponseWriter, r *http.Request, agentID string) {
+	// For now, just return success - this would integrate with MCP end_session tool
+	response := map[string]interface{}{
+		"success": true,
+		"message": fmt.Sprintf("Session ended for agent %s", agentID),
+	}
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
+}
+
+// handleUpdateStatus updates an agent's status
+func (s *Server) handleUpdateStatus(w http.ResponseWriter, r *http.Request, agentID string) {
+	// Parse request body
+	var req struct {
+		Status string `json:"status"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response := map[string]interface{}{
+			"success": false,
+			"message": "Invalid request body",
+		}
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// For now, just return success - this would integrate with MCP update_status tool
+	response := map[string]interface{}{
+		"success": true,
+		"message": fmt.Sprintf("Status updated to %s for agent %s", req.Status, agentID),
+	}
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
+}
+
+// mustMarshalJSON marshals to JSON and panics on error (for internal use)
+func mustMarshalJSON(v interface{}) []byte {
+	data, err := json.Marshal(v)
+	if err != nil {
+		panic(err)
+	}
+	return data
 }

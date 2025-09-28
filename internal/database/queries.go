@@ -279,10 +279,10 @@ func (db *DB) ListAgents(status string) ([]*Agent, error) {
 // ListActions retrieves all actions for a specific agent
 func (db *DB) ListActions(agentID string) ([]*Action, error) {
 	query := `
-		SELECT id, agent_id, action_type, description, details, created_at
+		SELECT id, agent_id, action_type, description, details, timestamp
 		FROM actions
 		WHERE agent_id = ?
-		ORDER BY created_at DESC
+		ORDER BY timestamp DESC
 	`
 	rows, err := db.conn.Query(query, agentID)
 	if err != nil {
@@ -313,10 +313,10 @@ func (db *DB) ListActions(agentID string) ([]*Action, error) {
 // ListCommits retrieves all commits for a specific agent
 func (db *DB) ListCommits(agentID string) ([]*Commit, error) {
 	query := `
-		SELECT id, agent_id, commit_hash, commit_message, created_at
+		SELECT id, agent_id, commit_hash, commit_message, timestamp
 		FROM commits
 		WHERE agent_id = ?
-		ORDER BY created_at DESC
+		ORDER BY timestamp DESC
 	`
 	rows, err := db.conn.Query(query, agentID)
 	if err != nil {

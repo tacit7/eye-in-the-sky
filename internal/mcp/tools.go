@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 
@@ -273,6 +274,104 @@ func (t *Tools) EndSession(args EndSessionArgs) (EndSessionResult, error) {
 	return EndSessionResult{Success: true, Message: message}, nil
 }
 
+// GetCurrentWindow implements the get_current_window MCP tool
+func (t *Tools) GetCurrentWindow(args GetCurrentWindowArgs) (GetCurrentWindowResult, error) {
+	if runtime.GOOS != "darwin" {
+		return GetCurrentWindowResult{Success: false, Message: "Window detection only supported on macOS"}, nil
+	}
+
+	// Get frontmost application
+	appCmd := exec.Command("osascript", "-e", `tell application "System Events" to get name of first application process whose frontmost is true`)
+	appOutput, err := appCmd.Output()
+	if err != nil {
+		return GetCurrentWindowResult{Success: false, Message: fmt.Sprintf("Failed to get current application: %v", err)}, nil
+	}
+	app := strings.TrimSpace(string(appOutput))
+
+	// Get window properties
+	windowCmd := exec.Command("osascript", "-e", fmt.Sprintf(`tell application "System Events" to tell process "%s" to get {name, position, size} of window 1`, app))
+	windowOutput, err := windowCmd.Output()
+	if err != nil {
+		return GetCurrentWindowResult{Success: false, Message: fmt.Sprintf("Failed to get window properties: %v", err)}, nil
+	}
+
+	windowData := strings.TrimSpace(string(windowOutput))
+	parts := strings.Split(windowData, ", ")
+
+	windowTitle := "Unknown"
+	position := "Unknown"
+	size := "Unknown"
+
+	if len(parts) >= 3 {
+		windowTitle = parts[0]
+		position = fmt.Sprintf("%s, %s", parts[1], parts[2])
+		if len(parts) >= 5 {
+			size = fmt.Sprintf("%s x %s", parts[3], parts[4])
+		}
+	}
+
+	// Generate a simple window ID based on app + title
+	windowID := fmt.Sprintf("%s_%s", app, strings.ReplaceAll(windowTitle, " ", "_"))
+
+	return GetCurrentWindowResult{
+		Success:     true,
+		Message:     fmt.Sprintf("Current window detected: %s", app),
+		Application: app,
+		WindowTitle: windowTitle,
+		WindowID:    windowID,
+		Position:    position,
+		Size:        size,
+	}, nil
+}
+
+// BringWindowFront implements the bring_window_front MCP tool
+func (t *Tools) BringWindowFront(args BringWindowFrontArgs) (BringWindowFrontResult, error) {
+	if runtime.GOOS != "darwin" {
+		return BringWindowFrontResult{Success: false, Message: "Window management only supported on macOS"}, nil
+	}
+
+	// Get agent to find window information
+	agent, err := t.db.GetAgent(args.AgentID)
+	if err != nil {
+		return BringWindowFrontResult{Success: false, Message: fmt.Sprintf("Agent not found: %v", err)}, nil
+	}
+
+	// For desktop agents, we can use the window ID if available
+	if agent.Source == database.SourceDesktop && agent.WindowID != nil {
+		// Parse window ID to get application name
+		windowID := *agent.WindowID
+		parts := strings.Split(windowID, "_")
+		if len(parts) > 0 {
+			app := parts[0]
+
+			// Bring application to front
+			bringCmd := exec.Command("osascript", "-e", fmt.Sprintf(`tell application "%s" to activate`, app))
+			err := bringCmd.Run()
+			if err != nil {
+				return BringWindowFrontResult{Success: false, Message: fmt.Sprintf("Failed to bring window to front: %v", err)}, nil
+			}
+
+			return BringWindowFrontResult{
+				Success: true,
+				Message: fmt.Sprintf("Brought %s window to front", app),
+			}, nil
+		}
+	}
+
+	// Fallback: try to bring ghostty to front (since that's what you're using)
+	bringCmd := exec.Command("osascript", "-e", `tell application "ghostty" to activate`)
+	err = bringCmd.Run()
+	if err != nil {
+		return BringWindowFrontResult{Success: false, Message: fmt.Sprintf("Failed to bring terminal to front: %v", err)}, nil
+	}
+
+	return BringWindowFrontResult{
+		Success: true,
+		Message: "Brought terminal window to front",
+	}, nil
+}
+
+
 // Help implements the help MCP tool
 func (t *Tools) Help(args HelpArgs) (HelpResult, error) {
 	if args.Tool != nil {
@@ -533,6 +632,45 @@ Priority levels: low, medium, high`,
 				`{"agent_id": "abc123de", "type": "insight", "content": "JWT token validation works better with async/await pattern"}`,
 				`{"agent_id": "web45678", "type": "reminder", "content": "Need to add error handling for API calls", "priority": "high"}`,
 				`{"agent_id": "api67890", "type": "warning", "content": "Database migration needed before deploy", "priority": "high", "tags": ["deployment", "database"]}`,
+			},
+		},
+		{
+			Name:        "get_current_window",
+			Description: "Get information about the current active window (macOS only)",
+			Instructions: `Detect the currently active window and return information about it. This tool helps identify which window/application is currently in focus.
+
+This tool:
+- Detects the frontmost application
+- Gets window title, position, and size
+- Generates a window ID for tracking
+- Only works on macOS systems
+
+Useful for registering agents with accurate window information.`,
+			Parameters: map[string]string{
+				// No parameters needed
+			},
+			Examples: []string{
+				`{}`,
+			},
+		},
+		{
+			Name:        "bring_window_front",
+			Description: "Bring an agent's window to the front (macOS only)",
+			Instructions: `Bring the specified agent's window to the front, making it the active window. This is useful for quickly switching focus to a specific agent's workspace.
+
+This tool:
+- Looks up the agent's window information
+- Uses the stored window ID to identify the application
+- Brings the application/window to the front
+- Falls back to bringing terminal (ghostty) to front if no specific window ID
+
+Only works on macOS systems with AppleScript support.`,
+			Parameters: map[string]string{
+				"agent_id": "8-character agent identifier (required)",
+			},
+			Examples: []string{
+				`{"agent_id": "534002f0"}`,
+				`{"agent_id": "abc123de"}`,
 			},
 		},
 	}

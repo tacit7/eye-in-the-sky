@@ -97,6 +97,30 @@ async function resumeSession(agentId) {
     }
 }
 
+// Agent window management
+async function bringAgentFront(agentId) {
+    try {
+        showToast(`Bringing agent ${agentId} window to front...`, 'info');
+
+        const response = await fetch(`/api/agents/${agentId}/bring-front`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            showToast(result.message, 'success');
+        } else {
+            showToast(`Failed to bring window to front: ${result.message}`, 'error');
+        }
+    } catch (error) {
+        console.error('Error bringing agent window to front:', error);
+        showToast('Failed to bring agent window to front', 'error');
+    }
+}
+
 // Agent management functions
 async function endSession(agentId) {
     if (!confirm(`Are you sure you want to end the session for agent ${agentId}?`)) {
@@ -450,6 +474,7 @@ window.dashboardFunctions = {
     markIdle,
     refreshDashboard,
     copyAgentId,
+    bringAgentFront,
     getWindowId,
     bringToFront,
     listWindows,

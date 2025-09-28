@@ -104,3 +104,29 @@ type HelpResult struct {
 	Message string `json:"message"`
 	Tools   []Tool `json:"tools,omitempty"`
 }
+
+// GetCurrentWindowArgs represents the arguments for get_current_window tool
+type GetCurrentWindowArgs struct {
+	// No arguments needed - detects current window automatically
+}
+
+type GetCurrentWindowResult struct {
+	Success       bool   `json:"success"`
+	Message       string `json:"message"`
+	Application   string `json:"application,omitempty"`
+	WindowTitle   string `json:"window_title,omitempty"`
+	WindowID      string `json:"window_id,omitempty"`
+	Position      string `json:"position,omitempty"`
+	Size          string `json:"size,omitempty"`
+}
+
+// BringWindowFrontArgs represents the arguments for bring_window_front tool
+type BringWindowFrontArgs struct {
+	AgentID string `json:"agent_id"`
+}
+
+type BringWindowFrontResult struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+

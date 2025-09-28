@@ -95,6 +95,11 @@
                                         <a href="/agent/{{.ID}}" class="btn btn-outline-primary">
                                             <i class="bi bi-eye"></i> View
                                         </a>
+                                        {{if eq .Source "desktop"}}
+                                        <button class="btn btn-outline-success" onclick="bringAgentFront('{{.ID}}')" title="Bring agent window to front">
+                                            <i class="bi bi-window-stack"></i> Front
+                                        </button>
+                                        {{end}}
                                         <button class="btn btn-outline-danger" onclick="endSession('{{.ID}}')">
                                             <i class="bi bi-stop-circle"></i> End
                                         </button>

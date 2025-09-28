@@ -41,6 +41,8 @@ func (s *Server) Start(ctx context.Context) error {
 	log.Println("  - save_session_context: Save session state for resumption")
 	log.Println("  - load_session_context: Load previous session state")
 	log.Println("  - add_session_note: Add contextual notes to session")
+	log.Println("  - get_current_window: Get current active window info (macOS)")
+	log.Println("  - bring_window_front: Bring agent window to front (macOS)")
 	log.Println("  - help: Get detailed help and usage instructions")
 	log.Println("")
 	log.Println("💡 Use the 'help' tool for detailed instructions:")
@@ -128,6 +130,20 @@ func (s *Server) HandleTool(toolName string, argsJSON []byte) (interface{}, erro
 		}
 		return s.tools.AddSessionNote(args)
 
+	case "get_current_window":
+		var args GetCurrentWindowArgs
+		if err := json.Unmarshal(argsJSON, &args); err != nil {
+			return nil, fmt.Errorf("invalid arguments for get_current_window: %w", err)
+		}
+		return s.tools.GetCurrentWindow(args)
+
+	case "bring_window_front":
+		var args BringWindowFrontArgs
+		if err := json.Unmarshal(argsJSON, &args); err != nil {
+			return nil, fmt.Errorf("invalid arguments for bring_window_front: %w", err)
+		}
+		return s.tools.BringWindowFront(args)
+
 	case "help":
 		var args HelpArgs
 		if err := json.Unmarshal(argsJSON, &args); err != nil {
@@ -178,6 +194,14 @@ func (s *Server) GetToolList() []Tool {
 		{
 			Name:        "add_session_note",
 			Description: "Add contextual notes to session",
+		},
+		{
+			Name:        "get_current_window",
+			Description: "Get current active window info (macOS)",
+		},
+		{
+			Name:        "bring_window_front",
+			Description: "Bring agent window to front (macOS)",
 		},
 		{
 			Name:        "help",
