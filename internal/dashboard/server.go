@@ -86,9 +86,9 @@ func (s *Server) LoadTemplates(templateDir string) error {
 
 // Start starts the HTTP server
 func (s *Server) Start() error {
-	// Static file handler
+	// Static file handler with cache-busting headers
 	fs := http.FileServer(http.Dir("web/static/"))
-	http.Handle("/static/", http.StripPrefix("/static/", fs))
+	http.Handle("/static/", http.StripPrefix("/static/", s.noCacheHandler(fs)))
 
 	// Route handlers
 	http.HandleFunc("/", s.handleIndex)
@@ -109,12 +109,28 @@ func (s *Server) Start() error {
 	return http.ListenAndServe(":"+s.port, nil)
 }
 
+// noCacheHandler wraps an http.Handler to add cache-busting headers
+func (s *Server) noCacheHandler(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Add cache-busting headers to prevent browser caching issues
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Expires", "0")
+		h.ServeHTTP(w, r)
+	})
+}
+
 // handleIndex serves the main dashboard page
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
 		return
 	}
+
+	// Add cache-busting headers to prevent browser caching issues
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
 
 	// Get all agents from database
 	dbAgents, err := s.db.ListAgents("")
@@ -145,8 +161,11 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 			ProjectName:           getStringValue(dbAgent.ProjectName),
 		}
 
-		// Separate suspended agents from active agents
-		if dbAgent.Status == "idle" && hasSessionContext(dbAgent.ID) {
+		// Filter out archived agents and separate suspended from active
+		if dbAgent.Status == database.StatusArchived {
+			// Skip archived agents - don't show them on dashboard
+			continue
+		} else if dbAgent.Status == "idle" && hasSessionContext(dbAgent.ID) {
 			suspendedAgents = append(suspendedAgents, agent)
 		} else if dbAgent.Status != database.StatusCompleted && dbAgent.Status != database.StatusFailed {
 			agents = append(agents, agent)
@@ -175,6 +194,11 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 
 // handleAgentDetail serves the agent detail page
 func (s *Server) handleAgentDetail(w http.ResponseWriter, r *http.Request) {
+	// Add cache-busting headers to prevent browser caching issues
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
+
 	// Extract agent ID from URL path
 	agentID := r.URL.Path[len("/agent/"):]
 	if agentID == "" {
@@ -344,6 +368,8 @@ func (s *Server) handleAPIAgents(w http.ResponseWriter, r *http.Request) {
 			s.handleBringAgentFront(w, r, agentID)
 		case "end":
 			s.handleEndSession(w, r, agentID)
+		case "archive":
+			s.handleArchiveAgent(w, r, agentID)
 		case "status":
 			s.handleUpdateStatus(w, r, agentID)
 		default:
@@ -685,10 +711,43 @@ func (s *Server) handleBringAgentFront(w http.ResponseWriter, r *http.Request, a
 
 // handleEndSession ends an agent session
 func (s *Server) handleEndSession(w http.ResponseWriter, r *http.Request, agentID string) {
-	// For now, just return success - this would integrate with MCP end_session tool
+	// Update agent status to completed
+	err := s.db.UpdateAgentStatus(agentID, database.StatusCompleted, nil)
+	if err != nil {
+		response := map[string]interface{}{
+			"success": false,
+			"message": fmt.Sprintf("Failed to end session for agent %s: %v", agentID, err),
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
 	response := map[string]interface{}{
 		"success": true,
 		"message": fmt.Sprintf("Session ended for agent %s", agentID),
+	}
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
+}
+
+// handleArchiveAgent archives an agent to hide it from the dashboard
+func (s *Server) handleArchiveAgent(w http.ResponseWriter, r *http.Request, agentID string) {
+	// Update agent status to archived
+	err := s.db.UpdateAgentStatus(agentID, database.StatusArchived, nil)
+	if err != nil {
+		response := map[string]interface{}{
+			"success": false,
+			"message": fmt.Sprintf("Failed to archive agent %s: %v", agentID, err),
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response := map[string]interface{}{
+		"success": true,
+		"message": fmt.Sprintf("Agent %s archived", agentID),
 	}
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)

@@ -3,6 +3,7 @@ package mcp
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/tacit7/eye-in-the-sky/internal/database"
@@ -266,7 +267,7 @@ func (t *Tools) SaveSessionContext(args SaveSessionContextArgs) (SaveSessionCont
 			stringPtr(fmt.Sprintf("Session paused at: %s", args.CurrentPhase)))
 		if err != nil {
 			// Log warning but don't fail
-			fmt.Printf("Warning: Failed to update agent status during auto-save: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Warning: Failed to update agent status during auto-save: %v\n", err)
 		}
 	}
 

@@ -7,7 +7,12 @@
       "Bash(gh repo list:*)",
       "Bash(git rm:*)",
       "Bash(./scripts/build.sh:*)",
-      "Bash(sqlite3:*)"
+      "Bash(sqlite3:*)",
+      "Bash(curl -X POST http://localhost:8080/api/mcp/tools/log_action -H \"Content-Type: application/json\" -d '{\"\"agent_id\"\": \"\"534002f0\"\", \"\"action_type\"\": \"\"file_operation\"\", \"\"description\"\": \"\"Implemented HTTP API endpoints for window management in dashboard server\"\", \"\"details\"\": \"\"{\\\"\"files\\\"\": [\\\"\"internal/dashboard/server.go\\\"\"], \\\"\"operation\\\"\": \\\"\"edit\\\"\", \\\"\"endpoints_added\\\"\": [\\\"\"/api/agents/{id}/bring-front\\\"\"]}\"\"}')",
+      "Bash(curl -X POST http://localhost:8080/api/mcp/tools/log_action -H \"Content-Type: application/json\" -d '{\"\"agent_id\"\": \"\"534002f0\"\", \"\"action_type\"\": \"\"status_update\"\", \"\"description\"\": \"\"Window focus feature implementation completed and tested successfully\"\", \"\"details\"\": \"\"{\\\"\"feature\\\"\": \\\"\"window_management\\\"\", \\\"\"status\\\"\": \\\"\"completed\\\"\", \\\"\"test_result\\\"\": \\\"\"success\\\"\"}\"\"}')",
+      "Bash(curl -X POST http://localhost:8080/api/mcp/tools/update_status -H \"Content-Type: application/json\" -d '{\"\"agent_id\"\": \"\"534002f0\"\", \"\"status\"\": \"\"working\"\", \"\"current_task\"\": \"\"Implementing proper activity logging to database and providing user guidance\"\"}')",
+      "Bash(curl:*)",
+      "Bash(go build:*)"
     ],
     "deny": [],
     "ask": []

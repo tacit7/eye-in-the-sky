@@ -123,7 +123,7 @@ async function bringAgentFront(agentId) {
 
 // Agent management functions
 async function endSession(agentId) {
-    if (!confirm(`Are you sure you want to end the session for agent ${agentId}?`)) {
+    if (!confirm(`Are you sure you want to end the session for agent ${agentId}? This will mark it as completed.`)) {
         return;
     }
 
@@ -144,6 +144,31 @@ async function endSession(agentId) {
     } catch (error) {
         console.error('Error ending session:', error);
         showToast('Failed to end session', 'error');
+    }
+}
+
+async function archiveAgent(agentId) {
+    if (!confirm(`Are you sure you want to archive agent ${agentId}? This will hide it from the dashboard.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/agents/${agentId}/archive`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (response.ok) {
+            showToast(`Agent ${agentId} archived`, 'success');
+            setTimeout(() => refreshDashboard(), 1000);
+        } else {
+            throw new Error('Failed to archive agent');
+        }
+    } catch (error) {
+        console.error('Error archiving agent:', error);
+        showToast('Failed to archive agent', 'error');
     }
 }
 
@@ -470,6 +495,7 @@ document.addEventListener('DOMContentLoaded', function() {
 window.dashboardFunctions = {
     resumeSession,
     endSession,
+    archiveAgent,
     updateStatus,
     markIdle,
     refreshDashboard,

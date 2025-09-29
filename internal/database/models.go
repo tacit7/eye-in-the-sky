@@ -43,6 +43,7 @@ const (
 	StatusWorking   = "working"
 	StatusCompleted = "completed"
 	StatusFailed    = "failed"
+	StatusArchived  = "archived"
 )
 
 // Valid agent sources

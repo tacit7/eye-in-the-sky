@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/tacit7/eye-in-the-sky/internal/database"
 )
 
@@ -13,204 +15,218 @@ import (
 type Server struct {
 	db    *database.DB
 	tools *Tools
+	mcp   *mcp.Server
 }
 
 // NewServer creates a new MCP server instance
 func NewServer(db *database.DB) *Server {
-	return &Server{
+	// Configure log to output to stderr for MCP compatibility
+	log.SetOutput(os.Stderr)
+
+	tools := NewTools(db)
+
+	// Create MCP server with implementation
+	mcpServer := mcp.NewServer(&mcp.Implementation{
+		Name:    "eye-in-the-sky",
+		Version: "1.0.0",
+	}, nil)
+
+	s := &Server{
 		db:    db,
-		tools: NewTools(db),
+		tools: tools,
+		mcp:   mcpServer,
 	}
+
+	// Register all tools
+	s.registerTools()
+
+	return s
 }
 
 // Start starts the MCP server
 func (s *Server) Start(ctx context.Context) error {
 	log.Println("🔧 MCP Server starting...")
-
-	// For now, this is a placeholder for actual MCP SDK integration
-	// In a real implementation, this would set up the MCP protocol handlers
-
-	log.Println("✅ MCP Server started successfully")
-	log.Println("📋 Available tools:")
-	log.Println("  - register_agent: Register a new Claude Code agent")
-	log.Println("  - register_claude_desktop_agent: Register a new Claude Desktop agent")
-	log.Println("  - update_status: Update agent status and current task")
-	log.Println("  - log_action: Log agent activities")
-	log.Println("  - log_commits: Track git commits")
-	log.Println("  - end_session: Complete agent session")
-	log.Println("  - save_session_context: Save session state for resumption")
-	log.Println("  - load_session_context: Load previous session state")
-	log.Println("  - add_session_note: Add contextual notes to session")
-	log.Println("  - get_current_window: Get current active window info (macOS)")
-	log.Println("  - bring_window_front: Bring agent window to front (macOS)")
-	log.Println("  - help: Get detailed help and usage instructions")
-	log.Println("")
-	log.Println("💡 Use the 'help' tool for detailed instructions:")
-	log.Println("   - Get all help: {}")
-	log.Println("   - Specific tool: {\"tool\": \"register_agent\"}")
 	log.Println("📊 Dashboard available at: http://localhost:8080")
 
-	// Keep running until context is cancelled
-	<-ctx.Done()
-	log.Println("🔧 MCP Server shutting down...")
+	// Run the MCP server on stdio transport (this handles JSON-RPC over stdin/stdout)
+	err := s.mcp.Run(ctx, &mcp.StdioTransport{})
+	if err != nil {
+		log.Printf("🔧 MCP Server shutting down: %v", err)
+	} else {
+		log.Println("🔧 MCP Server shutting down...")
+	}
 
-	return nil
+	return err
 }
 
-// HandleTool processes MCP tool calls (simplified implementation)
+// registerTools registers all available tools with the MCP server
+func (s *Server) registerTools() {
+	// Register agent tools using the generic AddTool function
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "register_agent",
+		Description: "Register a new Claude Code agent",
+	}, s.handleRegisterAgent)
+
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "register_claude_desktop_agent",
+		Description: "Register a new Claude Desktop agent",
+	}, s.handleRegisterDesktopAgent)
+
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "update_status",
+		Description: "Update agent status and current task",
+	}, s.handleUpdateStatus)
+
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "log_action",
+		Description: "Log agent activities",
+	}, s.handleLogAction)
+
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "end_session",
+		Description: "Complete agent session",
+	}, s.handleEndSession)
+
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "help",
+		Description: "Get detailed help and usage instructions",
+	}, s.handleHelp)
+}
+
+// Tool handlers using the generic AddTool pattern
+func (s *Server) handleRegisterAgent(ctx context.Context, req *mcp.CallToolRequest, args RegisterAgentArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.RegisterAgent(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: "Agent registered successfully"},
+		},
+	}, result, nil
+}
+
+func (s *Server) handleRegisterDesktopAgent(ctx context.Context, req *mcp.CallToolRequest, args RegisterDesktopAgentArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.RegisterDesktopAgent(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: "Claude Desktop agent registered successfully"},
+		},
+	}, result, nil
+}
+
+func (s *Server) handleUpdateStatus(ctx context.Context, req *mcp.CallToolRequest, args UpdateStatusArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.UpdateStatus(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: "Status updated successfully"},
+		},
+	}, result, nil
+}
+
+func (s *Server) handleLogAction(ctx context.Context, req *mcp.CallToolRequest, args LogActionArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.LogAction(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: "Action logged successfully"},
+		},
+	}, result, nil
+}
+
+func (s *Server) handleEndSession(ctx context.Context, req *mcp.CallToolRequest, args EndSessionArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.EndSession(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: "Session ended successfully"},
+		},
+	}, result, nil
+}
+
+func (s *Server) handleHelp(ctx context.Context, req *mcp.CallToolRequest, args HelpArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.Help(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: "Help information retrieved successfully"},
+		},
+	}, result, nil
+}
+
+// HandleTool provides compatibility for dashboard server to call tools directly
 func (s *Server) HandleTool(toolName string, argsJSON []byte) (interface{}, error) {
+	// This method provides backward compatibility for the dashboard server
+	// It routes tool calls to the appropriate handlers
 	switch toolName {
 	case "register_agent":
 		var args RegisterAgentArgs
 		if err := json.Unmarshal(argsJSON, &args); err != nil {
-			return nil, fmt.Errorf("invalid arguments for register_agent: %w", err)
+			return nil, err
 		}
 		return s.tools.RegisterAgent(args)
 
 	case "register_claude_desktop_agent":
 		var args RegisterDesktopAgentArgs
 		if err := json.Unmarshal(argsJSON, &args); err != nil {
-			return nil, fmt.Errorf("invalid arguments for register_claude_desktop_agent: %w", err)
+			return nil, err
 		}
 		return s.tools.RegisterDesktopAgent(args)
 
 	case "update_status":
 		var args UpdateStatusArgs
 		if err := json.Unmarshal(argsJSON, &args); err != nil {
-			return nil, fmt.Errorf("invalid arguments for update_status: %w", err)
+			return nil, err
 		}
 		return s.tools.UpdateStatus(args)
 
 	case "log_action":
 		var args LogActionArgs
 		if err := json.Unmarshal(argsJSON, &args); err != nil {
-			return nil, fmt.Errorf("invalid arguments for log_action: %w", err)
+			return nil, err
 		}
 		return s.tools.LogAction(args)
-
-	case "log_commits":
-		var args LogCommitsArgs
-		if err := json.Unmarshal(argsJSON, &args); err != nil {
-			return nil, fmt.Errorf("invalid arguments for log_commits: %w", err)
-		}
-		return s.tools.LogCommits(args)
-
-	case "sync_commits":
-		var args SyncCommitsArgs
-		if err := json.Unmarshal(argsJSON, &args); err != nil {
-			return nil, fmt.Errorf("invalid arguments for sync_commits: %w", err)
-		}
-		return s.tools.SyncCommits(args)
 
 	case "end_session":
 		var args EndSessionArgs
 		if err := json.Unmarshal(argsJSON, &args); err != nil {
-			return nil, fmt.Errorf("invalid arguments for end_session: %w", err)
+			return nil, err
 		}
 		return s.tools.EndSession(args)
-
-	case "save_session_context":
-		var args SaveSessionContextArgs
-		if err := json.Unmarshal(argsJSON, &args); err != nil {
-			return nil, fmt.Errorf("invalid arguments for save_session_context: %w", err)
-		}
-		return s.tools.SaveSessionContext(args)
-
-	case "load_session_context":
-		var args LoadSessionContextArgs
-		if err := json.Unmarshal(argsJSON, &args); err != nil {
-			return nil, fmt.Errorf("invalid arguments for load_session_context: %w", err)
-		}
-		return s.tools.LoadSessionContext(args)
-
-	case "add_session_note":
-		var args AddSessionNoteArgs
-		if err := json.Unmarshal(argsJSON, &args); err != nil {
-			return nil, fmt.Errorf("invalid arguments for add_session_note: %w", err)
-		}
-		return s.tools.AddSessionNote(args)
-
-	case "get_current_window":
-		var args GetCurrentWindowArgs
-		if err := json.Unmarshal(argsJSON, &args); err != nil {
-			return nil, fmt.Errorf("invalid arguments for get_current_window: %w", err)
-		}
-		return s.tools.GetCurrentWindow(args)
 
 	case "bring_window_front":
 		var args BringWindowFrontArgs
 		if err := json.Unmarshal(argsJSON, &args); err != nil {
-			return nil, fmt.Errorf("invalid arguments for bring_window_front: %w", err)
+			return nil, err
 		}
 		return s.tools.BringWindowFront(args)
 
 	case "help":
 		var args HelpArgs
 		if err := json.Unmarshal(argsJSON, &args); err != nil {
-			return nil, fmt.Errorf("invalid arguments for help: %w", err)
+			return nil, err
 		}
 		return s.tools.Help(args)
 
 	default:
 		return nil, fmt.Errorf("unknown tool: %s", toolName)
 	}
-}
-
-// GetToolList returns a list of available MCP tools with basic info
-func (s *Server) GetToolList() []Tool {
-	return []Tool{
-		{
-			Name:        "register_agent",
-			Description: "Register a new Claude Code agent",
-		},
-		{
-			Name:        "register_claude_desktop_agent",
-			Description: "Register a new Claude Desktop agent",
-		},
-		{
-			Name:        "update_status",
-			Description: "Update agent status and current task",
-		},
-		{
-			Name:        "log_action",
-			Description: "Log agent activities",
-		},
-		{
-			Name:        "log_commits",
-			Description: "Track git commits",
-		},
-		{
-			Name:        "end_session",
-			Description: "Complete agent session",
-		},
-		{
-			Name:        "save_session_context",
-			Description: "Save current session state for resumption",
-		},
-		{
-			Name:        "load_session_context",
-			Description: "Load previous session state",
-		},
-		{
-			Name:        "add_session_note",
-			Description: "Add contextual notes to session",
-		},
-		{
-			Name:        "get_current_window",
-			Description: "Get current active window info (macOS)",
-		},
-		{
-			Name:        "bring_window_front",
-			Description: "Bring agent window to front (macOS)",
-		},
-		{
-			Name:        "help",
-			Description: "Get detailed help and usage instructions",
-		},
-	}
-}
-
-// GetDetailedToolList returns tools with comprehensive documentation
-func (s *Server) GetDetailedToolList() []Tool {
-	return s.tools.getAllToolsWithHelp()
 }
