@@ -1,0 +1,206 @@
+#!/bin/bash
+
+# Eye in the Sky - Interactive Session Starter
+# This script helps you quickly register a new Claude Code agent session
+
+set -e
+
+# Color codes for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Default values
+DEFAULT_HOST="localhost"
+DEFAULT_PORT="8080"
+HOST="${DEFAULT_HOST}"
+PORT="${DEFAULT_PORT}"
+WORKTREE_PATH=$(pwd)
+DESCRIPTION=""
+AGENT_TYPE="worktree"
+PROJECT_NAME=""
+WINDOW_ID=""
+
+# Function to print colored output
+print_info() {
+    echo -e "${BLUE}ℹ${NC} $1"
+}
+
+print_success() {
+    echo -e "${GREEN}✅${NC} $1"
+}
+
+print_error() {
+    echo -e "${RED}❌${NC} $1"
+}
+
+print_warning() {
+    echo -e "${YELLOW}⚠️${NC} $1"
+}
+
+# Function to show usage
+show_usage() {
+    echo "Usage: $0 [OPTIONS]"
+    echo ""
+    echo "Options:"
+    echo "  -h, --help              Show this help message"
+    echo "  -t, --type TYPE         Agent type: 'worktree' or 'desktop' (default: worktree)"
+    echo "  -d, --description DESC  Description of the work you're doing"
+    echo "  -p, --path PATH         Worktree path (default: current directory)"
+    echo "  -n, --project NAME      Project name (for desktop agents)"
+    echo "  -w, --window ID         Window ID (for desktop agents)"
+    echo "  --host HOST             Server host (default: localhost)"
+    echo "  --port PORT             Server port (default: 8080)"
+    echo ""
+    echo "Examples:"
+    echo "  $0 -d \"Working on user authentication\""
+    echo "  $0 -t desktop -n \"MyApp\" -d \"Fixing login bug\""
+    echo "  $0 -t worktree -p \"/path/to/project\" -d \"Adding new feature\""
+}
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help)
+            show_usage
+            exit 0
+            ;;
+        -t|--type)
+            AGENT_TYPE="$2"
+            shift 2
+            ;;
+        -d|--description)
+            DESCRIPTION="$2"
+            shift 2
+            ;;
+        -p|--path)
+            WORKTREE_PATH="$2"
+            shift 2
+            ;;
+        -n|--project)
+            PROJECT_NAME="$2"
+            shift 2
+            ;;
+        -w|--window)
+            WINDOW_ID="$2"
+            shift 2
+            ;;
+        --host)
+            HOST="$2"
+            shift 2
+            ;;
+        --port)
+            PORT="$2"
+            shift 2
+            ;;
+        *)
+            print_error "Unknown option: $1"
+            show_usage
+            exit 1
+            ;;
+    esac
+done
+
+# Interactive mode if no description provided
+if [[ -z "$DESCRIPTION" ]]; then
+    echo ""
+    print_info "Starting Eye in the Sky session setup..."
+    echo ""
+
+    # Ask for agent type
+    echo "Select agent type:"
+    echo "  1) Worktree (Claude Code)"
+    echo "  2) Desktop (Claude Desktop)"
+    read -p "Choice [1-2] (default: 1): " type_choice
+
+    case $type_choice in
+        2)
+            AGENT_TYPE="desktop"
+            ;;
+        *)
+            AGENT_TYPE="worktree"
+            ;;
+    esac
+
+    # Get description
+    read -p "Description of work you're doing: " DESCRIPTION
+
+    # Get additional info based on agent type
+    if [[ "$AGENT_TYPE" == "desktop" ]]; then
+        read -p "Project name: " PROJECT_NAME
+        read -p "Window ID (optional): " WINDOW_ID
+    else
+        read -p "Worktree path (default: $WORKTREE_PATH): " path_input
+        if [[ -n "$path_input" ]]; then
+            WORKTREE_PATH="$path_input"
+        fi
+    fi
+fi
+
+# Validate inputs
+if [[ -z "$DESCRIPTION" ]]; then
+    print_error "Description is required"
+    exit 1
+fi
+
+if [[ "$AGENT_TYPE" != "worktree" && "$AGENT_TYPE" != "desktop" ]]; then
+    print_error "Agent type must be 'worktree' or 'desktop'"
+    exit 1
+fi
+
+# Check if server is reachable
+SERVER_URL="http://${HOST}:${PORT}"
+if ! curl -s "${SERVER_URL}/health" > /dev/null 2>&1; then
+    print_error "Cannot reach Eye in the Sky server at ${SERVER_URL}"
+    print_info "Make sure the server is running with: ./bin/eye-in-the-sky --dashboard"
+    exit 1
+fi
+
+# Prepare API call based on agent type
+if [[ "$AGENT_TYPE" == "desktop" ]]; then
+    # Register desktop agent
+    json_data="{\"description\": \"$DESCRIPTION\", \"project_name\": \"$PROJECT_NAME\""
+    if [[ -n "$WINDOW_ID" ]]; then
+        json_data+=", \"window_id\": \"$WINDOW_ID\""
+    fi
+    json_data+="}"
+
+    api_endpoint="/api/mcp/tools/register_claude_desktop_agent"
+else
+    # Register worktree agent
+    json_data="{\"description\": \"$DESCRIPTION\", \"worktree_path\": \"$WORKTREE_PATH\"}"
+    api_endpoint="/api/mcp/tools/register_agent"
+fi
+
+print_info "Registering $AGENT_TYPE agent..."
+
+# Make API call
+response=$(curl -s -X POST "${SERVER_URL}${api_endpoint}" \
+    -H "Content-Type: application/json" \
+    -d "$json_data")
+
+# Parse response
+if echo "$response" | jq -e '.success' > /dev/null 2>&1; then
+    agent_id=$(echo "$response" | jq -r '.result.message' | grep -o '[a-f0-9]\{8\}')
+    if [[ -n "$agent_id" ]]; then
+        print_success "Agent registered successfully!"
+        print_info "Agent ID: $agent_id"
+        print_info "Description: $DESCRIPTION"
+        if [[ "$AGENT_TYPE" == "worktree" ]]; then
+            print_info "Worktree: $WORKTREE_PATH"
+        else
+            print_info "Project: $PROJECT_NAME"
+        fi
+        print_info "View dashboard: ${SERVER_URL}"
+        print_info "Direct link: ${SERVER_URL}/agent/${agent_id}"
+    else
+        print_success "Agent registered successfully!"
+        print_info "View dashboard: ${SERVER_URL}"
+    fi
+else
+    print_error "Failed to register agent"
+    print_error "Response: $response"
+    exit 1
+fi

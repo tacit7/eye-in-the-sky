@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} - Eye in the Sky</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="/static/css/output.css" rel="stylesheet">
+</head>
+<body class="min-h-screen flex flex-col bg-[#1a1b1e]">
+    <div class="min-h-screen text-gray-100 p-8 space-y-8">
+        <header class="flex items-center justify-between bg-primary-800 p-4 rounded-xl shadow-md">
+            <h1 class="text-xl font-semibold text-white tracking-wide">Eye in the Sky - Mockup</h1>
+            <button class="bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg transition-colors">
+                Launch Agent
+            </button>
+        </header>
+
+        <section class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div class="bg-card border border-gray-700 rounded-xl p-4 md:p-6 flex flex-col items-center shadow-lg hover:shadow-xl transition-all duration-200">
+                <i class="bi bi-people text-primary-400 text-2xl mb-2"></i>
+                <p class="text-sm text-gray-400">Active Agents</p>
+                <p class="text-2xl font-semibold text-primary-400">3</p>
+            </div>
+            <div class="bg-card border border-gray-700 rounded-xl p-4 md:p-6 flex flex-col items-center shadow-lg hover:shadow-xl transition-all duration-200">
+                <i class="bi bi-activity text-primary-400 text-2xl mb-2"></i>
+                <p class="text-sm text-gray-400">Sessions Today</p>
+                <p class="text-2xl font-semibold text-primary-400">3</p>
+            </div>
+            <div class="bg-card border border-gray-700 rounded-xl p-4 md:p-6 flex flex-col items-center shadow-lg hover:shadow-xl transition-all duration-200">
+                <i class="bi bi-clock text-primary-400 text-2xl mb-2"></i>
+                <p class="text-sm text-gray-400">Inactive (&gt;2h)</p>
+                <p class="text-2xl font-semibold text-primary-400">0</p>
+            </div>
+        </section>
+
+        <section class="bg-surface border border-gray-700 rounded-xl shadow-lg overflow-hidden">
+            <div class="p-4 border-b border-gray-700 flex justify-between items-center">
+                <h2 class="text-lg font-semibold">Active Claude Code Agents</h2>
+                <span class="text-sm text-primary-400 font-medium">3 Active</span>
+            </div>
+
+            <div class="divide-y divide-gray-800">
+                <div class="flex justify-between items-center p-4 hover:bg-gray-800/60 transition-colors">
+                    <div>
+                        <p class="font-medium text-gray-100">Agent 1</p>
+                        <p class="text-sm text-gray-400">Working on UI improvements for Eye in the Sky</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button class="border border-primary-500 text-primary-400 hover:bg-primary-600 hover:text-white px-3 py-2 rounded-lg transition-colors">
+                            View
+                        </button>
+                        <button class="bg-primary-600 hover:bg-primary-700 text-white px-3 py-2 rounded-lg transition-colors">
+                            End
+                        </button>
+                    </div>
+                </div>
+                <div class="flex justify-between items-center p-4 hover:bg-gray-800/60 transition-colors">
+                    <div>
+                        <p class="font-medium text-gray-100">Agent 2</p>
+                        <p class="text-sm text-gray-400">Working on database optimization tasks</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button class="border border-primary-500 text-primary-400 hover:bg-primary-600 hover:text-white px-3 py-2 rounded-lg transition-colors">
+                            View
+                        </button>
+                        <button class="bg-primary-600 hover:bg-primary-700 text-white px-3 py-2 rounded-lg transition-colors">
+                            End
+                        </button>
+                    </div>
+                </div>
+                <div class="flex justify-between items-center p-4 hover:bg-gray-800/60 transition-colors">
+                    <div>
+                        <p class="font-medium text-gray-100">Agent 3</p>
+                        <p class="text-sm text-gray-400">Working on API endpoint development</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button class="border border-primary-500 text-primary-400 hover:bg-primary-600 hover:text-white px-3 py-2 rounded-lg transition-colors">
+                            View
+                        </button>
+                        <button class="bg-primary-600 hover:bg-primary-700 text-white px-3 py-2 rounded-lg transition-colors">
+                            End
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <footer class="text-center text-gray-400">
+            <small>Eye in the Sky - Mockup Design</small>
+            <br>
+            <a href="/" class="text-primary-400 hover:text-primary-300 underline">← Back to Main Dashboard</a>
+        </footer>
+    </div>
+</body>
+</html>

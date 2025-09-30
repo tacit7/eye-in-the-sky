@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"embed"
 	"flag"
 	"fmt"
 	"log"
@@ -15,6 +16,9 @@ import (
 	"github.com/tacit7/eye-in-the-sky/internal/database"
 	"github.com/tacit7/eye-in-the-sky/internal/mcp"
 )
+
+//go:embed web/templates/*.html
+var templateFS embed.FS
 
 func main() {
 	// Command line flags
@@ -58,7 +62,7 @@ func main() {
 	mcpServer := mcp.NewServer(db)
 
 	// Load templates
-	if err := dashboardServer.LoadTemplates("web/templates"); err != nil {
+	if err := dashboardServer.LoadTemplates(templateFS, "web/templates/*.html"); err != nil {
 		log.Fatalf("Failed to load templates: %v", err)
 	}
 

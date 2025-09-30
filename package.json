@@ -1,0 +1,12 @@
+{
+  "name": "eye-in-the-sky",
+  "version": "1.0.0",
+  "description": "Claude Code Multi-Agent Management System",
+  "scripts": {
+    "build-css": "tailwindcss -i ./web/static/css/input.css -o ./web/static/css/output.css --watch",
+    "build-css-prod": "tailwindcss -i ./web/static/css/input.css -o ./web/static/css/output.css --minify"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.3.0"
+  }
+}

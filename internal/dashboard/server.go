@@ -1,13 +1,13 @@
 package dashboard
 
 import (
+	"embed"
 	"encoding/json"
 	"fmt"
 	"html/template"
 	"log"
 	"net/http"
-	"os"
-	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/tacit7/eye-in-the-sky/internal/database"
@@ -15,9 +15,18 @@ import (
 	"github.com/tacit7/eye-in-the-sky/internal/window"
 )
 
+// APIResponse represents a standardized JSON API response
+type APIResponse[T any] struct {
+	Success bool   `json:"success"`
+	Message string `json:"message,omitempty"`
+	Data    *T     `json:"data,omitempty"`
+}
+
 // Server represents the dashboard HTTP server
 type Server struct {
 	templates     *template.Template
+	mux           *http.ServeMux
+	httpServer    *http.Server
 	port          string
 	windowManager *window.Manager
 	db            *database.DB
@@ -26,20 +35,21 @@ type Server struct {
 
 // Agent represents an agent for template rendering
 type Agent struct {
-	ID                     string
-	Status                 string
-	Source                 string
-	WorktreePath          string
-	FeatureDescription    string
-	CurrentTask           string
-	LastActivityAt        time.Time
-	LastActivityFormatted string
-	StatusIcon            string
-	SourceIcon            string
-	SourceColor           string
-	SourceBadge           string
-	Progress              int    // Progress percentage for suspended sessions
-	ProjectName           string // Project name for better identification
+	ID                     string    `json:"id"`
+	Status                 string    `json:"status"`
+	Source                 string    `json:"source"`
+	WorktreePath          string    `json:"worktree_path,omitempty"`
+	FeatureDescription    string    `json:"feature_description,omitempty"`
+	CurrentTask           string    `json:"current_task,omitempty"`
+	LastActivityAt        time.Time `json:"last_activity_at"`
+	LastActivityFormatted string    `json:"last_activity_formatted"`
+	LastActivityISO       string    `json:"last_activity_iso"` // For tooltips
+	StatusIcon            string    `json:"status_icon"`
+	SourceIcon            string    `json:"source_icon"`
+	SourceColor           string    `json:"source_color"`
+	SourceBadge           string    `json:"source_badge"`
+	Progress              int       `json:"progress"` // Progress percentage for suspended sessions
+	ProjectName           string    `json:"project_name,omitempty"` // Project name for better identification
 }
 
 // DashboardData represents the data passed to the main dashboard template
@@ -61,63 +71,90 @@ type DashboardStats struct {
 
 // NewServer creates a new dashboard server
 func NewServer(port string, db *database.DB) *Server {
-	return &Server{
+	mux := http.NewServeMux()
+	s := &Server{
 		port:          port,
 		windowManager: window.NewManager(),
 		db:            db,
 		mcpServer:     mcp.NewServer(db),
+		mux:           mux,
 	}
+	s.routes()
+	s.httpServer = &http.Server{
+		Addr:         ":" + port,
+		Handler:      mux,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+	return s
 }
 
-// LoadTemplates loads and parses HTML templates
-func (s *Server) LoadTemplates(templateDir string) error {
-	patterns := []string{
-		filepath.Join(templateDir, "*.html"),
-	}
-
-	templates, err := template.ParseGlob(patterns[0])
-	if err != nil {
-		return err
-	}
-
-	s.templates = templates
+// LoadTemplates loads and parses HTML templates from embedded filesystem
+func (s *Server) LoadTemplates(templateFS embed.FS, pattern string) error {
+	s.templates = template.Must(template.New("").Funcs(template.FuncMap{
+		"timeago": formatTimeAgo,
+	}).ParseFS(templateFS, pattern))
 	return nil
+}
+
+// routes sets up all HTTP routes
+func (s *Server) routes() {
+	fs := http.FileServer(http.Dir("web/static"))
+	s.mux.Handle("/static/", http.StripPrefix("/static/", s.cacheStatic(fs)))
+
+	s.mux.HandleFunc("/", s.cacheBustHTML(s.handleIndex))
+	s.mux.HandleFunc("/mockup", s.cacheBustHTML(s.handleMockup))
+	s.mux.HandleFunc("/agent/", s.cacheBustHTML(s.handleAgentDetail))
+
+	s.mux.HandleFunc("/api/agents/", s.handleAPIAgents)
+	s.mux.HandleFunc("/api/mcp/tools/", s.handleMCPTools)
+	s.mux.HandleFunc("/api/window/get-id", s.handleGetWindowID)
+	s.mux.HandleFunc("/api/window/bring-to-front", s.handleBringToFront)
+	s.mux.HandleFunc("/api/window/list", s.handleListWindows)
 }
 
 // Start starts the HTTP server
 func (s *Server) Start() error {
-	// Static file handler with cache-busting headers
-	fs := http.FileServer(http.Dir("web/static/"))
-	http.Handle("/static/", http.StripPrefix("/static/", s.noCacheHandler(fs)))
-
-	// Route handlers
-	http.HandleFunc("/", s.handleIndex)
-	http.HandleFunc("/agent/", s.handleAgentDetail)
-
-	// API routes for AJAX calls
-	http.HandleFunc("/api/agents/", s.handleAPIAgents)
-
-	// MCP tool API routes
-	http.HandleFunc("/api/mcp/tools/", s.handleMCPTools)
-
-	// Window management API routes
-	http.HandleFunc("/api/window/get-id", s.handleGetWindowID)
-	http.HandleFunc("/api/window/bring-to-front", s.handleBringToFront)
-	http.HandleFunc("/api/window/list", s.handleListWindows)
-
 	log.Printf("Dashboard server starting on http://localhost:%s", s.port)
-	return http.ListenAndServe(":"+s.port, nil)
+	return s.httpServer.ListenAndServe()
 }
 
-// noCacheHandler wraps an http.Handler to add cache-busting headers
-func (s *Server) noCacheHandler(h http.Handler) http.Handler {
+// cacheStatic adds long-term cache headers for static assets
+func (s *Server) cacheStatic(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Add cache-busting headers to prevent browser caching issues
-		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-		w.Header().Set("Pragma", "no-cache")
-		w.Header().Set("Expires", "0")
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		h.ServeHTTP(w, r)
 	})
+}
+
+// cacheBustHTML adds cache-busting and security headers for HTML responses
+func (s *Server) cacheBustHTML(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		reqID := time.Now().UnixNano()
+		log.Printf("req=%d %s %s", reqID, r.Method, r.URL.Path)
+
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Expires", "0")
+		s.securityHeaders(w)
+		next(w, r)
+	}
+}
+
+// securityHeaders adds security headers to responses
+func (s *Server) securityHeaders(w http.ResponseWriter) {
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("X-Frame-Options", "DENY")
+	w.Header().Set("Referrer-Policy", "same-origin")
+	w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'")
+}
+
+// writeJSON writes a standardized JSON response
+func writeJSON[T any](w http.ResponseWriter, status int, payload APIResponse[T]) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(payload)
 }
 
 // handleIndex serves the main dashboard page
@@ -126,11 +163,6 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-
-	// Add cache-busting headers to prevent browser caching issues
-	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-	w.Header().Set("Pragma", "no-cache")
-	w.Header().Set("Expires", "0")
 
 	// Get all agents from database
 	dbAgents, err := s.db.ListAgents("")
@@ -144,6 +176,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	var agents []Agent
 	var suspendedAgents []Agent
 	for _, dbAgent := range dbAgents {
+		lastActivity := getTimeValue(dbAgent.LastActivityAt, dbAgent.UpdatedAt)
 		agent := Agent{
 			ID:                     dbAgent.ID,
 			Status:                 dbAgent.Status,
@@ -151,8 +184,9 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 			WorktreePath:          getStringValue(dbAgent.GitWorktreePath),
 			FeatureDescription:    getStringValue(dbAgent.FeatureDescription),
 			CurrentTask:           getStringValue(dbAgent.CurrentTask),
-			LastActivityAt:        getTimeValue(dbAgent.LastActivityAt, dbAgent.UpdatedAt),
-			LastActivityFormatted: formatTimeAgo(getTimeValue(dbAgent.LastActivityAt, dbAgent.UpdatedAt)),
+			LastActivityAt:        lastActivity,
+			LastActivityFormatted: formatTimeAgo(lastActivity),
+			LastActivityISO:       lastActivity.Format(time.RFC3339), // For tooltips
 			StatusIcon:            getStatusIcon(dbAgent.Status),
 			SourceIcon:            getSourceIcon(dbAgent.Source),
 			SourceColor:           getSourceColor(dbAgent.Source),
@@ -192,12 +226,22 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// handleMockup serves the mockup page
+func (s *Server) handleMockup(w http.ResponseWriter, r *http.Request) {
+
+	data := DashboardData{
+		Title: "Mockup Dashboard",
+	}
+
+	if err := s.templates.ExecuteTemplate(w, "mockup.html", data); err != nil {
+		log.Printf("Error executing mockup template: %v", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+}
+
 // handleAgentDetail serves the agent detail page
 func (s *Server) handleAgentDetail(w http.ResponseWriter, r *http.Request) {
-	// Add cache-busting headers to prevent browser caching issues
-	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-	w.Header().Set("Pragma", "no-cache")
-	w.Header().Set("Expires", "0")
 
 	// Extract agent ID from URL path
 	agentID := r.URL.Path[len("/agent/"):]
@@ -295,53 +339,11 @@ func (s *Server) handleAgentDetail(w http.ResponseWriter, r *http.Request) {
 		Commits: commits,
 	}
 
-	// Write the page manually with agent template
-	w.Header().Set("Content-Type", "text/html")
-	w.WriteHeader(http.StatusOK)
-
-	// Write HTML header
-	w.Write([]byte(`<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agent Detail - Eye in the Sky</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="/static/css/styles.css" rel="stylesheet">
-</head>
-<body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-        <div class="container">
-            <a class="navbar-brand" href="/">
-                <i class="bi bi-eye"></i> Eye in the Sky
-            </a>
-            <div class="navbar-nav ms-auto">
-                <span class="nav-link text-light">Claude Code Multi-Agent Dashboard</span>
-            </div>
-        </div>
-    </nav>
-    <main class="container mt-4">
-`))
-
-	// Execute agent content template
-	if err := s.templates.ExecuteTemplate(w, "agent-content", data); err != nil {
+	if err := s.templates.ExecuteTemplate(w, "agent.html", data); err != nil {
 		log.Printf("Error executing agent template: %v", err)
-		w.Write([]byte("<p>Error loading agent details</p>"))
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
 	}
-
-	// Write HTML footer
-	w.Write([]byte(`
-    </main>
-    <footer class="bg-light mt-5 py-3">
-        <div class="container text-center text-muted">
-            <small>Claude Code Multi-Agent Management System</small>
-        </div>
-    </footer>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="/static/js/dashboard.js"></script>
-</body>
-</html>`))
 }
 
 // handleAPIAgents handles API calls for agent management
@@ -350,15 +352,10 @@ func (s *Server) handleAPIAgents(w http.ResponseWriter, r *http.Request) {
 
 	// Extract agent ID and action from URL path like /api/agents/{agentId}/{action}
 	pathParts := r.URL.Path[len("/api/agents/"):]
-
-	// Parse path components manually
-	agentID := ""
-	action := ""
-	if len(pathParts) >= 8 {
-		agentID = pathParts[:8]
-		if len(pathParts) > 9 && pathParts[8] == '/' {
-			action = pathParts[9:]
-		}
+	agentID, action, ok := parseAgentPath(pathParts)
+	if !ok {
+		http.Error(w, `{"success": false, "message": "Invalid agent path"}`, http.StatusBadRequest)
+		return
 	}
 
 	switch r.Method {
@@ -408,25 +405,26 @@ func (s *Server) handleGetWindowID(w http.ResponseWriter, r *http.Request) {
 	// Get window information
 	windowInfo, err := s.windowManager.GetCurrentWindowID(req.Application, req.WindowTitle)
 	if err != nil {
-		resp := map[string]interface{}{
-			"success": false,
-			"message": err.Error(),
-		}
-		json.NewEncoder(w).Encode(resp)
+		writeJSON(w, http.StatusInternalServerError, APIResponse[any]{
+			Success: false,
+			Message: err.Error(),
+		})
 		return
 	}
 
-	// Return success response
-	resp := map[string]interface{}{
-		"success":     true,
-		"message":     "Window ID retrieved successfully",
+	// Return success response with window data
+	data := map[string]interface{}{
 		"window_id":   windowInfo.ID,
 		"window_info": windowInfo.Title,
 		"application": windowInfo.Application,
 		"position":    windowInfo.Position,
 	}
 
-	json.NewEncoder(w).Encode(resp)
+	writeJSON(w, http.StatusOK, APIResponse[map[string]interface{}]{
+		Success: true,
+		Message: "Window ID retrieved successfully",
+		Data:    &data,
+	})
 }
 
 // handleBringToFront handles requests to bring a window to front
@@ -566,18 +564,18 @@ func getTimeValue(ptr *time.Time, fallback time.Time) time.Time {
 
 // formatTimeAgo formats a time as "X ago" format
 func formatTimeAgo(t time.Time) string {
-	duration := time.Since(t)
-
-	if duration.Hours() >= 24 {
-		days := int(duration.Hours() / 24)
-		return fmt.Sprintf("%dd ago", days)
-	} else if duration.Hours() >= 1 {
-		hours := int(duration.Hours())
-		return fmt.Sprintf("%dh ago", hours)
-	} else if duration.Minutes() >= 1 {
-		minutes := int(duration.Minutes())
-		return fmt.Sprintf("%dm ago", minutes)
-	} else {
+	d := time.Since(t)
+	if d < 0 {
+		d = 0
+	}
+	switch {
+	case d >= 48*time.Hour:
+		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
+	case d >= time.Hour:
+		return fmt.Sprintf("%dh ago", int(d.Hours()))
+	case d >= time.Minute:
+		return fmt.Sprintf("%dm ago", int(d.Minutes()))
+	default:
 		return "just now"
 	}
 }
@@ -670,19 +668,17 @@ func getSourceBadge(source string) string {
 
 // hasSessionContext checks if an agent has session context saved (indicating it can be suspended/resumed)
 func hasSessionContext(agentID string) bool {
-	// For now, we'll check if there's a session context file
-	// In a real implementation, this would check the database for session context records
-	contextFile := fmt.Sprintf("%s-context.md", agentID)
-	_, err := os.Stat(contextFile)
-	return err == nil
+	// FIXED: Use database instead of dangerous file reading
+	// In a proper implementation, this would check for a session_context table
+	// For now, return false to disable the dangerous file-based approach
+	return false
 }
 
 // extractProgressFromContext extracts progress percentage from session context
 func extractProgressFromContext(agentID string) int {
-	// For demonstration, return fixed progress for known agent
-	if agentID == "534002f0" {
-		return 95 // Agent 534002f0 was at 95% completion when suspended
-	}
+	// FIXED: Use database instead of dangerous file reading
+	// In a proper implementation, this would query a progress field from the database
+	// For now, return 0 to disable the dangerous file-based approach
 	return 0
 }
 
@@ -776,6 +772,19 @@ func (s *Server) handleUpdateStatus(w http.ResponseWriter, r *http.Request, agen
 	}
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)
+}
+
+// parseAgentPath parses agent path components from URL path
+func parseAgentPath(p string) (id, action string, ok bool) {
+	parts := strings.Split(strings.TrimPrefix(p, "/api/agents/"), "/")
+	if len(parts) == 0 || parts[0] == "" {
+		return "", "", false
+	}
+	id = parts[0]
+	if len(parts) > 1 {
+		action = parts[1]
+	}
+	return id, action, true
 }
 
 // mustMarshalJSON marshals to JSON and panics on error (for internal use)

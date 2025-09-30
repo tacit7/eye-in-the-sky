@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"embed"
 	"flag"
 	"fmt"
 	"log"
@@ -14,6 +15,9 @@ import (
 	"github.com/tacit7/eye-in-the-sky/internal/dashboard"
 	"github.com/tacit7/eye-in-the-sky/internal/mcp"
 )
+
+//go:embed templates/*.html
+var templateFS embed.FS
 
 // isRunningAsMCP detects if we're being called by Claude Desktop via stdin
 func isRunningAsMCP() bool {
@@ -65,7 +69,7 @@ func main() {
 	dashboardServer := dashboard.NewServer("8080", db)
 
 	// Load templates
-	if err := dashboardServer.LoadTemplates("./web/templates"); err != nil {
+	if err := dashboardServer.LoadTemplates(templateFS, "templates/*.html"); err != nil {
 		log.Fatalf("Failed to load templates: %v", err)
 	}
 
