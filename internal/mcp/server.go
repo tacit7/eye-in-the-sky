@@ -121,6 +121,48 @@ func (s *Server) registerTools() {
 		Name:        "i-help",
 		Description: "Get detailed help and usage instructions",
 	}, s.handleHelp)
+
+	// POA Spec Tools - Session Management
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "i-start-session",
+		Description: "Start a new session with agent registration",
+	}, s.handleStartSession)
+
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "i-log",
+		Description: "Add log entry to session",
+	}, s.handleAddLog)
+
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "i-note-add",
+		Description: "Add note to session",
+	}, s.handleAddNote)
+
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "i-context-set",
+		Description: "Set context key/value for session",
+	}, s.handleSetContext)
+
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "i-session-get",
+		Description: "Get session info with logs, notes, and context",
+	}, s.handleGetSession)
+
+	// Persona Management Tools
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "i-snapshot-expertise",
+		Description: "Save current agent expertise as a reusable persona",
+	}, s.handleSnapshotExpertise)
+
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "i-persona-get",
+		Description: "Get persona details and initial context",
+	}, s.handleGetPersona)
+
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "i-persona-list",
+		Description: "List all available personas",
+	}, s.handleListPersonas)
 }
 
 // Tool handlers using the generic AddTool pattern
@@ -350,4 +392,109 @@ func (s *Server) HandleTool(toolName string, argsJSON []byte) (interface{}, erro
 	default:
 		return nil, fmt.Errorf("unknown tool: %s", toolName)
 	}
+}
+// POA Spec Tool Handlers
+
+func (s *Server) handleStartSession(ctx context.Context, req *mcp.CallToolRequest, args StartSessionArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.StartSession(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: result.Message},
+		},
+	}, result, nil
+}
+
+func (s *Server) handleAddLog(ctx context.Context, req *mcp.CallToolRequest, args AddLogArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.AddLog(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: result.Message},
+		},
+	}, result, nil
+}
+
+func (s *Server) handleAddNote(ctx context.Context, req *mcp.CallToolRequest, args AddNoteArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.AddNote(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: result.Message},
+		},
+	}, result, nil
+}
+
+func (s *Server) handleSetContext(ctx context.Context, req *mcp.CallToolRequest, args SetContextArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.SetContext(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: result.Message},
+		},
+	}, result, nil
+}
+
+func (s *Server) handleGetSession(ctx context.Context, req *mcp.CallToolRequest, args GetSessionArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.GetSession(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: result.Message},
+		},
+	}, result, nil
+}
+
+func (s *Server) handleSnapshotExpertise(ctx context.Context, req *mcp.CallToolRequest, args SnapshotExpertiseArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.SnapshotExpertise(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: result.Message},
+		},
+	}, result, nil
+}
+
+func (s *Server) handleGetPersona(ctx context.Context, req *mcp.CallToolRequest, args GetPersonaArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.GetPersona(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: result.Message},
+		},
+	}, result, nil
+}
+
+func (s *Server) handleListPersonas(ctx context.Context, req *mcp.CallToolRequest, args ListPersonasArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.ListPersonas(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: result.Message},
+		},
+	}, result, nil
 }

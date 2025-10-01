@@ -131,3 +131,162 @@ type BringWindowFrontResult struct {
 	Message string `json:"message"`
 }
 
+// StartSessionArgs represents the arguments for i-start-session tool
+type StartSessionArgs struct {
+	AgentID      *string `json:"agent_id,omitempty" jsonschema:"description:8-character agent identifier (optional - auto-generated if not provided)"`
+	Name         *string `json:"name,omitempty" jsonschema:"description:Human-readable session name (optional)"`
+	Description  string  `json:"description" jsonschema:"description:What you'll be working on"`
+	ProjectName  *string `json:"project_name,omitempty" jsonschema:"description:Project name (optional)"`
+	WorktreePath *string `json:"worktree_path,omitempty" jsonschema:"description:Path to git repository (optional)"`
+	PersonaID    *string `json:"persona_id,omitempty" jsonschema:"description:Persona ID to load initial context from (optional)"`
+}
+
+type StartSessionResult struct {
+	Success        bool   `json:"success"`
+	Message        string `json:"message"`
+	AgentID        string `json:"agent_id"`
+	SessionID      string `json:"session_id"`
+	InitialContext string `json:"initial_context,omitempty"` // Loaded from persona if provided
+}
+
+// AddLogArgs represents the arguments for i-log tool
+type AddLogArgs struct {
+	SessionID string `json:"session_id" jsonschema:"description:Session identifier"`
+	Type      string `json:"type" jsonschema:"description:Log type: action, commit, error, info"`
+	Message   string `json:"message" jsonschema:"description:Log message"`
+}
+
+type AddLogResult struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+// AddNoteArgs represents the arguments for i-note-add tool
+type AddNoteArgs struct {
+	SessionID string `json:"session_id" jsonschema:"description:Session identifier"`
+	Content   string `json:"content" jsonschema:"description:Note content"`
+}
+
+type AddNoteResult struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+// SetContextArgs represents the arguments for i-context-set tool
+type SetContextArgs struct {
+	SessionID string `json:"session_id" jsonschema:"description:Session identifier"`
+	Key       string `json:"key" jsonschema:"description:Context key"`
+	Value     string `json:"value" jsonschema:"description:Context value"`
+}
+
+type SetContextResult struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+// GetSessionArgs represents the arguments for i-session-get tool
+type GetSessionArgs struct {
+	SessionID string `json:"session_id" jsonschema:"description:Session identifier"`
+}
+
+type GetSessionResult struct {
+	Success   bool              `json:"success"`
+	Message   string            `json:"message"`
+	AgentID   string            `json:"agent_id"`
+	SessionID string            `json:"session_id"`
+	Logs      []SessionLog      `json:"logs"`
+	Notes     []SessionNote     `json:"notes"`
+	Context   map[string]string `json:"context"`
+}
+
+type SessionLog struct {
+	Type      string `json:"type"`
+	Message   string `json:"message"`
+	Timestamp string `json:"timestamp"`
+}
+
+type SessionNote struct {
+	Content   string `json:"content"`
+	Timestamp string `json:"timestamp"`
+}
+
+// CreatePersonaArgs represents the arguments for i-persona-create tool
+type CreatePersonaArgs struct {
+	ID             string  `json:"id" jsonschema:"description:Unique persona identifier (e.g., 'frontend-specialist')"`
+	Name           string  `json:"name" jsonschema:"description:Human-readable persona name"`
+	Description    string  `json:"description" jsonschema:"description:Brief description of the persona"`
+	Expertise      string  `json:"expertise" jsonschema:"description:JSON array of expertise areas"`
+	InitialContext string  `json:"initial_context" jsonschema:"description:The persona's initial instructions and context"`
+	PreferredTools *string `json:"preferred_tools,omitempty" jsonschema:"description:JSON array of preferred MCP tools (optional)"`
+	Specialization *string `json:"specialization,omitempty" jsonschema:"description:Primary domain (e.g., 'frontend', 'backend', 'security') (optional)"`
+}
+
+type CreatePersonaResult struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+// GetPersonaArgs represents the arguments for i-persona-get tool
+type GetPersonaArgs struct {
+	ID string `json:"id" jsonschema:"description:Persona identifier"`
+}
+
+type GetPersonaResult struct {
+	Success        bool    `json:"success"`
+	Message        string  `json:"message"`
+	ID             string  `json:"id,omitempty"`
+	Name           string  `json:"name,omitempty"`
+	Description    string  `json:"description,omitempty"`
+	Expertise      string  `json:"expertise,omitempty"`
+	InitialContext string  `json:"initial_context,omitempty"`
+	PreferredTools *string `json:"preferred_tools,omitempty"`
+	Specialization *string `json:"specialization,omitempty"`
+}
+
+// ListPersonasArgs represents the arguments for i-persona-list tool
+type ListPersonasArgs struct {
+	Specialization *string `json:"specialization,omitempty" jsonschema:"description:Filter by specialization (optional)"`
+}
+
+type ListPersonasResult struct {
+	Success  bool              `json:"success"`
+	Message  string            `json:"message"`
+	Personas []PersonaSummary  `json:"personas,omitempty"`
+}
+
+type PersonaSummary struct {
+	ID             string  `json:"id"`
+	Name           string  `json:"name"`
+	Description    string  `json:"description"`
+	Specialization *string `json:"specialization,omitempty"`
+}
+
+// SnapshotExpertiseArgs represents arguments for capturing current agent expertise
+type SnapshotExpertiseArgs struct {
+	PersonaID      string  `json:"persona_id" jsonschema:"description:Unique ID for the persona (e.g., 'payment-flow-expert')"`
+	PersonaName    string  `json:"persona_name" jsonschema:"description:Human-readable name"`
+	ExpertiseAreas string  `json:"expertise_areas" jsonschema:"description:JSON array of expertise areas the agent has learned"`
+	CurrentContext string  `json:"current_context" jsonschema:"description:The agent's current understanding and knowledge - provide detailed context about what you've learned"`
+	Specialization *string `json:"specialization,omitempty" jsonschema:"description:Primary domain (optional)"`
+	PreferredTools *string `json:"preferred_tools,omitempty" jsonschema:"description:JSON array of tools used (optional)"`
+}
+
+type SnapshotExpertiseResult struct {
+	Success   bool   `json:"success"`
+	Message   string `json:"message"`
+	PersonaID string `json:"persona_id,omitempty"`
+}
+
+// GetContextArgs represents arguments for retrieving stored context
+type GetContextArgs struct {
+	AgentID string `json:"agent_id" jsonschema:"description:Agent ID to get context from"`
+}
+
+type GetContextResult struct {
+	Success        bool   `json:"success"`
+	Message        string `json:"message"`
+	LearnedContext string `json:"learned_context,omitempty"` // The stored learned context
+	CurrentPhase   string `json:"current_phase,omitempty"`
+	SessionID      string `json:"session_id,omitempty"`
+}
+

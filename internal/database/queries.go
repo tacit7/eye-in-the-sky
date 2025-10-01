@@ -26,13 +26,13 @@ func (db *DB) GetAgent(id string) (*Agent, error) {
 	}
 
 	query := `
-		SELECT id, status, source, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name
+		SELECT id, status, source, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, current_session_id, persona_id
 		FROM agents WHERE id = ?
 	`
 	var agent Agent
 	row := db.conn.QueryRow(query, id)
 	err := row.Scan(&agent.ID, &agent.Status, &agent.Source, &agent.CreatedAt, &agent.UpdatedAt,
-		&agent.GitWorktreePath, &agent.FeatureDescription, &agent.CurrentTask, &agent.LastActivityAt, &agent.WindowID, &agent.ProjectName)
+		&agent.GitWorktreePath, &agent.FeatureDescription, &agent.CurrentTask, &agent.LastActivityAt, &agent.WindowID, &agent.ProjectName, &agent.CurrentSessionID, &agent.PersonaID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, NewAgentError(id, "get", ErrAgentNotFound)
@@ -342,4 +342,295 @@ func (db *DB) ListCommits(agentID string) ([]*Commit, error) {
 	}
 
 	return commits, nil
+}
+
+// CreateSession inserts a new session
+func (db *DB) CreateSession(session *Session) error {
+	query := `INSERT INTO sessions (id, agent_id, name, started_at) VALUES (?, ?, ?, ?)`
+	_, err := db.conn.Exec(query, session.ID, session.AgentID, session.Name, session.StartedAt)
+	if err != nil {
+		return fmt.Errorf("failed to create session: %w", err)
+	}
+	return nil
+}
+
+// GetSession retrieves a session by ID
+func (db *DB) GetSession(id string) (*Session, error) {
+	query := `SELECT id, agent_id, name, started_at, ended_at FROM sessions WHERE id = ?`
+	var session Session
+	row := db.conn.QueryRow(query, id)
+	err := row.Scan(&session.ID, &session.AgentID, &session.Name, &session.StartedAt, &session.EndedAt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("session not found: %s", id)
+		}
+		return nil, fmt.Errorf("failed to get session: %w", err)
+	}
+	return &session, nil
+}
+
+// CreateLog inserts a new log entry
+func (db *DB) CreateLog(log *Log) error {
+	query := `INSERT INTO logs (session_id, type, message, timestamp) VALUES (?, ?, ?, ?)`
+	_, err := db.conn.Exec(query, log.SessionID, log.Type, log.Message, log.Timestamp)
+	if err != nil {
+		return fmt.Errorf("failed to create log: %w", err)
+	}
+	return nil
+}
+
+// GetLogs retrieves all logs for a session
+func (db *DB) GetLogs(sessionID string) ([]*Log, error) {
+	query := `SELECT id, session_id, type, message, timestamp FROM logs WHERE session_id = ? ORDER BY timestamp ASC`
+	rows, err := db.conn.Query(query, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get logs: %w", err)
+	}
+	defer rows.Close()
+
+	var logs []*Log
+	for rows.Next() {
+		var log Log
+		err := rows.Scan(&log.ID, &log.SessionID, &log.Type, &log.Message, &log.Timestamp)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan log: %w", err)
+		}
+		logs = append(logs, &log)
+	}
+	return logs, nil
+}
+
+// CreateNote inserts a new note
+func (db *DB) CreateNote(note *Note) error {
+	query := `INSERT INTO notes (session_id, content, created_at) VALUES (?, ?, ?)`
+	_, err := db.conn.Exec(query, note.SessionID, note.Content, note.Timestamp)
+	if err != nil {
+		return fmt.Errorf("failed to create note: %w", err)
+	}
+	return nil
+}
+
+// GetNotes retrieves all notes for a session
+func (db *DB) GetNotes(sessionID string) ([]*Note, error) {
+	query := `SELECT id, session_id, content, created_at FROM notes WHERE session_id = ? ORDER BY created_at ASC`
+	rows, err := db.conn.Query(query, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get notes: %w", err)
+	}
+	defer rows.Close()
+
+	var notes []*Note
+	for rows.Next() {
+		var note Note
+		err := rows.Scan(&note.ID, &note.SessionID, &note.Content, &note.Timestamp)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan note: %w", err)
+		}
+		notes = append(notes, &note)
+	}
+	return notes, nil
+}
+
+// SetContext sets or updates a context key-value pair
+func (db *DB) SetContext(sessionID, key, value string) error {
+	query := `INSERT OR REPLACE INTO context (session_id, key, value) VALUES (?, ?, ?)`
+	_, err := db.conn.Exec(query, sessionID, key, value)
+	if err != nil {
+		return fmt.Errorf("failed to set context: %w", err)
+	}
+	return nil
+}
+
+// GetContext retrieves all context key-value pairs for a session
+func (db *DB) GetContext(sessionID string) (map[string]string, error) {
+	query := `SELECT key, value FROM context WHERE session_id = ?`
+	rows, err := db.conn.Query(query, sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get context: %w", err)
+	}
+	defer rows.Close()
+
+	context := make(map[string]string)
+	for rows.Next() {
+		var key, value string
+		err := rows.Scan(&key, &value)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan context: %w", err)
+		}
+		context[key] = value
+	}
+	return context, nil
+}
+
+// UpdateAgentCurrentSession sets the current session for an agent
+func (db *DB) UpdateAgentCurrentSession(agentID, sessionID string) error {
+	query := `UPDATE agents SET current_session_id = ? WHERE id = ?`
+	_, err := db.conn.Exec(query, sessionID, agentID)
+	if err != nil {
+		return fmt.Errorf("failed to update current session: %w", err)
+	}
+	return nil
+}
+
+// GetCurrentSessionForAgent retrieves the current session for an agent
+func (db *DB) GetCurrentSessionForAgent(agentID string) (*Session, error) {
+	agent, err := db.GetAgent(agentID)
+	if err != nil {
+		return nil, err
+	}
+
+	if agent.CurrentSessionID == nil || *agent.CurrentSessionID == "" {
+		return nil, fmt.Errorf("no active session for agent %s", agentID)
+	}
+
+	return db.GetSession(*agent.CurrentSessionID)
+}
+
+// CreatePersona inserts a new persona
+func (db *DB) CreatePersona(persona *Persona) error {
+	query := `
+		INSERT INTO personas (id, name, description, expertise, initial_context, preferred_tools, specialization)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`
+	_, err := db.conn.Exec(query, persona.ID, persona.Name, persona.Description,
+		persona.Expertise, persona.InitialContext, persona.PreferredTools, persona.Specialization)
+	if err != nil {
+		return fmt.Errorf("failed to create persona: %w", err)
+	}
+	return nil
+}
+
+// GetPersona retrieves a persona by ID
+func (db *DB) GetPersona(id string) (*Persona, error) {
+	query := `
+		SELECT id, name, description, expertise, initial_context, preferred_tools, specialization, created_at, updated_at
+		FROM personas WHERE id = ?
+	`
+	var persona Persona
+	row := db.conn.QueryRow(query, id)
+	err := row.Scan(&persona.ID, &persona.Name, &persona.Description, &persona.Expertise,
+		&persona.InitialContext, &persona.PreferredTools, &persona.Specialization,
+		&persona.CreatedAt, &persona.UpdatedAt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("persona not found: %s", id)
+		}
+		return nil, fmt.Errorf("failed to get persona: %w", err)
+	}
+	return &persona, nil
+}
+
+// ListPersonas retrieves all personas, optionally filtered by specialization
+func (db *DB) ListPersonas(specialization string) ([]*Persona, error) {
+	var query string
+	var args []interface{}
+
+	if specialization != "" {
+		query = `
+			SELECT id, name, description, expertise, initial_context, preferred_tools, specialization, created_at, updated_at
+			FROM personas WHERE specialization = ?
+			ORDER BY name ASC
+		`
+		args = append(args, specialization)
+	} else {
+		query = `
+			SELECT id, name, description, expertise, initial_context, preferred_tools, specialization, created_at, updated_at
+			FROM personas
+			ORDER BY name ASC
+		`
+	}
+
+	rows, err := db.conn.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list personas: %w", err)
+	}
+	defer rows.Close()
+
+	var personas []*Persona
+	for rows.Next() {
+		var persona Persona
+		err := rows.Scan(
+			&persona.ID,
+			&persona.Name,
+			&persona.Description,
+			&persona.Expertise,
+			&persona.InitialContext,
+			&persona.PreferredTools,
+			&persona.Specialization,
+			&persona.CreatedAt,
+			&persona.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan persona: %w", err)
+		}
+		personas = append(personas, &persona)
+	}
+
+	return personas, nil
+}
+
+// UpdatePersona updates an existing persona
+func (db *DB) UpdatePersona(persona *Persona) error {
+	query := `
+		UPDATE personas
+		SET name = ?, description = ?, expertise = ?, initial_context = ?,
+		    preferred_tools = ?, specialization = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`
+	result, err := db.conn.Exec(query, persona.Name, persona.Description, persona.Expertise,
+		persona.InitialContext, persona.PreferredTools, persona.Specialization, persona.ID)
+	if err != nil {
+		return fmt.Errorf("failed to update persona: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("persona not found: %s", persona.ID)
+	}
+
+	return nil
+}
+
+// DeletePersona removes a persona
+func (db *DB) DeletePersona(id string) error {
+	query := `DELETE FROM personas WHERE id = ?`
+	result, err := db.conn.Exec(query, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete persona: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("persona not found: %s", id)
+	}
+
+	return nil
+}
+
+// UpdateAgentPersona associates a persona with an agent
+func (db *DB) UpdateAgentPersona(agentID string, personaID string) error {
+	query := `UPDATE agents SET persona_id = ? WHERE id = ?`
+	result, err := db.conn.Exec(query, personaID, agentID)
+	if err != nil {
+		return fmt.Errorf("failed to update agent persona: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("agent not found: %s", agentID)
+	}
+
+	return nil
 }

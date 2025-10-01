@@ -29,7 +29,7 @@ type SessionContext struct {
 	KeyDecisions      []SessionDecision      `json:"key_decisions"`
 	ImportantFiles    []string               `json:"important_files"`
 	Dependencies      []string               `json:"dependencies"`
-	Notes             []SessionNote          `json:"notes"`
+	Notes             []SessionContextNote          `json:"notes"`
 	Metrics           SessionMetrics         `json:"metrics"`
 }
 
@@ -68,8 +68,8 @@ type SessionDecision struct {
 	Alternatives []string `json:"alternatives,omitempty"`
 }
 
-// SessionNote represents timestamped observations or thoughts
-type SessionNote struct {
+// SessionContextNote represents timestamped observations or thoughts for session context
+type SessionContextNote struct {
 	Timestamp time.Time `json:"timestamp"`
 	Type      string    `json:"type"` // insight, reminder, warning, idea
 	Content   string    `json:"content"`
@@ -95,6 +95,7 @@ type SessionMetrics struct {
 type SaveSessionContextArgs struct {
 	AgentID        string                 `json:"agent_id"`
 	CurrentPhase   string                 `json:"current_phase"`
+	LearnedContext *string                `json:"learned_context,omitempty"` // Agent's accumulated knowledge/expertise
 	Progress       *SessionProgress       `json:"progress,omitempty"`
 	NextActions    []string               `json:"next_actions,omitempty"`
 	CompletedTasks []string               `json:"completed_tasks,omitempty"`
@@ -102,7 +103,7 @@ type SaveSessionContextArgs struct {
 	KeyDecisions   []SessionDecision      `json:"key_decisions,omitempty"`
 	ImportantFiles []string               `json:"important_files,omitempty"`
 	Dependencies   []string               `json:"dependencies,omitempty"`
-	Notes          []SessionNote          `json:"notes,omitempty"`
+	Notes          []SessionContextNote          `json:"notes,omitempty"`
 	Environment    map[string]interface{} `json:"environment,omitempty"`
 	Metrics        *SessionMetrics        `json:"metrics,omitempty"`
 	AutoSave       bool                   `json:"auto_save,omitempty"`
@@ -182,7 +183,7 @@ func (t *Tools) SaveSessionContext(args SaveSessionContextArgs) (SaveSessionCont
 			KeyDecisions:   []SessionDecision{},
 			ImportantFiles: []string{},
 			Dependencies:   []string{},
-			Notes:          []SessionNote{},
+			Notes:          []SessionContextNote{},
 			Progress: SessionProgress{
 				OverallCompletion: 0.0,
 				Milestones:        []SessionMilestone{},
@@ -306,7 +307,7 @@ func (t *Tools) LoadSessionContext(args LoadSessionContextArgs) (LoadSessionCont
 
 // AddSessionNote adds a contextual note to the current session
 func (t *Tools) AddSessionNote(args AddSessionNoteArgs) (AddSessionNoteResult, error) {
-	note := SessionNote{
+	note := SessionContextNote{
 		Timestamp: time.Now(),
 		Type:      args.Type,
 		Content:   args.Content,
@@ -335,7 +336,7 @@ func (t *Tools) AddSessionNote(args AddSessionNoteArgs) (AddSessionNoteResult, e
 	saveArgs := SaveSessionContextArgs{
 		AgentID:     args.AgentID,
 		CurrentPhase: context.CurrentPhase,
-		Notes:       []SessionNote{note},
+		Notes:       []SessionContextNote{note},
 		AutoSave:    true,
 	}
 

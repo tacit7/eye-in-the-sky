@@ -107,22 +107,15 @@ func main() {
 		<-ctx.Done()
 	} else if runningAsMCP {
 		// MCP-only mode (called by Claude Desktop)
-		fmt.Fprintln(os.Stderr, "🚀 Starting MCP Server...")
+		fmt.Fprintln(os.Stderr, "🚀 Starting MCP Server (stdio mode)...")
 		if err := mcpServer.Start(ctx); err != nil {
 			log.Fatalf("MCP Server failed: %v", err)
 		}
 	} else {
-		// Full MCP + Dashboard mode (standalone)
-		// Start dashboard server in background
-		go func() {
-			fmt.Fprintln(os.Stderr, "🚀 Starting Dashboard Server on :8080...")
-			if err := dashboardServer.Start(); err != nil {
-				log.Printf("Dashboard server error: %v", err)
-			}
-		}()
-
-		// Start MCP server (this blocks)
+		// Interactive mode - just MCP server (no dashboard)
+		// Dashboard should be run separately with --dashboard flag
 		fmt.Fprintln(os.Stderr, "🚀 Starting MCP Server...")
+		fmt.Fprintln(os.Stderr, "💡 Use --dashboard flag to run dashboard server")
 		if err := mcpServer.Start(ctx); err != nil {
 			log.Fatalf("MCP Server failed: %v", err)
 		}

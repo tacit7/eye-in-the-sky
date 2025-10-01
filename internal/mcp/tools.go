@@ -721,3 +721,337 @@ func getLatestCommits(count int, workDir string) ([]string, []string, error) {
 
 	return hashes, messages, nil
 }
+
+// POA Spec Tools - Session Management
+
+// StartSession implements the i-start-session tool
+func (t *Tools) StartSession(args StartSessionArgs) (StartSessionResult, error) {
+	// Generate agent ID if not provided
+	var agentID string
+	if args.AgentID == nil || *args.AgentID == "" {
+		agentID = utils.GenerateGitStyleAgentID()
+	} else {
+		agentID = *args.AgentID
+	}
+
+	// Load persona if provided
+	var initialContext string
+	var personaID *string
+	if args.PersonaID != nil && *args.PersonaID != "" {
+		persona, err := t.db.GetPersona(*args.PersonaID)
+		if err != nil {
+			return StartSessionResult{}, fmt.Errorf("failed to load persona %s: %w", *args.PersonaID, err)
+		}
+		initialContext = persona.InitialContext
+		personaID = args.PersonaID
+	}
+
+	// Create agent
+	agent := &database.Agent{
+		ID:                 agentID,
+		Status:             database.StatusActive,
+		Source:             database.SourceWorktree,
+		GitWorktreePath:    args.WorktreePath,
+		FeatureDescription: &args.Description,
+		ProjectName:        args.ProjectName,
+		PersonaID:          personaID,
+		LastActivityAt:     timePtr(time.Now()),
+	}
+
+	if err := t.db.CreateAgent(agent); err != nil {
+		return StartSessionResult{}, fmt.Errorf("failed to create agent: %w", err)
+	}
+
+	// Create session
+	sessionID := fmt.Sprintf("%s_%d", agentID, time.Now().Unix())
+	session := &database.Session{
+		ID:        sessionID,
+		AgentID:   agentID,
+		Name:      args.Name,
+		StartedAt: time.Now(),
+	}
+
+	if err := t.db.CreateSession(session); err != nil {
+		return StartSessionResult{}, fmt.Errorf("failed to create session: %w", err)
+	}
+
+	// Log initial entry
+	var logMessage string
+	if personaID != nil {
+		logMessage = fmt.Sprintf("Started session with persona '%s': %s", *personaID, args.Description)
+	} else {
+		logMessage = fmt.Sprintf("Started session: %s", args.Description)
+	}
+
+	log := &database.Log{
+		SessionID: sessionID,
+		Type:      "info",
+		Message:   logMessage,
+		Timestamp: time.Now(),
+	}
+
+	if err := t.db.CreateLog(log); err != nil {
+		return StartSessionResult{}, fmt.Errorf("failed to create initial log: %w", err)
+	}
+
+	// Update agent's current session
+	if err := t.db.UpdateAgentCurrentSession(agentID, sessionID); err != nil {
+		return StartSessionResult{}, fmt.Errorf("failed to update current session: %w", err)
+	}
+
+	var message string
+	if personaID != nil {
+		message = fmt.Sprintf("Session %s started for agent %s with persona '%s' loaded", sessionID, agentID, *personaID)
+	} else {
+		message = fmt.Sprintf("Session %s started for agent %s", sessionID, agentID)
+	}
+
+	return StartSessionResult{
+		Success:        true,
+		Message:        message,
+		AgentID:        agentID,
+		SessionID:      sessionID,
+		InitialContext: initialContext,
+	}, nil
+}
+
+// AddLog implements the i-log tool
+func (t *Tools) AddLog(args AddLogArgs) (AddLogResult, error) {
+	log := &database.Log{
+		SessionID: args.SessionID,
+		Type:      args.Type,
+		Message:   args.Message,
+		Timestamp: time.Now(),
+	}
+
+	if err := t.db.CreateLog(log); err != nil {
+		return AddLogResult{}, fmt.Errorf("failed to create log: %w", err)
+	}
+
+	return AddLogResult{
+		Success: true,
+		Message: "Log entry added",
+	}, nil
+}
+
+// AddNote implements the i-note-add tool
+func (t *Tools) AddNote(args AddNoteArgs) (AddNoteResult, error) {
+	note := &database.Note{
+		SessionID: args.SessionID,
+		Content:   args.Content,
+		Timestamp: time.Now(),
+	}
+
+	if err := t.db.CreateNote(note); err != nil {
+		return AddNoteResult{}, fmt.Errorf("failed to create note: %w", err)
+	}
+
+	return AddNoteResult{
+		Success: true,
+		Message: "Note added",
+	}, nil
+}
+
+// SetContext implements the i-context-set tool
+func (t *Tools) SetContext(args SetContextArgs) (SetContextResult, error) {
+	if err := t.db.SetContext(args.SessionID, args.Key, args.Value); err != nil {
+		return SetContextResult{}, fmt.Errorf("failed to set context: %w", err)
+	}
+
+	return SetContextResult{
+		Success: true,
+		Message: "Context updated",
+	}, nil
+}
+
+// GetSession implements the i-session-get tool
+func (t *Tools) GetSession(args GetSessionArgs) (GetSessionResult, error) {
+	// Get session
+	session, err := t.db.GetSession(args.SessionID)
+	if err != nil {
+		return GetSessionResult{}, fmt.Errorf("failed to get session: %w", err)
+	}
+
+	// Get logs
+	logs, err := t.db.GetLogs(args.SessionID)
+	if err != nil {
+		return GetSessionResult{}, fmt.Errorf("failed to get logs: %w", err)
+	}
+
+	// Get notes
+	notes, err := t.db.GetNotes(args.SessionID)
+	if err != nil {
+		return GetSessionResult{}, fmt.Errorf("failed to get notes: %w", err)
+	}
+
+	// Get context (already returns a map)
+	contextMap, err := t.db.GetContext(args.SessionID)
+	if err != nil {
+		return GetSessionResult{}, fmt.Errorf("failed to get context: %w", err)
+	}
+
+	// Convert logs
+	logResults := make([]SessionLog, len(logs))
+	for i, l := range logs {
+		logResults[i] = SessionLog{
+			Type:      l.Type,
+			Message:   l.Message,
+			Timestamp: l.Timestamp.Format(time.RFC3339),
+		}
+	}
+
+	// Convert notes
+	noteResults := make([]SessionNote, len(notes))
+	for i, n := range notes {
+		noteResults[i] = SessionNote{
+			Content:   n.Content,
+			Timestamp: n.Timestamp.Format(time.RFC3339),
+		}
+	}
+
+	return GetSessionResult{
+		Success:   true,
+		Message:   "Session retrieved successfully",
+		SessionID: session.ID,
+		AgentID:   session.AgentID,
+		Logs:      logResults,
+		Notes:     noteResults,
+		Context:   contextMap,
+	}, nil
+}
+
+// CreatePersona implements the i-persona-create MCP tool
+func (t *Tools) CreatePersona(args CreatePersonaArgs) (CreatePersonaResult, error) {
+	// Check if persona already exists
+	existing, _ := t.db.GetPersona(args.ID)
+	if existing != nil {
+		return CreatePersonaResult{
+			Success: false,
+			Message: fmt.Sprintf("Persona %s already exists", args.ID),
+		}, nil
+	}
+
+	persona := &database.Persona{
+		ID:             args.ID,
+		Name:           args.Name,
+		Description:    args.Description,
+		Expertise:      args.Expertise,
+		InitialContext: args.InitialContext,
+		PreferredTools: args.PreferredTools,
+		Specialization: args.Specialization,
+	}
+
+	if err := t.db.CreatePersona(persona); err != nil {
+		return CreatePersonaResult{
+			Success: false,
+			Message: fmt.Sprintf("Failed to create persona: %v", err),
+		}, fmt.Errorf("database error: %w", err)
+	}
+
+	return CreatePersonaResult{
+		Success: true,
+		Message: fmt.Sprintf("Persona %s created successfully", args.ID),
+	}, nil
+}
+
+// GetPersona implements the i-persona-get MCP tool
+func (t *Tools) GetPersona(args GetPersonaArgs) (GetPersonaResult, error) {
+	persona, err := t.db.GetPersona(args.ID)
+	if err != nil {
+		return GetPersonaResult{
+			Success: false,
+			Message: fmt.Sprintf("Persona not found: %s", args.ID),
+		}, nil
+	}
+
+	return GetPersonaResult{
+		Success:        true,
+		Message:        "Persona retrieved successfully",
+		ID:             persona.ID,
+		Name:           persona.Name,
+		Description:    persona.Description,
+		Expertise:      persona.Expertise,
+		InitialContext: persona.InitialContext,
+		PreferredTools: persona.PreferredTools,
+		Specialization: persona.Specialization,
+	}, nil
+}
+
+// ListPersonas implements the i-persona-list MCP tool
+func (t *Tools) ListPersonas(args ListPersonasArgs) (ListPersonasResult, error) {
+	var specialization string
+	if args.Specialization != nil {
+		specialization = *args.Specialization
+	}
+
+	personas, err := t.db.ListPersonas(specialization)
+	if err != nil {
+		return ListPersonasResult{
+			Success: false,
+			Message: fmt.Sprintf("Failed to list personas: %v", err),
+		}, fmt.Errorf("database error: %w", err)
+	}
+
+	summaries := make([]PersonaSummary, len(personas))
+	for i, p := range personas {
+		summaries[i] = PersonaSummary{
+			ID:             p.ID,
+			Name:           p.Name,
+			Description:    p.Description,
+			Specialization: p.Specialization,
+		}
+	}
+
+	return ListPersonasResult{
+		Success:  true,
+		Message:  fmt.Sprintf("Found %d personas", len(personas)),
+		Personas: summaries,
+	}, nil
+}
+
+// SnapshotExpertise implements the i-snapshot-expertise MCP tool
+// The agent provides its current learned context/expertise to create a reusable persona
+func (t *Tools) SnapshotExpertise(args SnapshotExpertiseArgs) (SnapshotExpertiseResult, error) {
+	// Check if persona already exists
+	existing, _ := t.db.GetPersona(args.PersonaID)
+	if existing != nil {
+		return SnapshotExpertiseResult{
+			Success: false,
+			Message: fmt.Sprintf("Persona %s already exists", args.PersonaID),
+		}, nil
+	}
+
+	description := fmt.Sprintf("Expert persona created from learned context on %s",
+		time.Now().Format("2006-01-02"))
+
+	persona := &database.Persona{
+		ID:             args.PersonaID,
+		Name:           args.PersonaName,
+		Description:    description,
+		Expertise:      args.ExpertiseAreas,
+		InitialContext: args.CurrentContext,
+		PreferredTools: args.PreferredTools,
+		Specialization: args.Specialization,
+	}
+
+	if err := t.db.CreatePersona(persona); err != nil {
+		return SnapshotExpertiseResult{
+			Success: false,
+			Message: fmt.Sprintf("Failed to create persona: %v", err),
+		}, fmt.Errorf("database error: %w", err)
+	}
+
+	return SnapshotExpertiseResult{
+		Success:   true,
+		Message:   fmt.Sprintf("Persona %s created successfully. Use persona_id='%s' when starting new sessions to load this expertise.", args.PersonaName, args.PersonaID),
+		PersonaID: args.PersonaID,
+	}, nil
+}
+
+// Helper function to safely get string from pointer
+func strPtrOrEmpty(s *string) string {
+	if s == nil {
+		return "N/A"
+	}
+	return *s
+}

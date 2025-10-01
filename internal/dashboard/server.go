@@ -50,6 +50,7 @@ type Agent struct {
 	SourceBadge           string    `json:"source_badge"`
 	Progress              int       `json:"progress"` // Progress percentage for suspended sessions
 	ProjectName           string    `json:"project_name,omitempty"` // Project name for better identification
+	Name                  string    `json:"name,omitempty"` // Session name
 }
 
 // DashboardData represents the data passed to the main dashboard template
@@ -177,6 +178,17 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	var suspendedAgents []Agent
 	for _, dbAgent := range dbAgents {
 		lastActivity := getTimeValue(dbAgent.LastActivityAt, dbAgent.UpdatedAt)
+
+		// Get session name from current session (if sessions table exists)
+		sessionName := ""
+		if dbAgent.CurrentSessionID != nil && *dbAgent.CurrentSessionID != "" {
+			// Try to get session, but ignore errors if table doesn't exist yet
+			session, err := s.db.GetSession(*dbAgent.CurrentSessionID)
+			if err == nil && session != nil && session.Name != nil {
+				sessionName = *session.Name
+			}
+		}
+
 		agent := Agent{
 			ID:                     dbAgent.ID,
 			Status:                 dbAgent.Status,
@@ -193,6 +205,7 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 			SourceBadge:           getSourceBadge(dbAgent.Source),
 			Progress:              extractProgressFromContext(dbAgent.ID), // Extract progress from session context
 			ProjectName:           getStringValue(dbAgent.ProjectName),
+			Name:                  sessionName,
 		}
 
 		// Filter out archived agents and separate suspended from active
@@ -361,6 +374,8 @@ func (s *Server) handleAPIAgents(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "POST":
 		switch action {
+		case "recreate":
+			s.handleRecreateAgent(w, r, agentID)
 		case "bring-front":
 			s.handleBringAgentFront(w, r, agentID)
 		case "end":
@@ -785,6 +800,161 @@ func parseAgentPath(p string) (id, action string, ok bool) {
 		action = parts[1]
 	}
 	return id, action, true
+}
+
+// handleRecreateAgent creates a new agent with the same learned context/expertise as the original
+func (s *Server) handleRecreateAgent(w http.ResponseWriter, r *http.Request, agentID string) {
+	// Get original agent
+	agent, err := s.db.GetAgent(agentID)
+	if err != nil {
+		response := map[string]interface{}{
+			"success": false,
+			"message": fmt.Sprintf("Failed to find agent %s: %v", agentID, err),
+		}
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// Try to get latest session context with learned_context
+	var learnedContext string
+	var personaID *string
+
+	// First check if agent has a persona_id
+	if agent.PersonaID != nil && *agent.PersonaID != "" {
+		personaID = agent.PersonaID
+
+		// Get persona details to show in response
+		persona, err := s.db.GetPersona(*agent.PersonaID)
+		if err == nil && persona != nil {
+			learnedContext = persona.InitialContext
+		}
+	}
+
+	// If no persona, try to get learned_context from most recent session
+	if learnedContext == "" && agent.CurrentSessionID != nil && *agent.CurrentSessionID != "" {
+		// Load session context using MCP tool
+		args := mcp.LoadSessionContextArgs{
+			AgentID: agentID,
+		}
+
+		result, err := s.mcpServer.HandleTool("load_session_context", mustMarshalJSON(args))
+		if err == nil {
+			// Try to extract learned_context from result
+			if resultMap, ok := result.(map[string]interface{}); ok {
+				if context, ok := resultMap["context"].(map[string]interface{}); ok {
+					if lc, ok := context["learned_context"].(string); ok {
+						learnedContext = lc
+					}
+				}
+			}
+		}
+	}
+
+	// If we still don't have context, inform the user
+	if learnedContext == "" && personaID == nil {
+		response := map[string]interface{}{
+			"success": false,
+			"message": "No learned context or persona found for this agent. Agent must have either saved session context with learned_context or be associated with a persona.",
+		}
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// Create new agent with same context
+	// Use appropriate registration based on source
+	var newAgentID string
+	if agent.Source == database.SourceDesktop {
+		// Register as desktop agent
+		args := mcp.RegisterDesktopAgentArgs{
+			Description: getStringValue(agent.FeatureDescription),
+			ProjectName: getStringValue(agent.ProjectName),
+		}
+
+		result, err := s.mcpServer.HandleTool("register_claude_desktop_agent", mustMarshalJSON(args))
+		if err != nil {
+			response := map[string]interface{}{
+				"success": false,
+				"message": fmt.Sprintf("Failed to create new desktop agent: %v", err),
+			}
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+
+		// Extract agent ID from result
+		if resultMap, ok := result.(map[string]interface{}); ok {
+			if msg, ok := resultMap["message"].(string); ok {
+				// Parse agent ID from message like "Agent a1b2c3d4 registered"
+				parts := strings.Fields(msg)
+				if len(parts) >= 2 {
+					newAgentID = parts[1]
+				}
+			}
+		}
+	} else {
+		// Register as worktree agent
+		args := mcp.RegisterAgentArgs{
+			Description:  getStringValue(agent.FeatureDescription),
+			WorktreePath: agent.GitWorktreePath,
+			ProjectName:  agent.ProjectName,
+		}
+
+		result, err := s.mcpServer.HandleTool("register_agent", mustMarshalJSON(args))
+		if err != nil {
+			response := map[string]interface{}{
+				"success": false,
+				"message": fmt.Sprintf("Failed to create new worktree agent: %v", err),
+			}
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+
+		// Extract agent ID from result
+		if resultMap, ok := result.(map[string]interface{}); ok {
+			if msg, ok := resultMap["message"].(string); ok {
+				// Parse agent ID from message like "Agent a1b2c3d4 registered"
+				parts := strings.Fields(msg)
+				if len(parts) >= 2 {
+					newAgentID = parts[1]
+				}
+			}
+		}
+	}
+
+	if newAgentID == "" {
+		response := map[string]interface{}{
+			"success": false,
+			"message": "Failed to extract new agent ID from registration",
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// If we have a persona, associate it with the new agent
+	if personaID != nil {
+		err := s.db.UpdateAgentPersona(newAgentID, *personaID)
+		if err != nil {
+			log.Printf("Warning: Failed to associate persona with new agent %s: %v", newAgentID, err)
+		}
+	}
+
+	// Success response
+	contextInfo := "persona"
+	if personaID == nil {
+		contextInfo = "learned context from session"
+	}
+
+	response := map[string]interface{}{
+		"success":      true,
+		"message":      fmt.Sprintf("New agent created with %s from %s", contextInfo, agentID),
+		"new_agent_id": newAgentID,
+	}
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(response)
 }
 
 // mustMarshalJSON marshals to JSON and panics on error (for internal use)

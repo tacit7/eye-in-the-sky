@@ -31,7 +31,7 @@
             <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
                 <div class="flex-1">
                     <div class="flex items-center space-x-3 mb-3 flex-wrap">
-                        <h2 class="text-2xl font-bold">Agent Details</h2>
+                        <h2 class="text-2xl font-bold">Session Details</h2>
                         <span class="agent-id">{{.Agent.ID}}</span>
                         <span class="status-badge status-{{.Agent.Status}}">
                             <i class="bi bi-{{.Agent.StatusIcon}} mr-1"></i>
@@ -81,6 +81,10 @@
 
                 <!-- Action Buttons -->
                 <div class="flex flex-col gap-2 min-w-[200px]">
+                    <button onclick="recreateAgent('{{.Agent.ID}}')" class="inline-flex items-center justify-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm font-medium">
+                        <i class="bi bi-arrow-repeat mr-2"></i>
+                        Recreate with Context
+                    </button>
                     <button onclick="bringToFront('{{.Agent.ID}}')" class="inline-flex items-center justify-center px-4 py-2 bg-accent hover:bg-accent/80 text-white rounded-lg transition-colors text-sm font-medium">
                         <i class="bi bi-window mr-2"></i>
                         Bring to Front
@@ -222,6 +226,30 @@
         });
 
         // Agent Actions
+        function recreateAgent(agentId) {
+            if (!confirm('Create a new agent with the same learned context?')) {
+                return;
+            }
+
+            fetch(`/api/agents/${agentId}/recreate`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(`New agent created: ${data.new_agent_id}\n\nUse this agent ID to start a new session with the same expertise.`);
+                } else {
+                    alert('Failed to recreate agent: ' + (data.message || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                alert('Error: ' + error.message);
+            });
+        }
+
         function bringToFront(agentId) {
             fetch(`/api/agents/${agentId}/bring-front`, {
                 method: 'POST',

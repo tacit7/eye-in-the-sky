@@ -22,7 +22,12 @@
             {{if .Agents}}
             {{range .Agents}}
             <div class="bg-[#1E222A] border border-gray-700/50 rounded-2xl p-6 hover:border-gray-600 transition-all duration-200">
-                <h3 class="text-xl font-semibold mb-4 text-white">Agent {{.ID}}</h3>
+                {{if .Name}}
+                <h3 class="text-xl font-semibold mb-2 text-white">{{.Name}}</h3>
+                <p class="text-sm text-gray-500 mb-4 font-mono">{{.ID}}</p>
+                {{else}}
+                <h3 class="text-xl font-semibold mb-4 text-white">Session {{.ID}}</h3>
+                {{end}}
 
                 <div class="mb-4">
                     {{if eq .Status "active"}}
@@ -77,7 +82,7 @@
                 {{range .Agents}}
                 <div class="flex items-start space-x-3 text-sm">
                     <span class="text-gray-500 font-mono text-xs whitespace-nowrap">{{.LastActivityISO}}</span>
-                    <span class="text-gray-400">Agent {{.ID}}:</span>
+                    <span class="text-gray-400">Session {{.ID}}:</span>
                     {{if .CurrentTask}}
                     <span class="text-gray-300">{{.CurrentTask}}</span>
                     {{else if .FeatureDescription}}
@@ -108,7 +113,7 @@
                 {{range .Agents}}
                 <div class="flex items-start space-x-3 text-sm">
                     <span class="text-gray-500 font-mono text-xs whitespace-nowrap">{{.LastActivityISO}}</span>
-                    <span class="text-gray-400">Agent {{.ID}}:</span>
+                    <span class="text-gray-400">Session {{.ID}}:</span>
                     {{if eq .Status "active"}}
                     <span class="flex items-center">
                         <span class="w-2 h-2 bg-green-400 rounded-full mr-2"></span>

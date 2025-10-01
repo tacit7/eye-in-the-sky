@@ -15,6 +15,8 @@ type Agent struct {
 	LastActivityAt     *time.Time `json:"last_activity_at,omitempty"`
 	WindowID           *string    `json:"window_id,omitempty"`
 	ProjectName        *string    `json:"project_name,omitempty"`
+	CurrentSessionID   *string    `json:"current_session_id,omitempty"`
+	PersonaID          *string    `json:"persona_id,omitempty"`
 }
 
 // Action represents an activity performed by an agent
@@ -59,3 +61,50 @@ const (
 	ActionGitCommit     = "git_commit"
 	ActionStatusUpdate  = "status_update"
 )
+
+// Session represents a tracked agent session
+type Session struct {
+	ID        string     `json:"id"`
+	AgentID   string     `json:"agent_id"`
+	Name      *string    `json:"name,omitempty"`
+	StartedAt time.Time  `json:"started_at"`
+	EndedAt   *time.Time `json:"ended_at,omitempty"`
+}
+
+// Log represents a session log entry
+type Log struct {
+	ID        int       `json:"id"`
+	SessionID string    `json:"session_id"`
+	Type      string    `json:"type"`
+	Message   string    `json:"message"`
+	Timestamp time.Time `json:"timestamp"`
+}
+
+// Note represents a session note
+type Note struct {
+	ID        int       `json:"id"`
+	SessionID string    `json:"session_id"`
+	Content   string    `json:"content"`
+	Timestamp time.Time `json:"timestamp"`
+}
+
+// Context represents a session context key-value pair
+type Context struct {
+	ID        int    `json:"id"`
+	SessionID string `json:"session_id"`
+	Key       string `json:"key"`
+	Value     string `json:"value"`
+}
+
+// Persona represents an expert agent template with predefined expertise
+type Persona struct {
+	ID             string    `json:"id"`
+	Name           string    `json:"name"`
+	Description    string    `json:"description"`
+	Expertise      string    `json:"expertise"`       // JSON array of expertise areas
+	InitialContext string    `json:"initial_context"` // The persona's initial instructions
+	PreferredTools *string   `json:"preferred_tools,omitempty"` // JSON array of preferred MCP tools
+	Specialization *string   `json:"specialization,omitempty"`  // Primary domain
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
