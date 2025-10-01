@@ -91,6 +91,24 @@
   .status-indicator.failed {
     @apply bg-red-400;
   }
+
+  /* Tab Navigation */
+  .tab-button {
+    @apply text-gray-400 border-transparent hover:text-gray-300 hover:border-gray-600;
+  }
+
+  .tab-button.tab-active {
+    @apply text-accent border-accent;
+  }
+
+  /* Card Enhancements */
+  .agent-card {
+    @apply bg-[#242B38] border border-gray-700 rounded-xl p-4 hover:shadow-glow transition-all duration-200;
+  }
+
+  .stat-card {
+    @apply bg-[#242B38] border border-gray-700 rounded-xl p-6 flex flex-col items-center shadow-lg hover:shadow-glow transition-all duration-200;
+  }
 }
 
 @layer utilities {
