@@ -78,10 +78,13 @@ func (a *App) cursorUp(g *gocui.Gui, v *gocui.View) error {
 	if v != nil {
 		ox, oy := v.Origin()
 		cx, cy := v.Cursor()
-		if cy > 0 {
+		// Don't go above line 2 (header is lines 0-1)
+		if cy > 2 {
 			if err := v.SetCursor(cx, cy-1); err != nil {
-				if err := v.SetOrigin(ox, oy-1); err != nil {
-					return err
+				if oy > 0 {
+					if err := v.SetOrigin(ox, oy-1); err != nil {
+						return err
+					}
 				}
 			}
 			if a.selectedIdx > 0 {
@@ -127,5 +130,12 @@ func (a *App) toggleFilter(g *gocui.Gui, v *gocui.View) error {
 		a.filter = "active"
 	}
 	a.selectedIdx = 0
+
+	// Reset cursor to first agent (line 2)
+	if mainView, err := g.View(viewMain); err == nil {
+		mainView.SetCursor(0, 2)
+		mainView.SetOrigin(0, 0)
+	}
+
 	return a.refreshAgents()
 }

@@ -40,6 +40,8 @@ func (a *App) layout(g *gocui.Gui) error {
 		if _, err := g.SetCurrentView(viewMain); err != nil {
 			return err
 		}
+		// Set cursor to first agent (skip header and separator line)
+		v.SetCursor(0, 2)
 		// Render agents on first load
 		a.renderAgents()
 	}
