@@ -6,6 +6,7 @@ import (
 	"os/exec"
 
 	"github.com/jroimartin/gocui"
+	"github.com/tacit7/eye-in-the-sky/internal/database"
 	"github.com/tacit7/eye-in-the-sky/internal/window"
 )
 
@@ -159,4 +160,141 @@ func (a *App) closeLogs(g *gocui.Gui, v *gocui.View) error {
 		return err
 	}
 	return nil
+}
+
+// viewAgentDetails displays detailed information about an agent
+func (a *App) viewAgentDetails(agentID string) error {
+	// Get agent details
+	agent, err := a.db.GetAgent(agentID)
+	if err != nil {
+		return a.showMessage(fmt.Sprintf("Failed to get agent: %v", err))
+	}
+
+	// Get session if available
+	var session *database.Session
+	if agent.CurrentSessionID != nil && *agent.CurrentSessionID != "" {
+		session, err = a.db.GetSession(*agent.CurrentSessionID)
+		if err != nil {
+			// Session error is not critical, continue without it
+			session = nil
+		}
+	}
+
+	// Get logs for the session (limit to 20)
+	var logs []*database.Log
+	if session != nil {
+		logs, err = a.db.GetLogs(session.ID)
+		if err != nil {
+			// Log error is not critical, continue without logs
+			logs = nil
+		}
+		// Limit to 20 most recent
+		if len(logs) > 20 {
+			logs = logs[:20]
+		}
+	}
+
+	// Render the detail view
+	return a.renderDetail(agent, session, logs)
+}
+
+// renderDetail renders the agent detail view
+func (a *App) renderDetail(agent *database.Agent, session *database.Session, logs []*database.Log) error {
+	maxX, maxY := a.gui.Size()
+
+	// Create detail view (full screen)
+	v, err := a.gui.SetView("details", 0, 3, maxX-1, maxY-3)
+	if err != nil && err != gocui.ErrUnknownView {
+		return err
+	}
+
+	v.Title = " Agent Details "
+	v.Clear()
+
+	// Agent information
+	fmt.Fprintf(v, "Agent: %s  (%s)\n", agent.ID[:8], agent.Status)
+
+	projectName := "N/A"
+	if agent.ProjectName != nil {
+		projectName = *agent.ProjectName
+	}
+	fmt.Fprintf(v, "Project: %s\n", projectName)
+
+	currentTask := "No task"
+	if agent.CurrentTask != nil {
+		currentTask = *agent.CurrentTask
+	}
+	fmt.Fprintf(v, "Current task: %s\n", currentTask)
+
+	// Session information
+	if session != nil {
+		sessionName := "-"
+		if session.Name != nil {
+			sessionName = *session.Name
+		}
+		fmt.Fprintf(v, "Session: %s\n", sessionName)
+		fmt.Fprintf(v, "Started: %s\n", session.StartedAt.Format("2006-01-02 15:04"))
+	}
+
+	if agent.LastActivityAt != nil {
+		fmt.Fprintf(v, "Last activity: %s\n", agent.LastActivityAt.Format("2006-01-02 15:04:05"))
+	}
+
+	// Logs section
+	fmt.Fprintln(v, "---")
+	fmt.Fprintln(v, "[LOGS - current session]")
+
+	if len(logs) > 0 {
+		for _, log := range logs {
+			fmt.Fprintf(v, "%s  %s\n",
+				log.Timestamp.Format("15:04"),
+				log.Message)
+		}
+	} else {
+		fmt.Fprintln(v, "No logs available")
+	}
+
+	// Set as current view
+	if _, err := a.gui.SetCurrentView("details"); err != nil {
+		return err
+	}
+
+	// Add close keybinding
+	if err := a.gui.SetKeybinding("details", 'q', gocui.ModNone, a.closeDetails); err != nil {
+		return err
+	}
+
+	// Update status bar
+	statusView, err := a.gui.View(viewStatus)
+	if err != nil {
+		return err
+	}
+	statusView.Clear()
+	fmt.Fprint(statusView, " Press L to view all session logs • q to return to agents list")
+
+	return nil
+}
+
+// closeDetails closes the details view and returns to main list
+func (a *App) closeDetails(g *gocui.Gui, v *gocui.View) error {
+	// Delete details view
+	if err := g.DeleteView("details"); err != nil && err != gocui.ErrUnknownView {
+		return err
+	}
+
+	// Return to main view
+	if _, err := g.SetCurrentView(viewMain); err != nil {
+		return err
+	}
+
+	// Restore status bar
+	statusView, err := g.View(viewStatus)
+	if err != nil {
+		return err
+	}
+	statusView.Clear()
+	fmt.Fprint(statusView, " [q] Quit | [r] Refresh | [a] Toggle All | [c] Continue | [w] Window | [L] Logs | [:] Command")
+
+	// Re-render agents
+	return a.renderAgents()
 }

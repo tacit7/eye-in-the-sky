@@ -1,6 +1,8 @@
 package dashboard
 
 import (
+	"strings"
+
 	"github.com/jroimartin/gocui"
 )
 
@@ -60,6 +62,11 @@ func (a *App) setupKeybindings() error {
 		if err := a.gui.SetKeybinding("", rune(key[0]), gocui.ModNone, a.showLogs); err != nil {
 			return err
 		}
+	}
+
+	// View details (Enter key)
+	if err := a.gui.SetKeybinding(viewMain, gocui.KeyEnter, gocui.ModNone, a.handleViewDetails); err != nil {
+		return err
 	}
 
 	// Arrow keys
@@ -138,4 +145,24 @@ func (a *App) toggleFilter(g *gocui.Gui, v *gocui.View) error {
 	}
 
 	return a.refreshAgents()
+}
+
+// handleViewDetails handles Enter key to view agent details
+func (a *App) handleViewDetails(g *gocui.Gui, v *gocui.View) error {
+	if v != nil {
+		// Get the current line
+		_, cy := v.Cursor()
+		line, err := v.Line(cy)
+		if err != nil {
+			return nil
+		}
+
+		// Parse the agent ID from the line (second field)
+		fields := strings.Fields(line)
+		if len(fields) > 1 {
+			agentID := fields[1]
+			return a.viewAgentDetails(agentID)
+		}
+	}
+	return nil
 }

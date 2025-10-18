@@ -7,5 +7,6 @@
   "up": ["k"],
   "down": ["j"],
   "logs": ["L"],
-  "command_mode": [":"]
+  "command_mode": [":"],
+  "view_details": ["enter"]
 }
