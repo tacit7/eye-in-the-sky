@@ -1,0 +1,13 @@
+{
+  "poll_interval": 5,
+  "default_filter": "active",
+  "colors": {
+    "active": "green",
+    "idle": "blue",
+    "working": "yellow",
+    "failed": "red",
+    "archived": "gray"
+  },
+  "scroll_mode": "scroll",
+  "pagination_mode": "page"
+}

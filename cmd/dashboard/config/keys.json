@@ -1,0 +1,11 @@
+{
+  "quit": ["q"],
+  "refresh": ["r"],
+  "continue_session": ["c"],
+  "go_to_window": ["w"],
+  "toggle_all_agents": ["a"],
+  "up": ["k"],
+  "down": ["j"],
+  "logs": ["L"],
+  "command_mode": [":"]
+}
