@@ -21,21 +21,22 @@ func (a *App) renderAgents() error {
 	}
 
 	// Header
-	fmt.Fprintf(v, "%-10s %-25s %-20s %-30s\n", "STATUS", "SESSION", "PROJECT", "TASK")
+	fmt.Fprintf(v, "%-10s %-10s %-20s %-15s %-25s\n", "STATUS", "AGENT", "SESSION", "PROJECT", "TASK")
 	fmt.Fprintln(v, "────────────────────────────────────────────────────────────────────────────────")
 
 	// Agents
 	for _, agent := range a.agents {
 		statusIcon := getStatusIcon(agent.Status)
-		sessionName := agent.ID[:8]
+		agentID := agent.ID[:8]
+		sessionName := "-"
 
 		// Get session name if available
 		if agent.CurrentSessionID != nil && *agent.CurrentSessionID != "" {
 			session, err := a.db.GetSession(*agent.CurrentSessionID)
 			if err == nil && session != nil && session.Name != nil {
 				sessionName = *session.Name
-				if len(sessionName) > 23 {
-					sessionName = sessionName[:20] + "..."
+				if len(sessionName) > 18 {
+					sessionName = sessionName[:15] + "..."
 				}
 			}
 		}
@@ -43,8 +44,8 @@ func (a *App) renderAgents() error {
 		projectName := "N/A"
 		if agent.ProjectName != nil {
 			projectName = *agent.ProjectName
-			if len(projectName) > 18 {
-				projectName = projectName[:15] + "..."
+			if len(projectName) > 13 {
+				projectName = projectName[:10] + "..."
 			}
 		}
 
@@ -54,11 +55,11 @@ func (a *App) renderAgents() error {
 		} else if agent.FeatureDescription != nil {
 			task = *agent.FeatureDescription
 		}
-		if len(task) > 28 {
-			task = task[:25] + "..."
+		if len(task) > 23 {
+			task = task[:20] + "..."
 		}
 
-		fmt.Fprintf(v, "%s %-25s %-20s %-30s\n", statusIcon, sessionName, projectName, task)
+		fmt.Fprintf(v, "%s %-10s %-20s %-15s %-25s\n", statusIcon, agentID, sessionName, projectName, task)
 	}
 
 	return nil
