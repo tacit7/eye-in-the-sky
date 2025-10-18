@@ -40,6 +40,8 @@ func (a *App) layout(g *gocui.Gui) error {
 		if _, err := g.SetCurrentView(viewMain); err != nil {
 			return err
 		}
+		// Render agents on first load
+		a.renderAgents()
 	}
 
 	// Status bar view

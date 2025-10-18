@@ -11,7 +11,8 @@
       "Bash(curl:*)",
       "Bash(go build:*)",
       "mcp__eye-in-the-sky__i-action",
-      "mcp__eye-in-the-sky__i-status"
+      "mcp__eye-in-the-sky__i-status",
+      "Bash(git commit -m \"Add TUI dashboard implementation using gocui\n\n- Created cmd/dashboard with main.go and config files\n- Implemented internal/dashboard package with core TUI logic:\n  - app.go: Application structure, config loading, polling loop\n  - layout.go: UI layout with header, main view, and status bar\n  - render.go: Agent list rendering with color-coded statuses\n  - keymap.go: Keybindings for navigation and actions\n  - actions.go: Continue session, window management, logs view\n  \nFeatures:\n- Auto-refresh every 5 seconds (configurable)\n- Color-coded agent statuses (active, working, idle, failed)\n- Vim-style keybindings (j/k for navigation)\n- Continue session with ''c'' key (runs claude -c)\n- Bring window to front with ''w'' key (AppleScript)\n- Show logs with ''L'' key\n- Toggle all/active agents with ''a'' key\n- Manual refresh with ''r'' key\n- Quit with ''q'' key\n\nBuilds successfully as: bin/dashboard\")"
     ],
     "deny": [],
     "ask": [],

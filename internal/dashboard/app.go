@@ -91,10 +91,20 @@ func (a *App) Run() error {
 		return err
 	}
 
-	// Load initial data
-	if err := a.refreshAgents(); err != nil {
+	// Load initial data (before starting main loop)
+	agents, err := a.db.ListAgents(a.filter)
+	if err != nil {
 		return err
 	}
+
+	// Filter archived agents
+	filtered := make([]*database.Agent, 0)
+	for _, agent := range agents {
+		if agent.Status != database.StatusArchived {
+			filtered = append(filtered, agent)
+		}
+	}
+	a.agents = filtered
 
 	// Start polling ticker
 	a.ticker = time.NewTicker(time.Duration(a.config.PollInterval) * time.Second)
