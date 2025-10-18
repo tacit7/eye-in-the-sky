@@ -1048,58 +1048,128 @@ func (t *Tools) SnapshotExpertise(args SnapshotExpertiseArgs) (SnapshotExpertise
 	}, nil
 }
 
-// ListSessions implements the i-list-sessions MCP tool
-func (t *Tools) ListSessions(args ListSessionsArgs) (ListSessionsResult, error) {
-	var agentID string
-	activeOnly := false
-
-	if args.AgentID != nil {
-		agentID = *args.AgentID
-	}
-	if args.ActiveOnly != nil {
-		activeOnly = *args.ActiveOnly
-	}
-
-	sessions, err := t.db.ListSessions(agentID, activeOnly)
+// ExtractPersonaFromContext implements the i-persona-from-context MCP tool (legacy - kept for compatibility)
+// This extracts the current session context and creates a persona template from it
+func (t *Tools) ExtractPersonaFromContext(args ExtractPersonaArgs) (ExtractPersonaResult, error) {
+	// Get the agent
+	agent, err := t.db.GetAgent(args.AgentID)
 	if err != nil {
-		return ListSessionsResult{}, fmt.Errorf("failed to list sessions: %w", err)
+		return ExtractPersonaResult{
+			Success: false,
+			Message: fmt.Sprintf("Agent not found: %s", args.AgentID),
+		}, nil
 	}
 
-	summaries := make([]SessionSummary, len(sessions))
-	for i, s := range sessions {
-		var endedAt *string
-		if s.EndedAt != nil {
-			formatted := s.EndedAt.Format(time.RFC3339)
-			endedAt = &formatted
-		}
+	// Get current session if available
+	var sessionContext string
+	if agent.CurrentSessionID != nil && *agent.CurrentSessionID != "" {
+		session, err := t.db.GetSession(*agent.CurrentSessionID)
+		if err == nil {
+			// Get session logs, notes, and context
+			logs, _ := t.db.GetLogs(session.ID)
+			notes, _ := t.db.GetNotes(session.ID)
+			contextMap, _ := t.db.GetContext(session.ID)
 
-		summaries[i] = SessionSummary{
-			ID:                 s.ID,
-			AgentID:            s.AgentID,
-			Name:               s.Name,
-			StartedAt:          s.StartedAt.Format(time.RFC3339),
-			EndedAt:            endedAt,
-			AgentStatus:        s.AgentStatus,
-			FeatureDescription: s.FeatureDescription,
-			CurrentTask:        s.CurrentTask,
-			ProjectName:        s.ProjectName,
-			IsActive:           s.EndedAt == nil,
+			// Build comprehensive context
+			sessionContext = fmt.Sprintf(`# Session Context
+
+## Session: %s
+Started: %s
+
+## Logs (%d entries)
+`, session.ID, session.StartedAt.Format(time.RFC3339), len(logs))
+
+			for _, log := range logs {
+				sessionContext += fmt.Sprintf("- [%s] %s: %s\n",
+					log.Timestamp.Format("15:04:05"), log.Type, log.Message)
+			}
+
+			sessionContext += fmt.Sprintf("\n## Notes (%d entries)\n", len(notes))
+			for _, note := range notes {
+				sessionContext += fmt.Sprintf("- [%s] %s\n",
+					note.Timestamp.Format("15:04:05"), note.Content)
+			}
+
+			sessionContext += "\n## Context Variables\n"
+			for key, value := range contextMap {
+				sessionContext += fmt.Sprintf("- %s: %s\n", key, value)
+			}
 		}
 	}
 
-	var message string
-	if activeOnly {
-		message = fmt.Sprintf("Found %d active sessions", len(sessions))
-	} else if agentID != "" {
-		message = fmt.Sprintf("Found %d sessions for agent %s", len(sessions), agentID)
+	// Get recent actions
+	actions, _ := t.db.GetActionsForAgent(args.AgentID, 20)
+	actionsContext := fmt.Sprintf("\n## Recent Actions (%d)\n", len(actions))
+	for _, action := range actions {
+		actionsContext += fmt.Sprintf("- [%s] %s: %s\n",
+			action.Timestamp.Format("15:04:05"), action.ActionType, action.Description)
+	}
+
+	// Build initial context
+	initialContext := fmt.Sprintf(`# Persona Context for %s
+
+## Agent Information
+- ID: %s
+- Source: %s
+- Project: %s
+- Feature: %s
+- Current Task: %s
+
+%s
+
+%s
+
+## Instructions
+This persona is based on the working context of agent %s.
+Recreate similar working patterns, tools, and approaches when instantiated.
+`,
+		args.PersonaName,
+		agent.ID,
+		agent.Source,
+		strPtrOrEmpty(agent.ProjectName),
+		strPtrOrEmpty(agent.FeatureDescription),
+		strPtrOrEmpty(agent.CurrentTask),
+		sessionContext,
+		actionsContext,
+		args.AgentID,
+	)
+
+	// Auto-detect expertise from actions and session data
+	expertise := []string{}
+	if agent.Source == database.SourceDesktop {
+		expertise = append(expertise, "Claude Desktop")
 	} else {
-		message = fmt.Sprintf("Found %d sessions", len(sessions))
+		expertise = append(expertise, "Git Worktree Management")
 	}
 
-	return ListSessionsResult{
-		Success:  true,
-		Message:  message,
-		Sessions: summaries,
+	if agent.ProjectName != nil {
+		expertise = append(expertise, *agent.ProjectName)
+	}
+
+	expertiseJSON := fmt.Sprintf(`["%s"]`, strings.Join(expertise, `", "`))
+
+	// Create the persona
+	persona := &database.Persona{
+		ID:             args.PersonaID,
+		Name:           args.PersonaName,
+		Description:    fmt.Sprintf("Persona extracted from agent %s working on %s", args.AgentID, strPtrOrEmpty(agent.FeatureDescription)),
+		Expertise:      expertiseJSON,
+		InitialContext: initialContext,
+		Specialization: args.Specialization,
+	}
+
+	if err := t.db.CreatePersona(persona); err != nil {
+		return ExtractPersonaResult{
+			Success: false,
+			Message: fmt.Sprintf("Failed to create persona: %v", err),
+		}, fmt.Errorf("database error: %w", err)
+	}
+
+	return ExtractPersonaResult{
+		Success:        true,
+		Message:        fmt.Sprintf("Persona %s created from agent %s context", args.PersonaID, args.AgentID),
+		PersonaID:      args.PersonaID,
+		InitialContext: initialContext,
 	}, nil
 }
 

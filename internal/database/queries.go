@@ -634,3 +634,79 @@ func (db *DB) UpdateAgentPersona(agentID string, personaID string) error {
 
 	return nil
 }
+
+// ListSessions retrieves all sessions with their associated agent information
+func (db *DB) ListSessions(agentID string, activeOnly bool) ([]*SessionWithAgent, error) {
+	var query string
+	var args []interface{}
+
+	if agentID != "" {
+		if activeOnly {
+			query = `
+				SELECT s.id, s.agent_id, s.name, s.started_at, s.ended_at,
+				       a.status, a.feature_description, a.current_task, a.project_name
+				FROM sessions s
+				JOIN agents a ON s.agent_id = a.id
+				WHERE s.agent_id = ? AND s.ended_at IS NULL
+				ORDER BY s.started_at DESC
+			`
+		} else {
+			query = `
+				SELECT s.id, s.agent_id, s.name, s.started_at, s.ended_at,
+				       a.status, a.feature_description, a.current_task, a.project_name
+				FROM sessions s
+				JOIN agents a ON s.agent_id = a.id
+				WHERE s.agent_id = ?
+				ORDER BY s.started_at DESC
+			`
+		}
+		args = append(args, agentID)
+	} else {
+		if activeOnly {
+			query = `
+				SELECT s.id, s.agent_id, s.name, s.started_at, s.ended_at,
+				       a.status, a.feature_description, a.current_task, a.project_name
+				FROM sessions s
+				JOIN agents a ON s.agent_id = a.id
+				WHERE s.ended_at IS NULL
+				ORDER BY s.started_at DESC
+			`
+		} else {
+			query = `
+				SELECT s.id, s.agent_id, s.name, s.started_at, s.ended_at,
+				       a.status, a.feature_description, a.current_task, a.project_name
+				FROM sessions s
+				JOIN agents a ON s.agent_id = a.id
+				ORDER BY s.started_at DESC
+			`
+		}
+	}
+
+	rows, err := db.conn.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list sessions: %w", err)
+	}
+	defer rows.Close()
+
+	var sessions []*SessionWithAgent
+	for rows.Next() {
+		var session SessionWithAgent
+		err := rows.Scan(
+			&session.ID,
+			&session.AgentID,
+			&session.Name,
+			&session.StartedAt,
+			&session.EndedAt,
+			&session.AgentStatus,
+			&session.FeatureDescription,
+			&session.CurrentTask,
+			&session.ProjectName,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan session: %w", err)
+		}
+		sessions = append(sessions, &session)
+	}
+
+	return sessions, nil
+}

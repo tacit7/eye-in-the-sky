@@ -108,3 +108,16 @@ type Persona struct {
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
 }
+
+// SessionWithAgent represents a session with its associated agent information
+type SessionWithAgent struct {
+	ID                 string     `json:"id"`
+	AgentID            string     `json:"agent_id"`
+	Name               *string    `json:"name,omitempty"`
+	StartedAt          time.Time  `json:"started_at"`
+	EndedAt            *time.Time `json:"ended_at,omitempty"`
+	AgentStatus        string     `json:"agent_status"`
+	FeatureDescription *string    `json:"feature_description,omitempty"`
+	CurrentTask        *string    `json:"current_task,omitempty"`
+	ProjectName        *string    `json:"project_name,omitempty"`
+}

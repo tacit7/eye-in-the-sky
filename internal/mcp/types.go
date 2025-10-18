@@ -290,3 +290,28 @@ type GetContextResult struct {
 	SessionID      string `json:"session_id,omitempty"`
 }
 
+// ListSessionsArgs represents the arguments for i-list-sessions tool
+type ListSessionsArgs struct {
+	AgentID    *string `json:"agent_id,omitempty" jsonschema:"description:Filter by agent ID (optional)"`
+	ActiveOnly *bool   `json:"active_only,omitempty" jsonschema:"description:Show only active sessions (optional, default: false)"`
+}
+
+type ListSessionsResult struct {
+	Success  bool             `json:"success"`
+	Message  string           `json:"message"`
+	Sessions []SessionSummary `json:"sessions,omitempty"`
+}
+
+type SessionSummary struct {
+	ID                 string  `json:"id"`
+	AgentID            string  `json:"agent_id"`
+	Name               *string `json:"name,omitempty"`
+	StartedAt          string  `json:"started_at"`
+	EndedAt            *string `json:"ended_at,omitempty"`
+	AgentStatus        string  `json:"agent_status"`
+	FeatureDescription *string `json:"feature_description,omitempty"`
+	CurrentTask        *string `json:"current_task,omitempty"`
+	ProjectName        *string `json:"project_name,omitempty"`
+	IsActive           bool    `json:"is_active"`
+}
+

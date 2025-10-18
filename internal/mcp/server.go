@@ -163,6 +163,11 @@ func (s *Server) registerTools() {
 		Name:        "i-persona-list",
 		Description: "List all available personas",
 	}, s.handleListPersonas)
+
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "i-list-sessions",
+		Description: "List all sessions with optional filtering",
+	}, s.handleListSessions)
 }
 
 // Tool handlers using the generic AddTool pattern
@@ -488,6 +493,19 @@ func (s *Server) handleGetPersona(ctx context.Context, req *mcp.CallToolRequest,
 
 func (s *Server) handleListPersonas(ctx context.Context, req *mcp.CallToolRequest, args ListPersonasArgs) (*mcp.CallToolResult, any, error) {
 	result, err := s.tools.ListPersonas(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: result.Message},
+		},
+	}, result, nil
+}
+
+func (s *Server) handleListSessions(ctx context.Context, req *mcp.CallToolRequest, args ListSessionsArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.ListSessions(args)
 	if err != nil {
 		return nil, nil, err
 	}

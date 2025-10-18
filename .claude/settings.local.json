@@ -10,7 +10,8 @@
       "Bash(sqlite3:*)",
       "Bash(curl:*)",
       "Bash(go build:*)",
-      "mcp__eye-in-the-sky__i-action"
+      "mcp__eye-in-the-sky__i-action",
+      "mcp__eye-in-the-sky__i-status"
     ],
     "deny": [],
     "ask": [],
