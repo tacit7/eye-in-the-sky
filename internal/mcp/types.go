@@ -127,6 +127,7 @@ type BringWindowFrontResult struct {
 // StartSessionArgs represents the arguments for i-start-session tool
 type StartSessionArgs struct {
 	AgentID          *string `json:"agent_id,omitempty" jsonschema:"description:8-character agent identifier (optional - auto-generated if not provided)"`
+	SessionID        *string `json:"session_id,omitempty" jsonschema:"description:Claude Code session ID from marker file (optional - auto-generated if not provided)"`
 	AgentDescription *string `json:"agent_description,omitempty" jsonschema:"description:Agent name/label (e.g., 'Frontend Dev Agent') (optional)"`
 	Name             *string `json:"name,omitempty" jsonschema:"description:Human-readable session name (optional)"`
 	Description      string  `json:"description" jsonschema:"description:What you'll be working on"`

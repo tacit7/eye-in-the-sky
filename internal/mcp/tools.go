@@ -400,32 +400,30 @@ STEP 2: If marker file exists, parse the filename
 Format: session-{agentId}-{claudeCodeSessionId}
 Example: session-a728dc53-a4ebc315-5577-4c81-b12e-1a7ae3fa907f
 
-Extract ONLY the agent_id (first 8 characters after 'session-'):
-  → agent_id: "a728dc53"  ← USE THIS in i-start-session
+Extract BOTH IDs from the filename:
+  → agent_id: "a728dc53" (first 8 chars after 'session-')
+  → session_id: "a4ebc315-5577-4c81-b12e-1a7ae3fa907f" (Claude Code session UUID)
 
-The Claude Code session_id is just for reference:
-  → claude_code_session_id: "a4ebc315-5577-4c81-b12e-1a7ae3fa907f"
-
-STEP 3: Call i-start-session with the EXTRACTED agent_id
+STEP 3: Call i-start-session with BOTH extracted IDs
   i-start-session({
-    "agent_id": "a728dc53",  ← The ID you extracted from marker file
+    "agent_id": "a728dc53",
+    "session_id": "a4ebc315-5577-4c81-b12e-1a7ae3fa907f",
     "agent_description": "Optional agent name/label",
     "description": "What you'll be working on",
     "project_name": "optional",
     "worktree_path": "optional"
   })
 
-  RESULT: Eye in the Sky creates internal session_id in format:
-    "{agentId}_{timestamp}" (e.g., "a728dc53_1760832709")
+  This uses the Claude Code session_id directly for tracking continuity.
 
 STEP 4: Delete marker file after successful registration
 Run: rm .claude/eye-in-the-sky/session-*
 
 CRITICAL NOTES:
-- YOU DON'T GENERATE ANY IDs - you extract them from the marker file
-- The external launcher creates the marker file with pre-determined IDs
-- agent_id provides continuity across multiple Claude sessions
-- If NO marker file exists, omit agent_id and i-start-session will auto-generate one
+- YOU DON'T GENERATE ANY IDs - you extract BOTH agent_id AND session_id from marker file
+- The external launcher creates the marker file with pre-determined IDs before Claude starts
+- Pass BOTH IDs to i-start-session for full tracking continuity
+- If NO marker file exists, omit both IDs and i-start-session will auto-generate them
 
 ═══════════════════════════════════════════════════════════════
 WORKFLOW - During your session
@@ -568,8 +566,14 @@ func (t *Tools) StartSession(args StartSessionArgs) (StartSessionResult, error) 
 		return StartSessionResult{}, fmt.Errorf("failed to create agent: %w", err)
 	}
 
-	// Create session
-	sessionID := fmt.Sprintf("%s_%d", agentID, time.Now().Unix())
+	// Create session - use provided session_id or generate one
+	var sessionID string
+	if args.SessionID != nil && *args.SessionID != "" {
+		sessionID = *args.SessionID
+	} else {
+		sessionID = fmt.Sprintf("%s_%d", agentID, time.Now().Unix())
+	}
+
 	session := &database.Session{
 		ID:        sessionID,
 		AgentID:   agentID,
