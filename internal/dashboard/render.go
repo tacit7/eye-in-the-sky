@@ -51,11 +51,22 @@ func (a *App) renderAgents() error {
 		}
 
 		sessionName := "-"
-		// Get session name if available
+		// Get session name or ID if available
 		if agent.CurrentSessionID != nil && *agent.CurrentSessionID != "" {
 			session, err := a.db.GetSession(*agent.CurrentSessionID)
-			if err == nil && session != nil && session.Name != nil {
-				sessionName = *session.Name
+			if err == nil && session != nil {
+				if session.Name != nil && *session.Name != "" {
+					sessionName = *session.Name
+				} else {
+					// Show truncated session ID if no name
+					sessionName = session.ID
+				}
+				if len(sessionName) > 16 {
+					sessionName = sessionName[:13] + "..."
+				}
+			} else {
+				// Session not found, show truncated current session ID
+				sessionName = *agent.CurrentSessionID
 				if len(sessionName) > 16 {
 					sessionName = sessionName[:13] + "..."
 				}
