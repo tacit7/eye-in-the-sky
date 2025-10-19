@@ -26,12 +26,12 @@ func (db *DB) GetAgent(id string) (*Agent, error) {
 	}
 
 	query := `
-		SELECT id, status, source, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, current_session_id, persona_id
+		SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, current_session_id, persona_id
 		FROM agents WHERE id = ?
 	`
 	var agent Agent
 	row := db.conn.QueryRow(query, id)
-	err := row.Scan(&agent.ID, &agent.Status, &agent.Source, &agent.CreatedAt, &agent.UpdatedAt,
+	err := row.Scan(&agent.ID, &agent.Status, &agent.Source, &agent.Description, &agent.CreatedAt, &agent.UpdatedAt,
 		&agent.GitWorktreePath, &agent.FeatureDescription, &agent.CurrentTask, &agent.LastActivityAt, &agent.WindowID, &agent.ProjectName, &agent.CurrentSessionID, &agent.PersonaID)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -233,14 +233,14 @@ func (db *DB) ListAgents(status string) ([]*Agent, error) {
 
 	if status != "" {
 		query = `
-			SELECT id, status, source, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name
+			SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, current_session_id, persona_id
 			FROM agents WHERE status = ?
 			ORDER BY updated_at DESC
 		`
 		args = append(args, status)
 	} else {
 		query = `
-			SELECT id, status, source, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name
+			SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, current_session_id, persona_id
 			FROM agents
 			ORDER BY updated_at DESC
 		`
@@ -259,6 +259,7 @@ func (db *DB) ListAgents(status string) ([]*Agent, error) {
 			&agent.ID,
 			&agent.Status,
 			&agent.Source,
+			&agent.Description,
 			&agent.CreatedAt,
 			&agent.UpdatedAt,
 			&agent.GitWorktreePath,
@@ -267,6 +268,8 @@ func (db *DB) ListAgents(status string) ([]*Agent, error) {
 			&agent.LastActivityAt,
 			&agent.WindowID,
 			&agent.ProjectName,
+			&agent.CurrentSessionID,
+			&agent.PersonaID,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan agent: %w", err)
