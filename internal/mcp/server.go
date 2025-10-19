@@ -65,10 +65,13 @@ func (s *Server) registerTools() {
 	// - i-session-get, i-list-sessions (internal query tools)
 	// - i-bring-front (window management - internal use)
 	// - i-persona-get, i-persona-list (internal persona queries)
+	// - i-load-context (internal context loading)
+	// - i-context-set (removed, use i-save-context instead)
+	// - i-note (deprecated stub, use i-note-add)
 	// All are still available via HandleTool() for backward compatibility
 
 	mcp.AddTool(s.mcp, &mcp.Tool{
-		Name:        "i-status",
+		Name:        "i-update-status",
 		Description: "Update agent status and current task",
 	}, s.handleUpdateStatus)
 
@@ -78,7 +81,7 @@ func (s *Server) registerTools() {
 	}, s.handleLogCommits)
 
 	mcp.AddTool(s.mcp, &mcp.Tool{
-		Name:        "i-end",
+		Name:        "i-end-session",
 		Description: "Complete agent session",
 	}, s.handleEndSession)
 
@@ -86,16 +89,6 @@ func (s *Server) registerTools() {
 		Name:        "i-save-context",
 		Description: "Save session state for resumption",
 	}, s.handleSaveSessionContext)
-
-	mcp.AddTool(s.mcp, &mcp.Tool{
-		Name:        "i-load-context",
-		Description: "Load previous session state",
-	}, s.handleLoadSessionContext)
-
-	mcp.AddTool(s.mcp, &mcp.Tool{
-		Name:        "i-note",
-		Description: "Add contextual notes to session",
-	}, s.handleAddSessionNote)
 
 	mcp.AddTool(s.mcp, &mcp.Tool{
 		Name:        "i-log-compaction",
@@ -122,11 +115,6 @@ func (s *Server) registerTools() {
 		Name:        "i-note-add",
 		Description: "Add note to session",
 	}, s.handleAddNote)
-
-	mcp.AddTool(s.mcp, &mcp.Tool{
-		Name:        "i-context-set",
-		Description: "Set context key/value for session",
-	}, s.handleSetContext)
 
 	// Persona Management Tools
 	mcp.AddTool(s.mcp, &mcp.Tool{
