@@ -431,7 +431,7 @@ func (a *App) closeDetails(g *gocui.Gui, v *gocui.View) error {
 		return err
 	}
 	statusView.Clear()
-	fmt.Fprint(statusView, " [q] Quit | [r] Refresh | [a] Toggle All | [c] Continue | [w] Window | [L] Logs | [:] Command")
+	fmt.Fprint(statusView, " [q] Quit | [r] Refresh | [a] Toggle All | [D] Archive | [c] Continue | [w] Window | [L] Logs")
 
 	// Re-render agents
 	return a.renderAgents()
@@ -477,4 +477,35 @@ func ptrToString(s *string) string {
 		return "N/A"
 	}
 	return *s
+}
+
+// archiveAgent archives (soft deletes) the selected agent
+func (a *App) archiveAgent(g *gocui.Gui, v *gocui.View) error {
+	if a.selectedIdx < 0 || a.selectedIdx >= len(a.agents) {
+		return nil
+	}
+
+	agent := a.agents[a.selectedIdx]
+
+	// Update agent status to archived
+	if err := a.db.UpdateAgentStatus(agent.ID, database.StatusArchived, nil); err != nil {
+		return a.showMessage(fmt.Sprintf("Failed to archive agent: %v", err))
+	}
+
+	// Refresh the agent list
+	if err := a.refreshAgents(); err != nil {
+		return err
+	}
+
+	// Adjust selected index if needed
+	if a.selectedIdx >= len(a.agents) && a.selectedIdx > 0 {
+		a.selectedIdx = len(a.agents) - 1
+	}
+
+	// Update cursor position
+	if mainView, err := g.View(viewMain); err == nil {
+		mainView.SetCursor(0, a.selectedIdx+2) // +2 for header
+	}
+
+	return a.showMessage(fmt.Sprintf("Agent %s archived", agent.ID[:8]))
 }

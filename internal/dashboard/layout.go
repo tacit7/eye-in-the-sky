@@ -54,7 +54,7 @@ func (a *App) layout(g *gocui.Gui) error {
 		v.Frame = false
 		v.FgColor = gocui.ColorWhite
 		v.Clear()
-		v.Write([]byte(" [q] Quit | [r] Refresh | [a] Toggle All | [c] Continue | [w] Window | [L] Logs | [:] Command"))
+		v.Write([]byte(" [q] Quit | [r] Refresh | [a] Toggle All | [D] Archive | [c] Continue | [w] Window | [L] Logs"))
 	}
 
 	return nil

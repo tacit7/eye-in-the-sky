@@ -21,8 +21,8 @@ func (a *App) renderAgents() error {
 	}
 
 	// Header
-	fmt.Fprintf(v, "%-10s %-10s %-20s %-15s %-18s %-15s %-25s\n", "STATUS", "AGENT", "DESCRIPTION", "SOURCE", "SESSION", "PROJECT", "TASK")
-	fmt.Fprintln(v, "───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────")
+	fmt.Fprintf(v, "%-10s %-10s %-12s %-20s %-15s %-30s\n", "STATUS", "AGENT", "SESSION", "DESCRIPTION", "PROJECT", "TASK")
+	fmt.Fprintln(v, "──────────────────────────────────────────────────────────────────────────────────────────────────────")
 
 	// Agents
 	for _, agent := range a.agents {
@@ -37,38 +37,25 @@ func (a *App) renderAgents() error {
 			}
 		}
 
-		// Source with window ID for desktop agents
-		source := agent.Source
-		if agent.Source == database.SourceDesktop && agent.WindowID != nil && *agent.WindowID != "" {
-			windowID := *agent.WindowID
-			if len(windowID) > 8 {
-				windowID = windowID[:5] + "..."
-			}
-			source = fmt.Sprintf("desktop:%s", windowID)
-		}
-		if len(source) > 13 {
-			source = source[:10] + "..."
-		}
-
 		sessionName := "-"
-		// Get session name or ID if available
+		// Get session name or ID (first part only) if available
 		if agent.CurrentSessionID != nil && *agent.CurrentSessionID != "" {
 			session, err := a.db.GetSession(*agent.CurrentSessionID)
 			if err == nil && session != nil {
 				if session.Name != nil && *session.Name != "" {
 					sessionName = *session.Name
 				} else {
-					// Show truncated session ID if no name
-					sessionName = session.ID
+					// Show first part of session ID (before - or _)
+					sessionName = getFirstPart(session.ID)
 				}
-				if len(sessionName) > 16 {
-					sessionName = sessionName[:13] + "..."
+				if len(sessionName) > 10 {
+					sessionName = sessionName[:10]
 				}
 			} else {
-				// Session not found, show truncated current session ID
-				sessionName = *agent.CurrentSessionID
-				if len(sessionName) > 16 {
-					sessionName = sessionName[:13] + "..."
+				// Session not found, show first part of current session ID
+				sessionName = getFirstPart(*agent.CurrentSessionID)
+				if len(sessionName) > 10 {
+					sessionName = sessionName[:10]
 				}
 			}
 		}
@@ -87,14 +74,25 @@ func (a *App) renderAgents() error {
 		} else if agent.FeatureDescription != nil {
 			task = *agent.FeatureDescription
 		}
-		if len(task) > 23 {
-			task = task[:20] + "..."
+		if len(task) > 28 {
+			task = task[:25] + "..."
 		}
 
-		fmt.Fprintf(v, "%s %-10s %-20s %-15s %-18s %-15s %-25s\n", statusIcon, agentID, description, source, sessionName, projectName, task)
+		fmt.Fprintf(v, "%s %-10s %-12s %-20s %-15s %-30s\n", statusIcon, agentID, sessionName, description, projectName, task)
 	}
 
 	return nil
+}
+
+// getFirstPart extracts the first part of a session ID (before - or _)
+func getFirstPart(s string) string {
+	// Split on - or _
+	for i, c := range s {
+		if c == '-' || c == '_' {
+			return s[:i]
+		}
+	}
+	return s
 }
 
 // getStatusIcon returns a colored icon for the status

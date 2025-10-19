@@ -75,6 +75,11 @@ func (a *App) setupKeybindings() error {
 		return err
 	}
 
+	// Delete/Archive agent
+	if err := a.gui.SetKeybinding("", 'D', gocui.ModNone, a.archiveAgent); err != nil {
+		return err
+	}
+
 	return nil
 }
 
