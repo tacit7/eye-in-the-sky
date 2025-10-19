@@ -64,6 +64,7 @@ func (s *Server) registerTools() {
 	// - i-register, i-register-claude-desktop (use i-start-session instead)
 	// - i-session-get, i-list-sessions (internal query tools)
 	// - i-bring-front (window management - internal use)
+	// - i-persona-get, i-persona-list (internal persona queries)
 	// All are still available via HandleTool() for backward compatibility
 
 	mcp.AddTool(s.mcp, &mcp.Tool{
@@ -133,15 +134,8 @@ func (s *Server) registerTools() {
 		Description: "Save current agent expertise as a reusable persona",
 	}, s.handleSnapshotExpertise)
 
-	mcp.AddTool(s.mcp, &mcp.Tool{
-		Name:        "i-persona-get",
-		Description: "Get persona details and initial context",
-	}, s.handleGetPersona)
-
-	mcp.AddTool(s.mcp, &mcp.Tool{
-		Name:        "i-persona-list",
-		Description: "List all available personas",
-	}, s.handleListPersonas)
+	// NOTE: i-persona-get and i-persona-list kept internal-only
+	// Available via HandleTool() for dashboard/internal use
 }
 
 // Tool handlers using the generic AddTool pattern
