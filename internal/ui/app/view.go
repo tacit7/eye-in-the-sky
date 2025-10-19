@@ -308,7 +308,7 @@ func (m *Model) renderAgentDetails() string {
 		for _, commit := range m.commits {
 			line := fmt.Sprintf("  %s  %s  %s",
 				commit.Timestamp.Format("15:04:05"),
-				commit.CommitHash[:8],
+				truncateCommitHash(commit.CommitHash, 8),
 				truncate(commit.CommitMessage, 60),
 			)
 			b.WriteString(m.styles.Text.Render(line))
@@ -425,6 +425,14 @@ func truncate(s string, maxLen int) string {
 		return s[:maxLen]
 	}
 	return s[:maxLen-3] + "..."
+}
+
+// truncateCommitHash safely truncates a commit hash to the specified length
+func truncateCommitHash(hash string, maxLen int) string {
+	if len(hash) <= maxLen {
+		return hash
+	}
+	return hash[:maxLen]
 }
 
 // formatTimestamp formats a timestamp in a human-readable way
