@@ -225,7 +225,8 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleDetailKeys handles keys in detail view
 func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if Matches(msg, m.keys.Back) {
+	// In detail view, q/esc go back to list instead of quitting
+	if Matches(msg, m.keys.Back) || Matches(msg, m.keys.Quit) {
 		// Go back to list view
 		m.currentView = ViewList
 		m.detailOffset = 0
@@ -263,10 +264,6 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Fallback keys (temporary)
 	switch msg.String() {
-	case "q":
-		fmt.Fprintf(os.Stderr, "fallback key q used\n")
-		m.currentView = ViewList
-		m.detailOffset = 0
 	case "g":
 		// Go to top
 		m.detailOffset = 0
@@ -280,7 +277,8 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleLogsKeys handles keys in logs view
 func (m *Model) handleLogsKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if Matches(msg, m.keys.Back) {
+	// In logs view, q/esc go back to list instead of quitting
+	if Matches(msg, m.keys.Back) || Matches(msg, m.keys.Quit) {
 		// Go back to list view
 		m.currentView = ViewList
 		return m, nil
@@ -317,9 +315,6 @@ func (m *Model) handleLogsKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Fallback keys (temporary)
 	switch msg.String() {
-	case "q":
-		fmt.Fprintf(os.Stderr, "fallback key q used\n")
-		m.currentView = ViewList
 	case "g":
 		// Go to top
 		m.detailOffset = 0
