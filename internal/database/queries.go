@@ -710,3 +710,62 @@ func (db *DB) ListSessions(agentID string, activeOnly bool) ([]*SessionWithAgent
 
 	return sessions, nil
 }
+
+// CreateCompaction logs a conversation compaction event
+func (db *DB) CreateCompaction(compaction *Compaction) error {
+	query := `
+		INSERT INTO compactions (agent_id, old_session_id, new_session_id, summary, jsonl_file_path, jsonl_file_size, message_count)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`
+	_, err := db.conn.Exec(query,
+		compaction.AgentID,
+		compaction.OldSessionID,
+		compaction.NewSessionID,
+		compaction.Summary,
+		compaction.JsonlFilePath,
+		compaction.JsonlFileSize,
+		compaction.MessageCount,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create compaction: %w", err)
+	}
+	return nil
+}
+
+// GetCompactionsForAgent retrieves all compactions for a specific agent
+func (db *DB) GetCompactionsForAgent(agentID string) ([]*Compaction, error) {
+	query := `
+		SELECT id, agent_id, old_session_id, new_session_id, compacted_at, summary, jsonl_file_path, jsonl_file_size, message_count
+		FROM compactions
+		WHERE agent_id = ?
+		ORDER BY compacted_at DESC
+	`
+
+	rows, err := db.conn.Query(query, agentID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get compactions: %w", err)
+	}
+	defer rows.Close()
+
+	var compactions []*Compaction
+	for rows.Next() {
+		var c Compaction
+		err := rows.Scan(
+			&c.ID,
+			&c.AgentID,
+			&c.OldSessionID,
+			&c.NewSessionID,
+			&c.CompactedAt,
+			&c.Summary,
+			&c.JsonlFilePath,
+			&c.JsonlFileSize,
+			&c.MessageCount,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan compaction: %w", err)
+		}
+		compactions = append(compactions, &c)
+	}
+
+	return compactions, nil
+}

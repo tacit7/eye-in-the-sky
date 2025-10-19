@@ -108,6 +108,11 @@ func (s *Server) registerTools() {
 	}, s.handleAddSessionNote)
 
 	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "i-log-compaction",
+		Description: "Log conversation compaction and backup JSONL file",
+	}, s.handleLogCompaction)
+
+	mcp.AddTool(s.mcp, &mcp.Tool{
 		Name:        "i-window",
 		Description: "Get current active window info (macOS)",
 	}, s.handleGetCurrentWindow)
@@ -506,6 +511,19 @@ func (s *Server) handleListPersonas(ctx context.Context, req *mcp.CallToolReques
 
 func (s *Server) handleListSessions(ctx context.Context, req *mcp.CallToolRequest, args ListSessionsArgs) (*mcp.CallToolResult, any, error) {
 	result, err := s.tools.ListSessions(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: result.Message},
+		},
+	}, result, nil
+}
+
+func (s *Server) handleLogCompaction(ctx context.Context, req *mcp.CallToolRequest, args LogCompactionArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.LogCompaction(args)
 	if err != nil {
 		return nil, nil, err
 	}

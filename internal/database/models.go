@@ -121,3 +121,16 @@ type SessionWithAgent struct {
 	CurrentTask        *string    `json:"current_task,omitempty"`
 	ProjectName        *string    `json:"project_name,omitempty"`
 }
+
+// Compaction represents a conversation compaction event
+type Compaction struct {
+	ID            int       `json:"id"`
+	AgentID       string    `json:"agent_id"`
+	OldSessionID  *string   `json:"old_session_id,omitempty"`
+	NewSessionID  string    `json:"new_session_id"`
+	CompactedAt   time.Time `json:"compacted_at"`
+	Summary       *string   `json:"summary,omitempty"`
+	JsonlFilePath *string   `json:"jsonl_file_path,omitempty"`
+	JsonlFileSize *int64    `json:"jsonl_file_size,omitempty"`
+	MessageCount  *int      `json:"message_count,omitempty"`
+}

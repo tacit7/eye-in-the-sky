@@ -1,9 +1,13 @@
 package mcp
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -1109,4 +1113,107 @@ func strPtrOrEmpty(s *string) string {
 		return "N/A"
 	}
 	return *s
+}
+
+// LogCompaction logs a conversation compaction event and backs up the JSONL file
+func (t *Tools) LogCompaction(args LogCompactionArgs) (LogCompactionResult, error) {
+	// Validate agent exists
+	agent, err := t.db.GetAgent(args.AgentID)
+	if err != nil {
+		return LogCompactionResult{Success: false, Message: fmt.Sprintf("Agent not found: %s", args.AgentID)}, nil
+	}
+
+	// Get project path from agent
+	var projectPath string
+	if agent.GitWorktreePath != nil {
+		projectPath = *agent.GitWorktreePath
+	} else {
+		return LogCompactionResult{Success: false, Message: "Agent does not have a project path - cannot locate JSONL file"}, nil
+	}
+
+	// Construct path to JSONL file
+	// Pattern: ~/.claude/projects/-Users-...-<project-name>/<session-id>.jsonl
+	homeDir := os.Getenv("HOME")
+	claudeProjectsDir := filepath.Join(homeDir, ".claude", "projects")
+
+	// Convert project path to Claude's format (replace / with -)
+	projectDirName := strings.ReplaceAll(strings.TrimPrefix(projectPath, "/"), "/", "-")
+	jsonlPath := filepath.Join(claudeProjectsDir, projectDirName, args.SessionID+".jsonl")
+
+	// Check if JSONL file exists
+	fileInfo, err := os.Stat(jsonlPath)
+	if err != nil {
+		return LogCompactionResult{Success: false, Message: fmt.Sprintf("JSONL file not found: %s", jsonlPath)}, nil
+	}
+
+	// Create compactions directory if it doesn't exist
+	compactionsDir := filepath.Join(homeDir, "projects", "eye-in-the-sky", "data", "compactions")
+	if err := os.MkdirAll(compactionsDir, 0755); err != nil {
+		return LogCompactionResult{Success: false, Message: fmt.Sprintf("Failed to create compactions directory: %v", err)}, nil
+	}
+
+	// Copy JSONL file to compactions directory
+	backupPath := filepath.Join(compactionsDir, args.SessionID+".jsonl")
+	if err := copyFile(jsonlPath, backupPath); err != nil {
+		return LogCompactionResult{Success: false, Message: fmt.Sprintf("Failed to copy JSONL file: %v", err)}, nil
+	}
+
+	// Count messages in JSONL file (optional, for metadata)
+	messageCount, _ := countJSONLLines(backupPath)
+	fileSize := fileInfo.Size()
+
+	// Create compaction record
+	compaction := &database.Compaction{
+		AgentID:       args.AgentID,
+		OldSessionID:  args.OldSessionID,
+		NewSessionID:  args.SessionID,
+		Summary:       args.Summary,
+		JsonlFilePath: &backupPath,
+		JsonlFileSize: &fileSize,
+		MessageCount:  &messageCount,
+	}
+
+	if err := t.db.CreateCompaction(compaction); err != nil {
+		return LogCompactionResult{Success: false, Message: fmt.Sprintf("Failed to log compaction: %v", err)}, nil
+	}
+
+	return LogCompactionResult{
+		Success:         true,
+		Message:         fmt.Sprintf("Compaction logged successfully for session %s", args.SessionID),
+		JsonlBackupPath: backupPath,
+	}, nil
+}
+
+// copyFile copies a file from src to dst
+func copyFile(src, dst string) error {
+	sourceFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer sourceFile.Close()
+
+	destFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer destFile.Close()
+
+	_, err = io.Copy(destFile, sourceFile)
+	return err
+}
+
+// countJSONLLines counts lines in a JSONL file
+func countJSONLLines(path string) (int, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return 0, err
+	}
+	defer file.Close()
+
+	count := 0
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		count++
+	}
+	return count, scanner.Err()
 }
