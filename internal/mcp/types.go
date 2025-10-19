@@ -313,10 +313,9 @@ type SessionSummary struct {
 
 // LogCompactionArgs represents the arguments for i-log-compaction tool
 type LogCompactionArgs struct {
-	AgentID      string  `json:"agent_id" jsonschema:"description:8-character agent identifier"`
-	SessionID    string  `json:"session_id" jsonschema:"description:New session ID after compaction"`
-	Summary      *string `json:"summary,omitempty" jsonschema:"description:Compaction summary text (optional)"`
-	OldSessionID *string `json:"old_session_id,omitempty" jsonschema:"description:Old session ID that was compacted (optional)"`
+	AgentID   string  `json:"agent_id" jsonschema:"description:8-character agent identifier"`
+	SessionID string  `json:"session_id" jsonschema:"description:Session ID that was compacted"`
+	Summary   *string `json:"summary,omitempty" jsonschema:"description:Compaction summary text (optional)"`
 }
 
 type LogCompactionResult struct {

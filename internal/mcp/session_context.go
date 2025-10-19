@@ -148,14 +148,19 @@ type AddSessionNoteResult struct {
 
 // SaveSessionContext saves the current session state for resumption
 func (t *Tools) SaveSessionContext(args SaveSessionContextArgs) (SaveSessionContextResult, error) {
+	fmt.Fprintf(os.Stderr, "[SaveSessionContext] Starting for agent: %s, phase: %s\n", args.AgentID, args.CurrentPhase)
+
 	// Validate agent exists
 	agent, err := t.db.GetAgent(args.AgentID)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "[SaveSessionContext] Agent not found: %s, error: %v\n", args.AgentID, err)
 		return SaveSessionContextResult{
 			Success: false,
 			Message: fmt.Sprintf("Agent not found: %s", args.AgentID),
 		}, nil
 	}
+
+	fmt.Fprintf(os.Stderr, "[SaveSessionContext] Agent found: %s, status: %s\n", agent.ID, agent.Status)
 
 	// Generate session ID and checkpoint
 	sessionID := fmt.Sprintf("%s_%d", args.AgentID, time.Now().Unix())
@@ -237,30 +242,83 @@ func (t *Tools) SaveSessionContext(args SaveSessionContextArgs) (SaveSessionCont
 	// Calculate time spent
 	context.Metrics.TimeSpent = time.Since(context.StartTime)
 
-	// Serialize context to JSON
-	contextJSON, err := json.Marshal(context)
-	if err != nil {
-		return SaveSessionContextResult{
-			Success: false,
-			Message: fmt.Sprintf("Failed to serialize context: %v", err),
-		}, nil
+	// Convert to database SessionContext model
+	dbContext := &database.SessionContext{
+		AgentID:         args.AgentID,
+		SessionID:       sessionID,
+		CurrentPhase:    &args.CurrentPhase,
+		OverallProgress: &context.Progress.OverallCompletion,
+		AutoSave:        args.AutoSave,
+		LearnedContext:  args.LearnedContext,
+	}
+
+	// Serialize JSON fields
+	if len(context.PendingTasks) > 0 {
+		if jsonData, err := json.Marshal(context.PendingTasks); err == nil {
+			dbContext.PendingTasks = stringPtr(string(jsonData))
+		}
+	}
+	if len(context.CompletedTasks) > 0 {
+		if jsonData, err := json.Marshal(context.CompletedTasks); err == nil {
+			dbContext.CompletedTasks = stringPtr(string(jsonData))
+		}
+	}
+	if len(context.NextActions) > 0 {
+		if jsonData, err := json.Marshal(context.NextActions); err == nil {
+			dbContext.NextActions = stringPtr(string(jsonData))
+		}
+	}
+	if len(context.Dependencies) > 0 {
+		if jsonData, err := json.Marshal(context.Dependencies); err == nil {
+			dbContext.Dependencies = stringPtr(string(jsonData))
+		}
+	}
+	if len(context.ImportantFiles) > 0 {
+		if jsonData, err := json.Marshal(context.ImportantFiles); err == nil {
+			dbContext.ImportantFiles = stringPtr(string(jsonData))
+		}
+	}
+	if len(context.Progress.Milestones) > 0 {
+		if jsonData, err := json.Marshal(context.Progress.Milestones); err == nil {
+			dbContext.Milestones = stringPtr(string(jsonData))
+		}
+	}
+	if len(context.Progress.CurrentGoals) > 0 {
+		if jsonData, err := json.Marshal(context.Progress.CurrentGoals); err == nil {
+			dbContext.CurrentGoals = stringPtr(string(jsonData))
+		}
+	}
+	if len(context.Progress.Blockers) > 0 {
+		if jsonData, err := json.Marshal(context.Progress.Blockers); err == nil {
+			dbContext.Blockers = stringPtr(string(jsonData))
+		}
+	}
+	if len(context.KeyDecisions) > 0 {
+		if jsonData, err := json.Marshal(context.KeyDecisions); err == nil {
+			dbContext.KeyDecisions = stringPtr(string(jsonData))
+		}
+	}
+	if len(context.Environment) > 0 {
+		if jsonData, err := json.Marshal(context.Environment); err == nil {
+			dbContext.Environment = stringPtr(string(jsonData))
+		}
+	}
+	if jsonData, err := json.Marshal(context.Metrics); err == nil {
+		dbContext.Metrics = stringPtr(string(jsonData))
 	}
 
 	// Save to database
-	action := &database.Action{
-		AgentID:     args.AgentID,
-		ActionType:  "session_checkpoint",
-		Description: fmt.Sprintf("Session context saved - Phase: %s", args.CurrentPhase),
-		Details:     stringPtr(string(contextJSON)),
-	}
-
-	err = t.db.CreateAction(action)
+	fmt.Fprintf(os.Stderr, "[SaveSessionContext] Saving to database for agent: %s, session: %s\n", args.AgentID, sessionID)
+	err = t.db.CreateSessionContext(dbContext)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "[SaveSessionContext] Database save failed: %v\n", err)
 		return SaveSessionContextResult{
 			Success: false,
 			Message: fmt.Sprintf("Failed to save context: %v", err),
 		}, nil
 	}
+
+	fmt.Fprintf(os.Stderr, "[SaveSessionContext] Successfully saved to database\n")
 
 	// Update agent status if auto-save
 	if args.AutoSave {
@@ -272,6 +330,7 @@ func (t *Tools) SaveSessionContext(args SaveSessionContextArgs) (SaveSessionCont
 		}
 	}
 
+	fmt.Fprintf(os.Stderr, "[SaveSessionContext] Returning success result\n")
 	return SaveSessionContextResult{
 		Success:    true,
 		Message:    fmt.Sprintf("Session context saved successfully for phase: %s", args.CurrentPhase),

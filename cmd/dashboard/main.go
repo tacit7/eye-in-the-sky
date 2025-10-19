@@ -5,16 +5,29 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/tacit7/eye-in-the-sky/internal/dashboard"
 	"github.com/tacit7/eye-in-the-sky/internal/database"
 )
 
 func main() {
-	// Command line flags
-	dbPath := flag.String("db", "./data/agents.db", "Path to the SQLite database")
-	configPath := flag.String("config", "./cmd/dashboard/config/config.json", "Path to config file")
-	keysPath := flag.String("keys", "./cmd/dashboard/config/keys.json", "Path to keys config file")
+	// Get executable directory for config paths
+	execPath, err := os.Executable()
+	if err != nil {
+		log.Fatalf("Failed to get executable path: %v", err)
+	}
+	execDir := filepath.Dir(execPath)
+	projectRoot := filepath.Dir(execDir) // bin is one level down from project root
+
+	// Command line flags with paths relative to project root
+	defaultDBPath := filepath.Join(projectRoot, "data", "agents.db")
+	defaultConfigPath := filepath.Join(projectRoot, "cmd", "dashboard", "config", "config.json")
+	defaultKeysPath := filepath.Join(projectRoot, "cmd", "dashboard", "config", "keys.json")
+
+	dbPath := flag.String("db", defaultDBPath, "Path to the SQLite database")
+	configPath := flag.String("config", defaultConfigPath, "Path to config file")
+	keysPath := flag.String("keys", defaultKeysPath, "Path to keys config file")
 	help := flag.Bool("help", false, "Show help")
 	flag.Parse()
 

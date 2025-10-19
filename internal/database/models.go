@@ -123,15 +123,38 @@ type SessionWithAgent struct {
 	ProjectName        *string    `json:"project_name,omitempty"`
 }
 
-// Compaction represents a conversation compaction event
+// Compaction represents a conversation compaction event (backup/snapshot)
 type Compaction struct {
 	ID            int       `json:"id"`
 	AgentID       string    `json:"agent_id"`
-	OldSessionID  *string   `json:"old_session_id,omitempty"`
-	NewSessionID  string    `json:"new_session_id"`
+	SessionID     string    `json:"session_id"` // The session that was compacted
 	CompactedAt   time.Time `json:"compacted_at"`
 	Summary       *string   `json:"summary,omitempty"`
 	JsonlFilePath *string   `json:"jsonl_file_path,omitempty"`
 	JsonlFileSize *int64    `json:"jsonl_file_size,omitempty"`
 	MessageCount  *int      `json:"message_count,omitempty"`
+}
+
+// SessionContext represents a saved session checkpoint
+type SessionContext struct {
+	ID              int       `json:"id"`
+	AgentID         string    `json:"agent_id"`
+	SessionID       string    `json:"session_id"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+	CurrentPhase    *string   `json:"current_phase,omitempty"`
+	OverallProgress *float32  `json:"overall_progress,omitempty"`
+	PendingTasks    *string   `json:"pending_tasks,omitempty"`
+	CompletedTasks  *string   `json:"completed_tasks,omitempty"`
+	NextActions     *string   `json:"next_actions,omitempty"`
+	Dependencies    *string   `json:"dependencies,omitempty"`
+	ImportantFiles  *string   `json:"important_files,omitempty"`
+	Milestones      *string   `json:"milestones,omitempty"`
+	CurrentGoals    *string   `json:"current_goals,omitempty"`
+	Blockers        *string   `json:"blockers,omitempty"`
+	KeyDecisions    *string   `json:"key_decisions,omitempty"`
+	Environment     *string   `json:"environment,omitempty"`
+	Metrics         *string   `json:"metrics,omitempty"`
+	AutoSave        bool      `json:"auto_save"`
+	LearnedContext  *string   `json:"learned_context,omitempty"`
 }

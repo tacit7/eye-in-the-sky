@@ -455,12 +455,12 @@ When Claude detects a conversation compaction (indicated by system message
 
 i-log-compaction({
   "agent_id": "your-agent-id",
-  "session_id": "current-session-id",
-  "summary": "compaction summary text",
-  "old_session_id": "previous-session-id (if known)"
+  "session_id": "session-id-that-was-compacted",
+  "summary": "compaction summary text (optional)"
 })
 
 This backs up the JSONL conversation file to data/compactions/ directory.
+The session continues with the same ID, just with compacted (summarized) messages.
 
 ═══════════════════════════════════════════════════════════════
 ADDITIONAL TOOLS
@@ -473,8 +473,44 @@ i-persona-get - Get persona details
 i-persona-list - List available personas
 i-snapshot-expertise - Save current expertise as persona
 
-Dashboard: http://localhost:8080 (if web server running)
+═══════════════════════════════════════════════════════════════
+DASHBOARD & TUI
+═══════════════════════════════════════════════════════════════
+
+Web Dashboard: http://localhost:8080 (if web server running)
 TUI: Run 'bin/dashboard' for terminal interface
+
+TUI KEYBINDINGS:
+Agent List View:
+  [q] Quit          [r] Refresh         [a] Toggle filter (active/all)
+  [j/k] Navigate    [Enter] View details
+  [n] New session   [c] Continue        [s] Start session   [w] Window
+  [L] Logs          [D] Archive
+
+Agent Detail View:
+  [q] Back to list  [r] Refresh         [j/k] Scroll
+  [s] Start session [w] Go to window    [L] View all logs
+
+STATUS INDICATORS:
+  Active Sessions (shown by default):
+    ● ACTIVE   - Ready for work (green)
+    ● WORKING  - Currently working (blue)
+    ● IDLE     - Waiting for next task (yellow)
+    ● STALE    - Inactive 30min-1hr (gray) - needs attention
+    ? UNKNOWN  - Inactive >1hr (gray) - possibly dead/disconnected
+
+  Completed Sessions (shown with 'a' toggle):
+    ✓ COMPLETE - Finished successfully (cyan)
+    ✗ FAILED   - Ended with error (red)
+
+ACTIVE FILTER:
+  Default view shows: active, working, idle, stale, unknown
+  Press 'a' to toggle between active sessions and all sessions (including completed/failed/archived)
+
+COMMANDS:
+  'n' New Session   - Creates new session with marker file, runs 'claude --session-id <id>' and exits
+  's' Start Session - Runs 'claude -s <session-id>' and exits dashboard
+  'c' Continue      - Runs 'claude --resume <session-id>' and returns to dashboard
 
 ═══════════════════════════════════════════════════════════════`
 
@@ -962,8 +998,8 @@ func (t *Tools) LogCompaction(args LogCompactionArgs) (LogCompactionResult, erro
 	homeDir := os.Getenv("HOME")
 	claudeProjectsDir := filepath.Join(homeDir, ".claude", "projects")
 
-	// Convert project path to Claude's format (replace / with -)
-	projectDirName := strings.ReplaceAll(strings.TrimPrefix(projectPath, "/"), "/", "-")
+	// Convert project path to Claude's format (replace / with - and prepend -)
+	projectDirName := "-" + strings.ReplaceAll(strings.TrimPrefix(projectPath, "/"), "/", "-")
 	jsonlPath := filepath.Join(claudeProjectsDir, projectDirName, args.SessionID+".jsonl")
 
 	// Check if JSONL file exists
@@ -991,8 +1027,7 @@ func (t *Tools) LogCompaction(args LogCompactionArgs) (LogCompactionResult, erro
 	// Create compaction record
 	compaction := &database.Compaction{
 		AgentID:       args.AgentID,
-		OldSessionID:  args.OldSessionID,
-		NewSessionID:  args.SessionID,
+		SessionID:     args.SessionID,
 		Summary:       args.Summary,
 		JsonlFilePath: &backupPath,
 		JsonlFileSize: &fileSize,

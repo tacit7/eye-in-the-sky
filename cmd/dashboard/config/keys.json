@@ -1,7 +1,9 @@
 {
   "quit": ["q"],
-  "refresh": ["r"],
-  "continue_session": ["c"],
+  "refresh": ["R"],
+  "continue_session": ["r"],
+  "start_session": ["s"],
+  "new_session": ["n"],
   "go_to_window": ["w"],
   "toggle_all_agents": ["a"],
   "up": ["k"],
@@ -9,5 +11,6 @@
   "logs": ["L"],
   "command_mode": [":"],
   "archive": ["D"],
+  "mark_done": ["d"],
   "view_details": ["enter"]
 }

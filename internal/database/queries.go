@@ -65,6 +65,29 @@ func (db *DB) UpdateAgentStatus(id, status string, currentTask *string) error {
 	return nil
 }
 
+// UpdateAgentDescription updates an agent's description
+func (db *DB) UpdateAgentDescription(id string, description string) error {
+	query := `
+		UPDATE agents SET description = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`
+	result, err := db.conn.Exec(query, description, id)
+	if err != nil {
+		return fmt.Errorf("failed to update agent description: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("agent not found: %s", id)
+	}
+
+	return nil
+}
+
 // CreateAction logs a new action
 func (db *DB) CreateAction(action *Action) error {
 	query := `INSERT INTO actions (agent_id, action_type, description, details) VALUES (?, ?, ?, ?)`
@@ -232,12 +255,21 @@ func (db *DB) ListAgents(status string) ([]*Agent, error) {
 	var args []interface{}
 
 	if status != "" {
-		query = `
-			SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, current_session_id, persona_id
-			FROM agents WHERE status = ?
-			ORDER BY updated_at DESC
-		`
-		args = append(args, status)
+		// Special handling for "active" filter - show all active sessions
+		if status == "active" {
+			query = `
+				SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, current_session_id, persona_id
+				FROM agents WHERE status IN ('active', 'working', 'idle')
+				ORDER BY updated_at DESC
+			`
+		} else {
+			query = `
+				SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, current_session_id, persona_id
+				FROM agents WHERE status = ?
+				ORDER BY updated_at DESC
+			`
+			args = append(args, status)
+		}
 	} else {
 		query = `
 			SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, current_session_id, persona_id
@@ -717,13 +749,12 @@ func (db *DB) ListSessions(agentID string, activeOnly bool) ([]*SessionWithAgent
 // CreateCompaction logs a conversation compaction event
 func (db *DB) CreateCompaction(compaction *Compaction) error {
 	query := `
-		INSERT INTO compactions (agent_id, old_session_id, new_session_id, summary, jsonl_file_path, jsonl_file_size, message_count)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO compactions (agent_id, session_id, summary, jsonl_file_path, jsonl_file_size, message_count)
+		VALUES (?, ?, ?, ?, ?, ?)
 	`
 	_, err := db.conn.Exec(query,
 		compaction.AgentID,
-		compaction.OldSessionID,
-		compaction.NewSessionID,
+		compaction.SessionID,
 		compaction.Summary,
 		compaction.JsonlFilePath,
 		compaction.JsonlFileSize,
@@ -738,7 +769,7 @@ func (db *DB) CreateCompaction(compaction *Compaction) error {
 // GetCompactionsForAgent retrieves all compactions for a specific agent
 func (db *DB) GetCompactionsForAgent(agentID string) ([]*Compaction, error) {
 	query := `
-		SELECT id, agent_id, old_session_id, new_session_id, compacted_at, summary, jsonl_file_path, jsonl_file_size, message_count
+		SELECT id, agent_id, session_id, compacted_at, summary, jsonl_file_path, jsonl_file_size, message_count
 		FROM compactions
 		WHERE agent_id = ?
 		ORDER BY compacted_at DESC
@@ -756,8 +787,7 @@ func (db *DB) GetCompactionsForAgent(agentID string) ([]*Compaction, error) {
 		err := rows.Scan(
 			&c.ID,
 			&c.AgentID,
-			&c.OldSessionID,
-			&c.NewSessionID,
+			&c.SessionID,
 			&c.CompactedAt,
 			&c.Summary,
 			&c.JsonlFilePath,
@@ -771,4 +801,128 @@ func (db *DB) GetCompactionsForAgent(agentID string) ([]*Compaction, error) {
 	}
 
 	return compactions, nil
+}
+
+// GetActionsByType retrieves all actions for a specific agent filtered by action type
+func (db *DB) GetActionsByType(agentID string, actionType string) ([]*Action, error) {
+	query := `
+		SELECT id, agent_id, action_type, description, details, timestamp
+		FROM actions
+		WHERE agent_id = ? AND action_type = ?
+		ORDER BY timestamp ASC
+	`
+	rows, err := db.conn.Query(query, agentID, actionType)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get actions by type: %w", err)
+	}
+	defer rows.Close()
+
+	var actions []*Action
+	for rows.Next() {
+		var action Action
+		err := rows.Scan(
+			&action.ID,
+			&action.AgentID,
+			&action.ActionType,
+			&action.Description,
+			&action.Details,
+			&action.Timestamp,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan action: %w", err)
+		}
+		actions = append(actions, &action)
+	}
+
+	return actions, nil
+}
+
+// GetSessionContextsForAgent retrieves all saved session contexts for a specific agent
+func (db *DB) GetSessionContextsForAgent(agentID string) ([]*SessionContext, error) {
+	query := `
+		SELECT id, agent_id, session_id, created_at, updated_at, current_phase,
+		       overall_progress, pending_tasks, completed_tasks, next_actions,
+		       dependencies, important_files, milestones, current_goals, blockers,
+		       key_decisions, environment, metrics, auto_save, learned_context
+		FROM session_context
+		WHERE agent_id = ?
+		ORDER BY created_at DESC
+	`
+
+	rows, err := db.conn.Query(query, agentID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get session contexts: %w", err)
+	}
+	defer rows.Close()
+
+	var contexts []*SessionContext
+	for rows.Next() {
+		var ctx SessionContext
+		err := rows.Scan(
+			&ctx.ID,
+			&ctx.AgentID,
+			&ctx.SessionID,
+			&ctx.CreatedAt,
+			&ctx.UpdatedAt,
+			&ctx.CurrentPhase,
+			&ctx.OverallProgress,
+			&ctx.PendingTasks,
+			&ctx.CompletedTasks,
+			&ctx.NextActions,
+			&ctx.Dependencies,
+			&ctx.ImportantFiles,
+			&ctx.Milestones,
+			&ctx.CurrentGoals,
+			&ctx.Blockers,
+			&ctx.KeyDecisions,
+			&ctx.Environment,
+			&ctx.Metrics,
+			&ctx.AutoSave,
+			&ctx.LearnedContext,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan session context: %w", err)
+		}
+		contexts = append(contexts, &ctx)
+	}
+
+	return contexts, nil
+}
+
+// CreateSessionContext inserts or updates a session context checkpoint
+func (db *DB) CreateSessionContext(ctx *SessionContext) error {
+	query := `
+		INSERT INTO session_context (
+			agent_id, session_id, current_phase, overall_progress,
+			pending_tasks, completed_tasks, next_actions, dependencies,
+			important_files, milestones, current_goals, blockers,
+			key_decisions, environment, metrics, auto_save, learned_context
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
+
+	_, err := db.conn.Exec(query,
+		ctx.AgentID,
+		ctx.SessionID,
+		ctx.CurrentPhase,
+		ctx.OverallProgress,
+		ctx.PendingTasks,
+		ctx.CompletedTasks,
+		ctx.NextActions,
+		ctx.Dependencies,
+		ctx.ImportantFiles,
+		ctx.Milestones,
+		ctx.CurrentGoals,
+		ctx.Blockers,
+		ctx.KeyDecisions,
+		ctx.Environment,
+		ctx.Metrics,
+		ctx.AutoSave,
+		ctx.LearnedContext,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to create session context: %w", err)
+	}
+
+	return nil
 }

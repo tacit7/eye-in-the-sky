@@ -46,7 +46,6 @@ func NewServer(db *database.DB) *Server {
 // Start starts the MCP server
 func (s *Server) Start(ctx context.Context) error {
 	log.Println("🔧 MCP Server starting...")
-	log.Println("📊 Dashboard available at: http://localhost:8080")
 
 	// Run the MCP server on stdio transport (this handles JSON-RPC over stdin/stdout)
 	err := s.mcp.Run(ctx, &mcp.StdioTransport{})
@@ -77,10 +76,6 @@ func (s *Server) registerTools() {
 		Description: "Update agent status and current task",
 	}, s.handleUpdateStatus)
 
-	mcp.AddTool(s.mcp, &mcp.Tool{
-		Name:        "i-action",
-		Description: "Log agent activities",
-	}, s.handleLogAction)
 
 	mcp.AddTool(s.mcp, &mcp.Tool{
 		Name:        "i-commits",
@@ -133,10 +128,6 @@ func (s *Server) registerTools() {
 		Description: "Start a new session with agent registration. IMPORTANT: Before calling this, check for .claude/eye-in-the-sky/session-* marker file and extract BOTH agent_id (first 8 chars) and session_id (UUID) from filename. Pass BOTH IDs to maintain full continuity. If no marker file exists, omit both and they will be auto-generated. Call i-instructions for complete initialization workflow.",
 	}, s.handleStartSession)
 
-	mcp.AddTool(s.mcp, &mcp.Tool{
-		Name:        "i-log",
-		Description: "Add log entry to session",
-	}, s.handleAddLog)
 
 	mcp.AddTool(s.mcp, &mcp.Tool{
 		Name:        "i-note-add",
@@ -215,19 +206,6 @@ func (s *Server) handleUpdateStatus(ctx context.Context, req *mcp.CallToolReques
 	}, result, nil
 }
 
-func (s *Server) handleLogAction(ctx context.Context, req *mcp.CallToolRequest, args LogActionArgs) (*mcp.CallToolResult, any, error) {
-	result, err := s.tools.LogAction(args)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: "Action logged successfully"},
-		},
-	}, result, nil
-}
-
 func (s *Server) handleEndSession(ctx context.Context, req *mcp.CallToolRequest, args EndSessionArgs) (*mcp.CallToolResult, any, error) {
 	result, err := s.tools.EndSession(args)
 	if err != nil {
@@ -255,12 +233,16 @@ func (s *Server) handleLogCommits(ctx context.Context, req *mcp.CallToolRequest,
 }
 
 func (s *Server) handleSaveSessionContext(ctx context.Context, req *mcp.CallToolRequest, args SaveSessionContextArgs) (*mcp.CallToolResult, any, error) {
-	// For now, return a simple success message - session context can be implemented later
+	result, err := s.tools.SaveSessionContext(args)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to save session context: %w", err)
+	}
+
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
-			&mcp.TextContent{Text: "Session context saved successfully"},
+			&mcp.TextContent{Text: result.Message},
 		},
-	}, map[string]interface{}{"success": true, "message": "Session context saved"}, nil
+	}, result, nil
 }
 
 func (s *Server) handleLoadSessionContext(ctx context.Context, req *mcp.CallToolRequest, args LoadSessionContextArgs) (*mcp.CallToolResult, any, error) {
@@ -347,13 +329,6 @@ func (s *Server) HandleTool(toolName string, argsJSON []byte) (interface{}, erro
 		}
 		return s.tools.UpdateStatus(args)
 
-	case "log_action", "i-log-action", "i-action":
-		var args LogActionArgs
-		if err := json.Unmarshal(argsJSON, &args); err != nil {
-			return nil, err
-		}
-		return s.tools.LogAction(args)
-
 	case "log_commits", "i-log-commits", "i-commits":
 		var args LogCommitsArgs
 		if err := json.Unmarshal(argsJSON, &args); err != nil {
@@ -404,19 +379,6 @@ func (s *Server) HandleTool(toolName string, argsJSON []byte) (interface{}, erro
 
 func (s *Server) handleStartSession(ctx context.Context, req *mcp.CallToolRequest, args StartSessionArgs) (*mcp.CallToolResult, any, error) {
 	result, err := s.tools.StartSession(args)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: result.Message},
-		},
-	}, result, nil
-}
-
-func (s *Server) handleAddLog(ctx context.Context, req *mcp.CallToolRequest, args AddLogArgs) (*mcp.CallToolResult, any, error) {
-	result, err := s.tools.AddLog(args)
 	if err != nil {
 		return nil, nil, err
 	}

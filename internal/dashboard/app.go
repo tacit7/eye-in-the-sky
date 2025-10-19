@@ -12,16 +12,25 @@ import (
 
 // App represents the TUI dashboard application
 type App struct {
-	gui            *gocui.Gui
-	db             *database.DB
-	config         *Config
-	keymap         *Keymap
-	agents         []*database.Agent
-	selectedIdx    int
-	filter         string
-	ticker         *time.Ticker
-	quitChan       chan bool
-	currentAgentID string // Agent ID currently being viewed in detail
+	gui                *gocui.Gui
+	db                 *database.DB
+	config             *Config
+	keymap             *Keymap  // Old config-based keymap (keep for now)
+	keys               *KeyRegistry  // NEW
+	modes              *ModeManager  // NEW
+	views              *ViewManager  // NEW
+	agents             []*database.Agent
+	selectedIdx        int
+	filter             string
+	ticker             *time.Ticker
+	quitChan           chan bool
+	currentAgentID     string // Agent ID currently being viewed in detail
+	currentCompactions []*database.Compaction
+	compactionLineMap  map[int]int // Maps line number to compaction index
+	currentContexts    []*database.SessionContext
+	contextLineMap     map[int]int // Maps line number to context index
+	sectionLines       map[string]int // Maps section name to starting line number
+	showRefreshDot     bool // Show green refresh indicator
 }
 
 // Config represents the dashboard configuration
@@ -38,6 +47,8 @@ type Keymap struct {
 	Quit             []string `json:"quit"`
 	Refresh          []string `json:"refresh"`
 	ContinueSession  []string `json:"continue_session"`
+	StartSession     []string `json:"start_session"`
+	NewSession       []string `json:"new_session"`
 	GoToWindow       []string `json:"go_to_window"`
 	ToggleAllAgents  []string `json:"toggle_all_agents"`
 	Up               []string `json:"up"`
@@ -45,6 +56,7 @@ type Keymap struct {
 	Logs             []string `json:"logs"`
 	CommandMode      []string `json:"command_mode"`
 	Archive          []string `json:"archive"`
+	MarkDone         []string `json:"mark_done"`
 	ViewDetails      []string `json:"view_details"`
 }
 
@@ -69,13 +81,28 @@ func NewApp(db *database.DB, configPath, keysPath string) (*App, error) {
 	}
 
 	app := &App{
-		gui:        g,
-		db:         db,
-		config:     config,
-		keymap:     keymap,
-		filter:     config.DefaultFilter,
-		quitChan:   make(chan bool),
+		gui:         g,
+		db:          db,
+		config:      config,
+		keymap:      keymap,
+		keys:        NewKeyRegistry(g),      // NEW
+		modes:       NewModeManager(),       // NEW
+		filter:      config.DefaultFilter,
+		quitChan:    make(chan bool),
+		selectedIdx: 0,                      // Initialize cursor position
 	}
+
+	app.views = NewViewManager(app)  // NEW
+
+	// Register all keybinding tags (but don't bind yet - views don't exist)
+	app.RegisterGlobalKeys()
+	app.RegisterMainKeys()
+	app.RegisterDetailsKeys()
+	app.RegisterNavigationKeys()
+	app.RegisterEditKeys()
+
+	g.SetManagerFunc(app.layout)
+	g.Cursor = true
 
 	return app, nil
 }
@@ -85,14 +112,7 @@ func (a *App) Run() error {
 	defer a.gui.Close()
 
 	// Set up GUI
-	a.gui.SetManagerFunc(a.layout)
-	a.gui.Cursor = true
 	a.gui.Mouse = false
-
-	// Set up keybindings
-	if err := a.setupKeybindings(); err != nil {
-		return err
-	}
 
 	// Load initial data (before starting main loop)
 	agents, err := a.db.ListAgents(a.filter)
@@ -108,6 +128,22 @@ func (a *App) Run() error {
 		}
 	}
 	a.agents = filtered
+
+	// Force initial layout to create views
+	if err := a.layout(a.gui); err != nil {
+		return err
+	}
+
+	// NOW activate keybinding tags (after views exist)
+	if err := a.keys.BindTag("global"); err != nil {
+		return err
+	}
+	if err := a.keys.BindTag("main"); err != nil {
+		return err
+	}
+	if err := a.keys.BindTag("navigation"); err != nil {
+		return err
+	}
 
 	// Start polling ticker
 	a.ticker = time.NewTicker(time.Duration(a.config.PollInterval) * time.Second)
