@@ -67,7 +67,17 @@ type errMsg struct {
 
 // handleKeyPress processes keyboard input
 func (m *Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Global keys (work in all views)
+	// Handle view-specific keys first (before global keys)
+	switch m.currentView {
+	case ViewDetail:
+		return m.handleDetailKeys(msg)
+	case ViewLogs:
+		return m.handleLogsKeys(msg)
+	case ViewList:
+		// List view falls through to global keys, then list-specific
+	}
+
+	// Global keys (only checked if not handled by view-specific)
 	if Matches(msg, m.keys.Quit) {
 		return m, tea.Quit
 	}
@@ -93,14 +103,9 @@ func (m *Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		fmt.Fprintf(os.Stderr, "fallback key k used\n")
 	}
 
-	// View-specific keys
-	switch m.currentView {
-	case ViewList:
+	// List-specific keys (only if we're in list view)
+	if m.currentView == ViewList {
 		return m.handleListKeys(msg)
-	case ViewDetail:
-		return m.handleDetailKeys(msg)
-	case ViewLogs:
-		return m.handleLogsKeys(msg)
 	}
 
 	return m, nil
