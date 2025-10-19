@@ -2,6 +2,8 @@ package app
 
 import (
 	"database/sql"
+	"fmt"
+	"os"
 	"time"
 
 	"github.com/charmbracelet/bubbles/help"
@@ -149,7 +151,8 @@ func NewModel(db *sql.DB) (*Model, error) {
 	// Resolve claude path
 	claudePath, err := ResolveClaudePath(config.ClaudePath)
 	if err != nil {
-		// Don't fail startup, just log warning
+		// Don't fail startup, just log warning and leave empty
+		fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
 		claudePath = ""
 	}
 

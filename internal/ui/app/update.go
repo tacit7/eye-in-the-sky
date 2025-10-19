@@ -155,6 +155,7 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if Matches(msg, m.keys.NewSession) {
+		fmt.Fprintf(os.Stderr, "NewSession key pressed! claudePath='%s'\n", m.claudePath)
 		if m.claudePath == "" {
 			m.statusMsg = "Claude binary not found"
 			return m, nil

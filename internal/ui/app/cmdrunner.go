@@ -82,26 +82,33 @@ func StartSession(claudePath, sessionID string) tea.Cmd {
 	}
 }
 
-// NewSession spawns claude --session-id with a new UUID and agent-id
+// NewSession spawns claude --session-id with a new UUID and agent-id in a new terminal window
 func NewSession(claudePath string) tea.Cmd {
 	return func() tea.Msg {
 		// Generate session ID and agent ID
 		sessionID := uuid.New().String()
 		agentID := uuid.New().String()
 
-		// Run: claude --session-id "$CCSESSION" "agent-id: $CCAGENT"
-		cmd := exec.Command(claudePath, "--session-id", sessionID, fmt.Sprintf("agent-id: %s", agentID))
-		cmd.Stdin = nil
-		cmd.Stdout = nil
-		cmd.Stderr = nil
+		// Build the claude command
+		claudeCmd := fmt.Sprintf("%s --session-id %s 'agent-id: %s'",
+			claudePath, sessionID, agentID)
+
+		fmt.Fprintf(os.Stderr, "Starting new session in new window: session=%s agent=%s\n",
+			sessionID[:8], agentID[:8])
+
+		// Open in new terminal window (macOS)
+		cmd := exec.Command("osascript", "-e",
+			fmt.Sprintf(`tell application "Terminal" to do script "%s"`, claudeCmd))
 
 		if err := cmd.Start(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error starting session: %v\n", err)
 			return cmdResult{success: false, message: "Failed to create new session", err: err}
 		}
 
 		// Detach - don't wait
 		go cmd.Wait()
 
+		fmt.Fprintf(os.Stderr, "Session started successfully\n")
 		return cmdResult{
 			success: true,
 			message: fmt.Sprintf("Created session %s with agent %s", sessionID[:8], agentID[:8]),
