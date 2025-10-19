@@ -113,6 +113,8 @@ func (m *Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleListKeys handles keys in list view
 func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	fmt.Fprintf(os.Stderr, "handleListKeys called with key: %s\n", msg.String())
+
 	if Matches(msg, m.keys.NavigateDown) {
 		if m.selectedIndex < len(m.agents)-1 {
 			m.selectedIndex++
@@ -155,11 +157,13 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if Matches(msg, m.keys.NewSession) {
-		fmt.Fprintf(os.Stderr, "NewSession key pressed! claudePath='%s'\n", m.claudePath)
+		fmt.Fprintf(os.Stderr, "NewSession key pressed! claudePath='%s' terminal='%s'\n", m.claudePath, m.config.DefaultTerminal)
 		if m.claudePath == "" {
-			m.statusMsg = "Claude binary not found"
+			m.statusMsg = "ERROR: Claude binary not found in PATH"
+			fmt.Fprintf(os.Stderr, "ERROR: Claude binary not found\n")
 			return m, nil
 		}
+		m.statusMsg = "Creating new session..."
 		return m, NewSession(m.claudePath, m.config.DefaultTerminal)
 	}
 
@@ -200,7 +204,7 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.statusMsg = "No window ID for agent"
 			return m, nil
 		}
-		return m, util.FocusWindowCmd(m.windowFocuser, agent.WindowID)
+		return m, util.FocusWindowCmd(m.windowFocuser, agent.WindowID, agent.TerminalApplication)
 	}
 
 	if Matches(msg, m.keys.Archive) {
@@ -366,7 +370,7 @@ func (m *Model) archiveAgentCmd(agentID string) tea.Cmd {
 
 		return cmdResult{
 			success: true,
-			message: fmt.Sprintf("Archived agent %s", agentID[:8]),
+			message: fmt.Sprintf("Archived agent %s", truncateID(agentID, 8)),
 		}
 	}
 }

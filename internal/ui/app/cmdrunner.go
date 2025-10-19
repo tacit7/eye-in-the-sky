@@ -9,6 +9,14 @@ import (
 	"github.com/google/uuid"
 )
 
+// truncateID safely truncates an ID string to specified length
+func truncateID(id string, maxLen int) string {
+	if len(id) <= maxLen {
+		return id
+	}
+	return id[:maxLen]
+}
+
 // ResolveClaudePath resolves the path to the claude binary
 // Priority: config → $PATH → error
 func ResolveClaudePath(cfgPath string) (string, error) {
@@ -55,7 +63,7 @@ func ResumeSession(claudePath, sessionID string) tea.Cmd {
 		// Detach - don't wait
 		go cmd.Wait()
 
-		return cmdResult{success: true, message: fmt.Sprintf("Resumed session %s", sessionID[:8])}
+		return cmdResult{success: true, message: fmt.Sprintf("Resumed session %s", truncateID(sessionID, 8))}
 	}
 }
 
@@ -78,7 +86,7 @@ func StartSession(claudePath, sessionID string) tea.Cmd {
 		// Detach - don't wait
 		go cmd.Wait()
 
-		return cmdResult{success: true, message: fmt.Sprintf("Started session %s", sessionID[:8])}
+		return cmdResult{success: true, message: fmt.Sprintf("Started session %s", truncateID(sessionID, 8))}
 	}
 }
 
@@ -90,11 +98,11 @@ func NewSession(claudePath, terminal string) tea.Cmd {
 		agentID := uuid.New().String()
 
 		// Build the claude command
-		claudeCmd := fmt.Sprintf(`%s --session-id %s "agent-id: %s"`,
-			claudePath, sessionID, agentID)
+		claudeCmd := fmt.Sprintf(`%s --session-id %s "agent-id: %s  session-id: %s"`,
+			claudePath, sessionID, agentID, sessionID)
 
 		fmt.Fprintf(os.Stderr, "Starting new session in %s: session=%s agent=%s\n",
-			terminal, sessionID[:8], agentID[:8])
+			terminal, truncateID(sessionID, 8), truncateID(agentID, 8))
 
 		var cmd *exec.Cmd
 
@@ -102,8 +110,13 @@ func NewSession(claudePath, terminal string) tea.Cmd {
 		switch terminal {
 		case "iterm":
 			// iTerm2
-			cmd = exec.Command("osascript", "-e",
-				fmt.Sprintf(`tell application "iTerm2" to create window with default profile command "%s"`, claudeCmd))
+			script := fmt.Sprintf(`tell application "iTerm2"
+    set newWindow to (create window with default profile)
+    tell current session of newWindow
+        write text "%s"
+    end tell
+end tell`, claudeCmd)
+			cmd = exec.Command("osascript", "-e", script)
 		case "warp":
 			// Warp
 			cmd = exec.Command("open", "-a", "Warp", "--args", claudeCmd)
@@ -130,7 +143,7 @@ func NewSession(claudePath, terminal string) tea.Cmd {
 		fmt.Fprintf(os.Stderr, "Session started successfully\n")
 		return cmdResult{
 			success: true,
-			message: fmt.Sprintf("Created session %s with agent %s", sessionID[:8], agentID[:8]),
+			message: fmt.Sprintf("Created session %s with agent %s", truncateID(sessionID, 8), truncateID(agentID, 8)),
 		}
 	}
 }
