@@ -27,7 +27,7 @@ func NewServer(db *database.DB) *Server {
 
 	// Create MCP server with implementation
 	mcpServer := mcp.NewServer(&mcp.Implementation{
-		Name:    "eye-in-the-sky",
+		Name:    "eits",
 		Version: "1.0.0",
 	}, nil)
 
