@@ -212,21 +212,39 @@ func (a *App) viewAgentDetails(agentID string) error {
 		actions = actions[:20]
 	}
 
+	// Get compactions for the agent
+	compactions, err := a.db.GetCompactionsForAgent(agent.ID)
+	if err != nil {
+		// Compaction error is not critical, continue without compactions
+		compactions = nil
+	}
+
+	// Get initial context from persona if available
+	var initialContext string
+	if agent.PersonaID != nil && *agent.PersonaID != "" {
+		persona, err := a.db.GetPersona(*agent.PersonaID)
+		if err == nil && persona != nil {
+			initialContext = persona.InitialContext
+		}
+	}
+
 	// Render the detail view
-	return a.renderDetail(agent, session, logs, actions)
+	return a.renderDetail(agent, session, logs, actions, compactions, initialContext)
 }
 
 // renderDetail renders the agent detail view
-func (a *App) renderDetail(agent *database.Agent, session *database.Session, logs []*database.Log, actions []*database.Action) error {
+func (a *App) renderDetail(agent *database.Agent, session *database.Session, logs []*database.Log, actions []*database.Action, compactions []*database.Compaction, initialContext string) error {
 	maxX, maxY := a.gui.Size()
 
-	// Create detail view (full screen)
+	// Create detail view (full screen) with scrolling enabled
 	v, err := a.gui.SetView("details", 0, 3, maxX-1, maxY-3)
 	if err != nil && err != gocui.ErrUnknownView {
 		return err
 	}
 
 	v.Title = " Agent Details "
+	v.Wrap = true
+	v.Autoscroll = false
 	v.Clear()
 
 	// Agent information
@@ -298,6 +316,39 @@ func (a *App) renderDetail(agent *database.Agent, session *database.Session, log
 		fmt.Fprintln(v, "No logs available")
 	}
 
+	// Compactions section
+	fmt.Fprintln(v, "---")
+	fmt.Fprintln(v, "[COMPACTIONS - conversation compactions]")
+
+	if len(compactions) > 0 {
+		for _, comp := range compactions {
+			fmt.Fprintf(v, "%s  Session: %s → %s\n",
+				comp.CompactedAt.Format("2006-01-02 15:04"),
+				truncateString(comp.NewSessionID, 12),
+				truncateString(ptrToString(comp.OldSessionID), 12))
+			if comp.Summary != nil && *comp.Summary != "" {
+				fmt.Fprintf(v, "  Summary: %s\n", *comp.Summary)
+			}
+			if comp.MessageCount != nil {
+				fmt.Fprintf(v, "  Messages: %d\n", *comp.MessageCount)
+			}
+		}
+	} else {
+		fmt.Fprintln(v, "No compactions")
+	}
+
+	// Initial context section (if available)
+	if initialContext != "" {
+		fmt.Fprintln(v, "---")
+		fmt.Fprintln(v, "[INITIAL CONTEXT - from persona]")
+		// Show first 500 characters of initial context
+		if len(initialContext) > 500 {
+			fmt.Fprintf(v, "%s...\n", initialContext[:500])
+		} else {
+			fmt.Fprintln(v, initialContext)
+		}
+	}
+
 	// Set as current view
 	if _, err := a.gui.SetCurrentView("details"); err != nil {
 		return err
@@ -306,6 +357,9 @@ func (a *App) renderDetail(agent *database.Agent, session *database.Session, log
 	// Delete any existing keybindings for this view
 	a.gui.DeleteKeybinding("details", 'q', gocui.ModNone)
 	a.gui.DeleteKeybinding("details", 'r', gocui.ModNone)
+	a.gui.DeleteKeybinding("details", 'w', gocui.ModNone)
+	a.gui.DeleteKeybinding("details", gocui.KeyArrowUp, gocui.ModNone)
+	a.gui.DeleteKeybinding("details", gocui.KeyArrowDown, gocui.ModNone)
 
 	// Add close keybinding
 	if err := a.gui.SetKeybinding("details", 'q', gocui.ModNone, a.closeDetails); err != nil {
@@ -317,13 +371,26 @@ func (a *App) renderDetail(agent *database.Agent, session *database.Session, log
 		return err
 	}
 
+	// Add window keybinding
+	if err := a.gui.SetKeybinding("details", 'w', gocui.ModNone, a.goToWindow); err != nil {
+		return err
+	}
+
+	// Add scroll keybindings
+	if err := a.gui.SetKeybinding("details", gocui.KeyArrowUp, gocui.ModNone, a.scrollUp); err != nil {
+		return err
+	}
+	if err := a.gui.SetKeybinding("details", gocui.KeyArrowDown, gocui.ModNone, a.scrollDown); err != nil {
+		return err
+	}
+
 	// Update status bar
 	statusView, err := a.gui.View(viewStatus)
 	if err != nil {
 		return err
 	}
 	statusView.Clear()
-	fmt.Fprint(statusView, " [r] Refresh • [L] View all logs • [q] Return to agents list")
+	fmt.Fprint(statusView, " [↑↓] Scroll • [r] Refresh • [w] Go to window • [L] View all logs • [q] Return to agents list")
 
 	return nil
 }
@@ -344,6 +411,9 @@ func (a *App) closeDetails(g *gocui.Gui, v *gocui.View) error {
 	// Delete keybindings for details view
 	g.DeleteKeybinding("details", 'q', gocui.ModNone)
 	g.DeleteKeybinding("details", 'r', gocui.ModNone)
+	g.DeleteKeybinding("details", 'w', gocui.ModNone)
+	g.DeleteKeybinding("details", gocui.KeyArrowUp, gocui.ModNone)
+	g.DeleteKeybinding("details", gocui.KeyArrowDown, gocui.ModNone)
 
 	// Delete details view
 	if err := g.DeleteView("details"); err != nil && err != gocui.ErrUnknownView {
@@ -365,4 +435,46 @@ func (a *App) closeDetails(g *gocui.Gui, v *gocui.View) error {
 
 	// Re-render agents
 	return a.renderAgents()
+}
+
+// scrollUp scrolls the detail view up
+func (a *App) scrollUp(g *gocui.Gui, v *gocui.View) error {
+	if v != nil {
+		ox, oy := v.Origin()
+		if oy > 0 {
+			if err := v.SetOrigin(ox, oy-1); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// scrollDown scrolls the detail view down
+func (a *App) scrollDown(g *gocui.Gui, v *gocui.View) error {
+	if v != nil {
+		ox, oy := v.Origin()
+		// Ignore error if we're at the bottom
+		v.SetOrigin(ox, oy+1)
+	}
+	return nil
+}
+
+// truncateString truncates a string to the specified length
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	if maxLen <= 3 {
+		return s[:maxLen]
+	}
+	return s[:maxLen-3] + "..."
+}
+
+// ptrToString converts a string pointer to string
+func ptrToString(s *string) string {
+	if s == nil {
+		return "N/A"
+	}
+	return *s
 }
