@@ -84,8 +84,9 @@ func DefaultTheme() Theme {
 	return theme
 }
 
-// ConfigDir returns the configuration directory path
-func ConfigDir() (string, error) {
+// ConfigDir is a variable that returns the configuration directory path
+// This can be overridden in tests
+var ConfigDir = func() (string, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("failed to get home directory: %w", err)

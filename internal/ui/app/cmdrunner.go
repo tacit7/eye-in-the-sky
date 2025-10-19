@@ -6,6 +6,7 @@ import (
 	"os/exec"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/google/uuid"
 )
 
 // ResolveClaudePath resolves the path to the claude binary
@@ -81,12 +82,15 @@ func StartSession(claudePath, sessionID string) tea.Cmd {
 	}
 }
 
-// NewSession spawns claude --session-id with a new UUID
+// NewSession spawns claude --session-id with a new UUID and agent-id
 func NewSession(claudePath string) tea.Cmd {
 	return func() tea.Msg {
-		// For now, just spawn claude without session ID
-		// TODO: Generate UUID and pass --session-id
-		cmd := exec.Command(claudePath)
+		// Generate session ID and agent ID
+		sessionID := uuid.New().String()
+		agentID := uuid.New().String()
+
+		// Run: claude --session-id "$CCSESSION" "agent-id: $CCAGENT"
+		cmd := exec.Command(claudePath, "--session-id", sessionID, fmt.Sprintf("agent-id: %s", agentID))
 		cmd.Stdin = nil
 		cmd.Stdout = nil
 		cmd.Stderr = nil
@@ -98,6 +102,9 @@ func NewSession(claudePath string) tea.Cmd {
 		// Detach - don't wait
 		go cmd.Wait()
 
-		return cmdResult{success: true, message: "Created new session"}
+		return cmdResult{
+			success: true,
+			message: fmt.Sprintf("Created session %s with agent %s", sessionID[:8], agentID[:8]),
+		}
 	}
 }
