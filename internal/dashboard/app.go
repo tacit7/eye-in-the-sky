@@ -12,15 +12,16 @@ import (
 
 // App represents the TUI dashboard application
 type App struct {
-	gui        *gocui.Gui
-	db         *database.DB
-	config     *Config
-	keymap     *Keymap
-	agents     []*database.Agent
-	selectedIdx int
-	filter     string
-	ticker     *time.Ticker
-	quitChan   chan bool
+	gui            *gocui.Gui
+	db             *database.DB
+	config         *Config
+	keymap         *Keymap
+	agents         []*database.Agent
+	selectedIdx    int
+	filter         string
+	ticker         *time.Ticker
+	quitChan       chan bool
+	currentAgentID string // Agent ID currently being viewed in detail
 }
 
 // Config represents the dashboard configuration

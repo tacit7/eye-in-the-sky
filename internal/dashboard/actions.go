@@ -164,6 +164,9 @@ func (a *App) closeLogs(g *gocui.Gui, v *gocui.View) error {
 
 // viewAgentDetails displays detailed information about an agent
 func (a *App) viewAgentDetails(agentID string) error {
+	// Store the current agent ID for refresh
+	a.currentAgentID = agentID
+
 	// Get agent details
 	agent, err := a.db.GetAgent(agentID)
 	if err != nil {
@@ -296,19 +299,35 @@ func (a *App) renderDetail(agent *database.Agent, session *database.Session, log
 		return err
 	}
 
+	// Add refresh keybinding
+	if err := a.gui.SetKeybinding("details", 'r', gocui.ModNone, a.refreshDetails); err != nil {
+		return err
+	}
+
 	// Update status bar
 	statusView, err := a.gui.View(viewStatus)
 	if err != nil {
 		return err
 	}
 	statusView.Clear()
-	fmt.Fprint(statusView, " Press L to view all session logs • q to return to agents list")
+	fmt.Fprint(statusView, " [r] Refresh • [L] View all logs • [q] Return to agents list")
 
 	return nil
 }
 
+// refreshDetails refreshes the detail view with latest data
+func (a *App) refreshDetails(g *gocui.Gui, v *gocui.View) error {
+	if a.currentAgentID == "" {
+		return nil
+	}
+	return a.viewAgentDetails(a.currentAgentID)
+}
+
 // closeDetails closes the details view and returns to main list
 func (a *App) closeDetails(g *gocui.Gui, v *gocui.View) error {
+	// Clear current agent ID
+	a.currentAgentID = ""
+
 	// Delete details view
 	if err := g.DeleteView("details"); err != nil && err != gocui.ErrUnknownView {
 		return err
