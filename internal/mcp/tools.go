@@ -14,6 +14,7 @@ import (
 
 	"github.com/tacit7/eye-in-the-sky/internal/database"
 	"github.com/tacit7/eye-in-the-sky/internal/utils"
+	"github.com/tacit7/eye-in-the-sky/internal/window"
 )
 
 type Tools struct {
@@ -411,10 +412,12 @@ STEP 3: Call i-start-session with BOTH extracted IDs
     "agent_description": "Optional agent name/label",
     "description": "What you'll be working on",
     "project_name": "optional",
-    "worktree_path": "optional"
+    "worktree_path": "optional",
+    "window_id": "optional (auto-detected on macOS)"
   })
 
   This uses the Claude Code session_id directly for tracking continuity.
+  On macOS, window_id is automatically detected if not provided.
 
 STEP 4: Delete marker file after successful registration
 Run: rm .claude/eye-in-the-sky/session-*
@@ -549,6 +552,22 @@ func (t *Tools) StartSession(args StartSessionArgs) (StartSessionResult, error) 
 		personaID = args.PersonaID
 	}
 
+	// Detect window ID on macOS if not provided
+	var windowID *string
+	if args.WindowID != nil && *args.WindowID != "" {
+		windowID = args.WindowID
+	} else if runtime.GOOS == "darwin" {
+		// Auto-detect current window on macOS
+		wm := window.NewManager()
+		winInfo, err := wm.GetCurrentWindowID("current", "")
+		if err == nil && winInfo != nil {
+			// Format: "Application:WindowID"
+			detectedWindowID := fmt.Sprintf("%s:%s", winInfo.Application, winInfo.ID)
+			windowID = &detectedWindowID
+		}
+		// If detection fails, just continue without window ID
+	}
+
 	// Create agent
 	agent := &database.Agent{
 		ID:                 agentID,
@@ -559,6 +578,7 @@ func (t *Tools) StartSession(args StartSessionArgs) (StartSessionResult, error) 
 		FeatureDescription: &args.Description,
 		ProjectName:        args.ProjectName,
 		PersonaID:          personaID,
+		WindowID:           windowID,
 		LastActivityAt:     timePtr(time.Now()),
 	}
 

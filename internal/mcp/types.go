@@ -134,6 +134,7 @@ type StartSessionArgs struct {
 	ProjectName      *string `json:"project_name,omitempty" jsonschema:"description:Project name (optional)"`
 	WorktreePath     *string `json:"worktree_path,omitempty" jsonschema:"description:Path to git repository (optional)"`
 	PersonaID        *string `json:"persona_id,omitempty" jsonschema:"description:Persona ID to load initial context from (optional)"`
+	WindowID         *string `json:"window_id,omitempty" jsonschema:"description:Claude Desktop window identifier for window management (optional)"`
 }
 
 type StartSessionResult struct {
