@@ -21,8 +21,8 @@ func (a *App) renderAgents() error {
 	}
 
 	// Header
-	fmt.Fprintf(v, "%-10s %-10s %-20s %-20s %-15s %-25s\n", "STATUS", "AGENT", "DESCRIPTION", "SESSION", "PROJECT", "TASK")
-	fmt.Fprintln(v, "────────────────────────────────────────────────────────────────────────────────────────────────────────────")
+	fmt.Fprintf(v, "%-10s %-10s %-20s %-15s %-18s %-15s %-25s\n", "STATUS", "AGENT", "DESCRIPTION", "SOURCE", "SESSION", "PROJECT", "TASK")
+	fmt.Fprintln(v, "───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────")
 
 	// Agents
 	for _, agent := range a.agents {
@@ -37,14 +37,27 @@ func (a *App) renderAgents() error {
 			}
 		}
 
+		// Source with window ID for desktop agents
+		source := agent.Source
+		if agent.Source == database.SourceDesktop && agent.WindowID != nil && *agent.WindowID != "" {
+			windowID := *agent.WindowID
+			if len(windowID) > 8 {
+				windowID = windowID[:5] + "..."
+			}
+			source = fmt.Sprintf("desktop:%s", windowID)
+		}
+		if len(source) > 13 {
+			source = source[:10] + "..."
+		}
+
 		sessionName := "-"
 		// Get session name if available
 		if agent.CurrentSessionID != nil && *agent.CurrentSessionID != "" {
 			session, err := a.db.GetSession(*agent.CurrentSessionID)
 			if err == nil && session != nil && session.Name != nil {
 				sessionName = *session.Name
-				if len(sessionName) > 18 {
-					sessionName = sessionName[:15] + "..."
+				if len(sessionName) > 16 {
+					sessionName = sessionName[:13] + "..."
 				}
 			}
 		}
@@ -67,7 +80,7 @@ func (a *App) renderAgents() error {
 			task = task[:20] + "..."
 		}
 
-		fmt.Fprintf(v, "%s %-10s %-20s %-20s %-15s %-25s\n", statusIcon, agentID, description, sessionName, projectName, task)
+		fmt.Fprintf(v, "%s %-10s %-20s %-15s %-18s %-15s %-25s\n", statusIcon, agentID, description, source, sessionName, projectName, task)
 	}
 
 	return nil

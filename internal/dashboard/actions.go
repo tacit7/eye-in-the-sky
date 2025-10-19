@@ -246,6 +246,11 @@ func (a *App) renderDetail(agent *database.Agent, session *database.Session, log
 	}
 	fmt.Fprintf(v, "Current task: %s\n", currentTask)
 
+	// Window ID (for desktop agents)
+	if agent.WindowID != nil && *agent.WindowID != "" {
+		fmt.Fprintf(v, "Window ID: %s\n", *agent.WindowID)
+	}
+
 	// Session information
 	if session != nil {
 		sessionName := "-"
