@@ -21,15 +21,23 @@ func (a *App) renderAgents() error {
 	}
 
 	// Header
-	fmt.Fprintf(v, "%-10s %-10s %-20s %-15s %-25s\n", "STATUS", "AGENT", "SESSION", "PROJECT", "TASK")
-	fmt.Fprintln(v, "────────────────────────────────────────────────────────────────────────────────")
+	fmt.Fprintf(v, "%-10s %-10s %-20s %-20s %-15s %-25s\n", "STATUS", "AGENT", "DESCRIPTION", "SESSION", "PROJECT", "TASK")
+	fmt.Fprintln(v, "────────────────────────────────────────────────────────────────────────────────────────────────────────────")
 
 	// Agents
 	for _, agent := range a.agents {
 		statusIcon := getStatusIcon(agent.Status)
 		agentID := agent.ID[:8]
-		sessionName := "-"
 
+		description := "-"
+		if agent.Description != nil {
+			description = *agent.Description
+			if len(description) > 18 {
+				description = description[:15] + "..."
+			}
+		}
+
+		sessionName := "-"
 		// Get session name if available
 		if agent.CurrentSessionID != nil && *agent.CurrentSessionID != "" {
 			session, err := a.db.GetSession(*agent.CurrentSessionID)
@@ -59,7 +67,7 @@ func (a *App) renderAgents() error {
 			task = task[:20] + "..."
 		}
 
-		fmt.Fprintf(v, "%s %-10s %-20s %-15s %-25s\n", statusIcon, agentID, sessionName, projectName, task)
+		fmt.Fprintf(v, "%s %-10s %-20s %-20s %-15s %-25s\n", statusIcon, agentID, description, sessionName, projectName, task)
 	}
 
 	return nil

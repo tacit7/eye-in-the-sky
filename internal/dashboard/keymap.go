@@ -1,8 +1,6 @@
 package dashboard
 
 import (
-	"strings"
-
 	"github.com/jroimartin/gocui"
 )
 
@@ -149,20 +147,10 @@ func (a *App) toggleFilter(g *gocui.Gui, v *gocui.View) error {
 
 // handleViewDetails handles Enter key to view agent details
 func (a *App) handleViewDetails(g *gocui.Gui, v *gocui.View) error {
-	if v != nil {
-		// Get the current line
-		_, cy := v.Cursor()
-		line, err := v.Line(cy)
-		if err != nil {
-			return nil
-		}
-
-		// Parse the agent ID from the line (second field)
-		fields := strings.Fields(line)
-		if len(fields) > 1 {
-			agentID := fields[1]
-			return a.viewAgentDetails(agentID)
-		}
+	// Use the selected index to get the agent directly
+	if a.selectedIdx >= 0 && a.selectedIdx < len(a.agents) {
+		agent := a.agents[a.selectedIdx]
+		return a.viewAgentDetails(agent.ID)
 	}
 	return nil
 }

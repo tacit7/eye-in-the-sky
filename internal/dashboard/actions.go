@@ -214,6 +214,12 @@ func (a *App) renderDetail(agent *database.Agent, session *database.Session, log
 	// Agent information
 	fmt.Fprintf(v, "Agent: %s  (%s)\n", agent.ID[:8], agent.Status)
 
+	description := "N/A"
+	if agent.Description != nil {
+		description = *agent.Description
+	}
+	fmt.Fprintf(v, "Description: %s\n", description)
+
 	projectName := "N/A"
 	if agent.ProjectName != nil {
 		projectName = *agent.ProjectName
