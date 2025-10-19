@@ -60,16 +60,9 @@ func (s *Server) Start(ctx context.Context) error {
 
 // registerTools registers all available tools with the MCP server
 func (s *Server) registerTools() {
-	// Register agent tools using the generic AddTool function with "i-" prefix
-	mcp.AddTool(s.mcp, &mcp.Tool{
-		Name:        "i-register",
-		Description: "Register a new Claude Code agent",
-	}, s.handleRegisterAgent)
-
-	mcp.AddTool(s.mcp, &mcp.Tool{
-		Name:        "i-register-claude-desktop",
-		Description: "Register a new Claude Desktop agent",
-	}, s.handleRegisterDesktopAgent)
+	// NOTE: i-register and i-register-claude-desktop are kept internal-only
+	// Claude should use i-start-session instead for new agent registration
+	// The old tools are still available via HandleTool() for backward compatibility
 
 	mcp.AddTool(s.mcp, &mcp.Tool{
 		Name:        "i-status",
