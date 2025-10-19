@@ -49,6 +49,7 @@ func (t *Tools) RegisterAgent(args RegisterAgentArgs) (RegisterAgentResult, erro
 		ID:                 agentID,
 		Status:             database.StatusActive,
 		Source:             database.SourceWorktree,
+		Description:        args.AgentDescription,
 		GitWorktreePath:    args.WorktreePath,
 		FeatureDescription: &args.Description,
 		ProjectName:        args.ProjectName,
@@ -93,6 +94,7 @@ func (t *Tools) RegisterDesktopAgent(args RegisterDesktopAgentArgs) (RegisterDes
 		ID:                 agentID,
 		Status:             database.StatusActive,
 		Source:             database.SourceDesktop,
+		Description:        args.AgentDescription,
 		GitWorktreePath:    nil, // Desktop agents don't have worktree paths
 		FeatureDescription: &args.Description,
 		ProjectName:        &args.ProjectName,
@@ -755,6 +757,7 @@ func (t *Tools) StartSession(args StartSessionArgs) (StartSessionResult, error) 
 		ID:                 agentID,
 		Status:             database.StatusActive,
 		Source:             database.SourceWorktree,
+		Description:        args.AgentDescription,
 		GitWorktreePath:    args.WorktreePath,
 		FeatureDescription: &args.Description,
 		ProjectName:        args.ProjectName,

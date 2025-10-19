@@ -2,10 +2,11 @@ package mcp
 
 // RegisterAgentArgs represents the arguments for register_agent tool
 type RegisterAgentArgs struct {
-	AgentID      *string `json:"agent_id,omitempty" jsonschema:"description:Unique 8-character hex identifier (optional - auto-generated if not provided)"`
-	Description  string  `json:"description" jsonschema:"description:Brief description of what the agent will work on"`
-	WorktreePath *string `json:"worktree_path,omitempty" jsonschema:"description:Path to the git repository (optional)"`
-	ProjectName  *string `json:"project_name,omitempty" jsonschema:"description:Name of the project being worked on (optional)"`
+	AgentID          *string `json:"agent_id,omitempty" jsonschema:"description:Unique 8-character hex identifier (optional - auto-generated if not provided)"`
+	AgentDescription *string `json:"agent_description,omitempty" jsonschema:"description:Agent name/label (e.g., 'Frontend Dev Agent') (optional)"`
+	Description      string  `json:"description" jsonschema:"description:Brief description of what the agent will work on"`
+	WorktreePath     *string `json:"worktree_path,omitempty" jsonschema:"description:Path to the git repository (optional)"`
+	ProjectName      *string `json:"project_name,omitempty" jsonschema:"description:Name of the project being worked on (optional)"`
 }
 
 type RegisterAgentResult struct {
@@ -15,10 +16,11 @@ type RegisterAgentResult struct {
 
 // RegisterDesktopAgentArgs represents the arguments for register_claude_desktop_agent tool
 type RegisterDesktopAgentArgs struct {
-	AgentID     *string `json:"agent_id,omitempty" jsonschema:"description:Unique 8-character hex identifier (optional - auto-generated if not provided)"`
-	Description string  `json:"description" jsonschema:"description:Brief description of what the agent will work on"`
-	ProjectName string  `json:"project_name" jsonschema:"description:Name of the project being worked on"`
-	WindowID    *string `json:"window_id,omitempty" jsonschema:"description:Claude Desktop window identifier for window management (optional)"`
+	AgentID          *string `json:"agent_id,omitempty" jsonschema:"description:Unique 8-character hex identifier (optional - auto-generated if not provided)"`
+	AgentDescription *string `json:"agent_description,omitempty" jsonschema:"description:Agent name/label (e.g., 'Frontend Dev Agent') (optional)"`
+	Description      string  `json:"description" jsonschema:"description:Brief description of what the agent will work on"`
+	ProjectName      string  `json:"project_name" jsonschema:"description:Name of the project being worked on"`
+	WindowID         *string `json:"window_id,omitempty" jsonschema:"description:Claude Desktop window identifier for window management (optional)"`
 }
 
 type RegisterDesktopAgentResult struct {
@@ -133,12 +135,13 @@ type BringWindowFrontResult struct {
 
 // StartSessionArgs represents the arguments for i-start-session tool
 type StartSessionArgs struct {
-	AgentID      *string `json:"agent_id,omitempty" jsonschema:"description:8-character agent identifier (optional - auto-generated if not provided)"`
-	Name         *string `json:"name,omitempty" jsonschema:"description:Human-readable session name (optional)"`
-	Description  string  `json:"description" jsonschema:"description:What you'll be working on"`
-	ProjectName  *string `json:"project_name,omitempty" jsonschema:"description:Project name (optional)"`
-	WorktreePath *string `json:"worktree_path,omitempty" jsonschema:"description:Path to git repository (optional)"`
-	PersonaID    *string `json:"persona_id,omitempty" jsonschema:"description:Persona ID to load initial context from (optional)"`
+	AgentID          *string `json:"agent_id,omitempty" jsonschema:"description:8-character agent identifier (optional - auto-generated if not provided)"`
+	AgentDescription *string `json:"agent_description,omitempty" jsonschema:"description:Agent name/label (e.g., 'Frontend Dev Agent') (optional)"`
+	Name             *string `json:"name,omitempty" jsonschema:"description:Human-readable session name (optional)"`
+	Description      string  `json:"description" jsonschema:"description:What you'll be working on"`
+	ProjectName      *string `json:"project_name,omitempty" jsonschema:"description:Project name (optional)"`
+	WorktreePath     *string `json:"worktree_path,omitempty" jsonschema:"description:Path to git repository (optional)"`
+	PersonaID        *string `json:"persona_id,omitempty" jsonschema:"description:Persona ID to load initial context from (optional)"`
 }
 
 type StartSessionResult struct {
