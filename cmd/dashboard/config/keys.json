@@ -8,5 +8,6 @@
   "down": ["j"],
   "logs": ["L"],
   "command_mode": [":"],
+  "archive": ["D"],
   "view_details": ["enter"]
 }

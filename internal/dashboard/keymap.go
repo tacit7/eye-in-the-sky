@@ -62,21 +62,31 @@ func (a *App) setupKeybindings() error {
 		}
 	}
 
-	// View details (Enter key)
-	if err := a.gui.SetKeybinding(viewMain, gocui.KeyEnter, gocui.ModNone, a.handleViewDetails); err != nil {
-		return err
+	// Archive
+	for _, key := range a.keymap.Archive {
+		if err := a.gui.SetKeybinding("", rune(key[0]), gocui.ModNone, a.archiveAgent); err != nil {
+			return err
+		}
 	}
 
-	// Arrow keys
+	// View details
+	for _, key := range a.keymap.ViewDetails {
+		if key == "enter" {
+			if err := a.gui.SetKeybinding(viewMain, gocui.KeyEnter, gocui.ModNone, a.handleViewDetails); err != nil {
+				return err
+			}
+		} else {
+			if err := a.gui.SetKeybinding(viewMain, rune(key[0]), gocui.ModNone, a.handleViewDetails); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Arrow keys for compatibility
 	if err := a.gui.SetKeybinding(viewMain, gocui.KeyArrowUp, gocui.ModNone, a.cursorUp); err != nil {
 		return err
 	}
 	if err := a.gui.SetKeybinding(viewMain, gocui.KeyArrowDown, gocui.ModNone, a.cursorDown); err != nil {
-		return err
-	}
-
-	// Delete/Archive agent
-	if err := a.gui.SetKeybinding("", 'D', gocui.ModNone, a.archiveAgent); err != nil {
 		return err
 	}
 

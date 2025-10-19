@@ -44,6 +44,8 @@ type Keymap struct {
 	Down             []string `json:"down"`
 	Logs             []string `json:"logs"`
 	CommandMode      []string `json:"command_mode"`
+	Archive          []string `json:"archive"`
+	ViewDetails      []string `json:"view_details"`
 }
 
 // NewApp creates a new dashboard application

@@ -360,28 +360,53 @@ func (a *App) renderDetail(agent *database.Agent, session *database.Session, log
 	a.gui.DeleteKeybinding("details", 'w', gocui.ModNone)
 	a.gui.DeleteKeybinding("details", gocui.KeyArrowUp, gocui.ModNone)
 	a.gui.DeleteKeybinding("details", gocui.KeyArrowDown, gocui.ModNone)
-
-	// Add close keybinding
-	if err := a.gui.SetKeybinding("details", 'q', gocui.ModNone, a.closeDetails); err != nil {
-		return err
+	// Delete configured scroll keys
+	for _, key := range a.keymap.Up {
+		a.gui.DeleteKeybinding("details", rune(key[0]), gocui.ModNone)
+	}
+	for _, key := range a.keymap.Down {
+		a.gui.DeleteKeybinding("details", rune(key[0]), gocui.ModNone)
 	}
 
-	// Add refresh keybinding
-	if err := a.gui.SetKeybinding("details", 'r', gocui.ModNone, a.refreshDetails); err != nil {
-		return err
+	// Add close keybinding (from config)
+	for _, key := range a.keymap.Quit {
+		if err := a.gui.SetKeybinding("details", rune(key[0]), gocui.ModNone, a.closeDetails); err != nil {
+			return err
+		}
 	}
 
-	// Add window keybinding
-	if err := a.gui.SetKeybinding("details", 'w', gocui.ModNone, a.goToWindow); err != nil {
-		return err
+	// Add refresh keybinding (from config)
+	for _, key := range a.keymap.Refresh {
+		if err := a.gui.SetKeybinding("details", rune(key[0]), gocui.ModNone, a.refreshDetails); err != nil {
+			return err
+		}
 	}
 
-	// Add scroll keybindings
+	// Add window keybinding (from config)
+	for _, key := range a.keymap.GoToWindow {
+		if err := a.gui.SetKeybinding("details", rune(key[0]), gocui.ModNone, a.goToWindow); err != nil {
+			return err
+		}
+	}
+
+	// Add scroll keybindings (arrow keys for compatibility)
 	if err := a.gui.SetKeybinding("details", gocui.KeyArrowUp, gocui.ModNone, a.scrollUp); err != nil {
 		return err
 	}
 	if err := a.gui.SetKeybinding("details", gocui.KeyArrowDown, gocui.ModNone, a.scrollDown); err != nil {
 		return err
+	}
+
+	// Add configured scroll keybindings (j/k from config)
+	for _, key := range a.keymap.Up {
+		if err := a.gui.SetKeybinding("details", rune(key[0]), gocui.ModNone, a.scrollUp); err != nil {
+			return err
+		}
+	}
+	for _, key := range a.keymap.Down {
+		if err := a.gui.SetKeybinding("details", rune(key[0]), gocui.ModNone, a.scrollDown); err != nil {
+			return err
+		}
 	}
 
 	// Update status bar
@@ -390,7 +415,7 @@ func (a *App) renderDetail(agent *database.Agent, session *database.Session, log
 		return err
 	}
 	statusView.Clear()
-	fmt.Fprint(statusView, " [↑↓] Scroll • [r] Refresh • [w] Go to window • [L] View all logs • [q] Return to agents list")
+	fmt.Fprint(statusView, " [j/k] Scroll • [r] Refresh • [w] Go to window • [L] View all logs • [q] Return to agents list")
 
 	return nil
 }
@@ -409,9 +434,21 @@ func (a *App) closeDetails(g *gocui.Gui, v *gocui.View) error {
 	a.currentAgentID = ""
 
 	// Delete keybindings for details view
-	g.DeleteKeybinding("details", 'q', gocui.ModNone)
-	g.DeleteKeybinding("details", 'r', gocui.ModNone)
-	g.DeleteKeybinding("details", 'w', gocui.ModNone)
+	for _, key := range a.keymap.Quit {
+		g.DeleteKeybinding("details", rune(key[0]), gocui.ModNone)
+	}
+	for _, key := range a.keymap.Refresh {
+		g.DeleteKeybinding("details", rune(key[0]), gocui.ModNone)
+	}
+	for _, key := range a.keymap.GoToWindow {
+		g.DeleteKeybinding("details", rune(key[0]), gocui.ModNone)
+	}
+	for _, key := range a.keymap.Up {
+		g.DeleteKeybinding("details", rune(key[0]), gocui.ModNone)
+	}
+	for _, key := range a.keymap.Down {
+		g.DeleteKeybinding("details", rune(key[0]), gocui.ModNone)
+	}
 	g.DeleteKeybinding("details", gocui.KeyArrowUp, gocui.ModNone)
 	g.DeleteKeybinding("details", gocui.KeyArrowDown, gocui.ModNone)
 
