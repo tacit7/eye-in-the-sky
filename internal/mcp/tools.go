@@ -390,25 +390,31 @@ INITIALIZATION - Do this FIRST on every new session
 STEP 1: Check for marker file
 Run: ls .claude/eye-in-the-sky/session-* 2>/dev/null
 
-STEP 2: Parse agent_id and session_id from filename
-Format: session-{agentId}-{sessionId}
+STEP 2: Parse agent_id and Claude Code session_id from filename
+Format: session-{agentId}-{claudeCodeSessionId}
 Example: session-a728dc53-a4ebc315-5577-4c81-b12e-1a7ae3fa907f
-  → agent_id: a728dc53 (8 characters after 'session-')
-  → session_id: a4ebc315-5577-4c81-b12e-1a7ae3fa907f (UUID)
+  → agent_id: a728dc53 (first 8 characters - REUSE THIS)
+  → claude_session_id: a4ebc315-5577-4c81-b12e-1a7ae3fa907f (Claude Code UUID - for reference only)
 
-STEP 3: Call i-start-session with parsed agent_id
+STEP 3: Call i-start-session with the agent_id
   i-start-session({
-    "agent_id": "a728dc53",
+    "agent_id": "a728dc53",  ← Use the parsed agent_id for continuity
     "agent_description": "Optional agent name/label",
     "description": "What you'll be working on",
     "project_name": "optional",
     "worktree_path": "optional"
   })
 
+  NOTE: i-start-session will auto-generate a NEW Eye in the Sky session_id
+  in format: {agentId}_{timestamp} (e.g., "a728dc53_1760832709")
+
 STEP 4: Delete marker file after successful registration
 Run: rm .claude/eye-in-the-sky/session-*
 
-NOTE: If no marker file exists, omit agent_id and i-start-session will auto-generate one.
+IMPORTANT:
+- The agent_id provides continuity across multiple sessions
+- Each session gets a fresh Eye in the Sky session_id
+- If no marker file exists, omit agent_id and a new one will be auto-generated
 
 ═══════════════════════════════════════════════════════════════
 WORKFLOW - During your session
