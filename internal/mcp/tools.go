@@ -379,310 +379,92 @@ func (t *Tools) BringWindowFront(args BringWindowFrontArgs) (BringWindowFrontRes
 	}, nil
 }
 
+// Instructions implements the i-instructions MCP tool
+func (t *Tools) Instructions(args InstructionsArgs) (InstructionsResult, error) {
+	instructions := `Eye in the Sky - Agent Lifecycle Management
 
-// Help implements the help MCP tool
-func (t *Tools) Help(args HelpArgs) (HelpResult, error) {
-	if args.Tool != nil {
-		// Return detailed help for specific tool
-		toolHelp := t.getToolHelp(*args.Tool)
-		if toolHelp == nil {
-			return HelpResult{Success: false, Message: fmt.Sprintf("Tool '%s' not found", *args.Tool)}, nil
-		}
-		return HelpResult{
-			Success: true,
-			Message: fmt.Sprintf("Help for tool '%s'", *args.Tool),
-			Tools:   []Tool{*toolHelp},
-		}, nil
-	}
+═══════════════════════════════════════════════════════════════
+INITIALIZATION - Do this FIRST on every new session
+═══════════════════════════════════════════════════════════════
 
-	// Return help for all tools
-	tools := t.getAllToolsWithHelp()
-	return HelpResult{
-		Success: true,
-		Message: "Eye in the Sky - Claude Code Multi-Agent Management System\n\nAvailable tools for tracking and managing Claude Code agent activities:",
-		Tools:   tools,
+STEP 1: Check for marker file
+Run: ls .claude/eye-in-the-sky/session-* 2>/dev/null
+
+STEP 2: Parse agent_id and session_id from filename
+Format: session-{agentId}-{sessionId}
+Example: session-a728dc53-a4ebc315-5577-4c81-b12e-1a7ae3fa907f
+  → agent_id: a728dc53 (8 characters after 'session-')
+  → session_id: a4ebc315-5577-4c81-b12e-1a7ae3fa907f (UUID)
+
+STEP 3: Call i-start-session with parsed agent_id
+  i-start-session({
+    "agent_id": "a728dc53",
+    "agent_description": "Optional agent name/label",
+    "description": "What you'll be working on",
+    "project_name": "optional",
+    "worktree_path": "optional"
+  })
+
+STEP 4: Delete marker file after successful registration
+Run: rm .claude/eye-in-the-sky/session-*
+
+NOTE: If no marker file exists, omit agent_id and i-start-session will auto-generate one.
+
+═══════════════════════════════════════════════════════════════
+WORKFLOW - During your session
+═══════════════════════════════════════════════════════════════
+
+i-status - Update your current status
+  Statuses: active, working, idle, completed, failed
+  Example: i-status({"agent_id": "a728dc53", "status": "working", "current_task": "Building TUI"})
+
+i-action - Log significant activities
+  Types: task_start, file_operation, git_commit, status_update
+  Example: i-action({"agent_id": "a728dc53", "action_type": "file_operation", "description": "Created dashboard component"})
+
+i-commits - Track git commits
+  Example: i-commits({"agent_id": "a728dc53", "commit_hashes": ["abc123f"], "commit_messages": ["Add feature"]})
+
+i-end - End session with summary
+  Example: i-end({"agent_id": "a728dc53", "summary": "Completed TUI implementation", "final_status": "completed"})
+
+═══════════════════════════════════════════════════════════════
+COMPACTION TRACKING
+═══════════════════════════════════════════════════════════════
+
+When Claude detects a conversation compaction (indicated by system message
+'This session is being continued from a previous conversation'), call:
+
+i-log-compaction({
+  "agent_id": "your-agent-id",
+  "session_id": "current-session-id",
+  "summary": "compaction summary text",
+  "old_session_id": "previous-session-id (if known)"
+})
+
+This backs up the JSONL conversation file to data/compactions/ directory.
+
+═══════════════════════════════════════════════════════════════
+ADDITIONAL TOOLS
+═══════════════════════════════════════════════════════════════
+
+i-save-context - Save session state for resumption
+i-load-context - Load previous session context
+i-note - Add contextual notes to session
+i-persona-get - Get persona details
+i-persona-list - List available personas
+i-snapshot-expertise - Save current expertise as persona
+
+Dashboard: http://localhost:8080 (if web server running)
+TUI: Run 'bin/dashboard' for terminal interface
+
+═══════════════════════════════════════════════════════════════`
+
+	return InstructionsResult{
+		Success:      true,
+		Message:      "Instructions retrieved successfully",
+		Instructions: instructions,
 	}, nil
-}
-
-// getToolHelp returns detailed help for a specific tool
-func (t *Tools) getToolHelp(toolName string) *Tool {
-	tools := t.getAllToolsWithHelp()
-	for _, tool := range tools {
-		if tool.Name == toolName {
-			return &tool
-		}
-	}
-	return nil
-}
-
-// getAllToolsWithHelp returns all tools with comprehensive documentation
-func (t *Tools) getAllToolsWithHelp() []Tool {
-	return []Tool{
-		{
-			Name:        "register_agent",
-			Description: "Register a new Claude Code agent to start tracking activities",
-			Instructions: `Register a new agent before starting any work. If no agent_id is provided, a git-style 8-character hash will be auto-generated.
-
-This tool:
-- Creates a new agent record in the database
-- Auto-generates git-style hash ID if not provided
-- Sets initial status to 'active'
-- Logs the registration action
-- Enables tracking for all subsequent activities
-
-Required before using any other tools for this agent.`,
-			Parameters: map[string]string{
-				"agent_id":      "Unique 8-character hex identifier (optional - auto-generated if not provided)",
-				"description":   "Brief description of what the agent will work on (required)",
-				"worktree_path": "Path to the git repository (optional)",
-				"project_name":  "Name of the project being worked on (optional)",
-			},
-			Examples: []string{
-				`{"description": "Working on user authentication system"}`,
-				`{"agent_id": "abc123de", "description": "Working on user authentication system", "project_name": "MyApp"}`,
-				`{"description": "Frontend dashboard development", "worktree_path": "/path/to/project", "project_name": "Eye in the Sky"}`,
-			},
-		},
-		{
-			Name:        "register_claude_desktop_agent",
-			Description: "Register a new Claude Desktop agent to start tracking activities",
-			Instructions: `Register a new Claude Desktop agent before starting any work. This tool is specifically for agents running in Claude Desktop (not git worktrees). If no agent_id is provided, a git-style 8-character hash will be auto-generated.
-
-This tool:
-- Creates a new agent record with 'desktop' source
-- Auto-generates git-style hash ID if not provided
-- Sets initial status to 'active'
-- Logs the registration action with project context
-- Does not require git worktree paths`,
-			Parameters: map[string]string{
-				"agent_id":     "Unique 8-character hex identifier (optional - auto-generated if not provided)",
-				"description":  "Brief description of what the agent will work on (required)",
-				"project_name": "Name of the project being worked on (required)",
-				"window_id":    "Claude Desktop window identifier for window management (optional)",
-			},
-			Examples: []string{
-				`{"description": "Building user authentication system", "project_name": "MyApp"}`,
-				`{"agent_id": "desk1234", "description": "Building user authentication system", "project_name": "MyApp"}`,
-				`{"description": "Frontend component development", "project_name": "Dashboard"}`,
-				`{"description": "Working on API endpoints", "project_name": "Backend", "window_id": "win_abc123"}`,
-			},
-		},
-		{
-			Name:        "update_status",
-			Description: "Update agent status and current task being worked on",
-			Instructions: `Update the agent's current status and what they're working on. This helps track progress and current focus.
-
-Valid statuses:
-- 'active': Agent is available and ready to work
-- 'working': Agent is actively working on a task
-- 'idle': Agent is paused or waiting
-- 'completed': Agent has finished all work
-- 'failed': Agent encountered an error
-
-Updates the last activity timestamp automatically.`,
-			Parameters: map[string]string{
-				"agent_id":     "8-character agent identifier (required)",
-				"status":       "One of: active, working, idle, completed, failed (required)",
-				"current_task": "Description of current task (optional)",
-			},
-			Examples: []string{
-				`{"agent_id": "abc123de", "status": "working", "current_task": "Implementing JWT validation"}`,
-				`{"agent_id": "web45678", "status": "completed"}`,
-			},
-		},
-		{
-			Name:        "log_action",
-			Description: "Log agent activities and actions for audit trail",
-			Instructions: `Log important activities performed by the agent. This creates an audit trail of all work done.
-
-Action types:
-- 'task_start': Starting a new task or phase
-- 'file_operation': Creating, editing, or deleting files
-- 'git_commit': Making git commits (use log_commits for detailed commit tracking)
-- 'status_update': Changing status or current task
-
-The details field can contain JSON for structured information.`,
-			Parameters: map[string]string{
-				"agent_id":     "8-character agent identifier (required)",
-				"action_type":  "One of: task_start, file_operation, git_commit, status_update (required)",
-				"description":  "Human-readable description of the action (required)",
-				"details":      "Additional structured information as JSON string (optional)",
-			},
-			Examples: []string{
-				`{"agent_id": "abc123de", "action_type": "task_start", "description": "Started implementing user authentication"}`,
-				`{"agent_id": "web45678", "action_type": "file_operation", "description": "Created login component", "details": "{\"file\": \"src/components/Login.tsx\", \"lines\": 45}"}`,
-			},
-		},
-		{
-			Name:        "log_commits",
-			Description: "Track git commits made by the agent",
-			Instructions: `Record git commits for tracking code changes. This provides a detailed history of code modifications.
-
-You can log multiple commits at once. Commit messages are optional but recommended for better tracking.
-
-This automatically updates the agent's last activity timestamp.`,
-			Parameters: map[string]string{
-				"agent_id":        "8-character agent identifier (required)",
-				"commit_hashes":   "Array of git commit hash strings (required)",
-				"commit_messages": "Array of commit messages, same order as hashes (optional)",
-			},
-			Examples: []string{
-				`{"agent_id": "abc123de", "commit_hashes": ["a1b2c3d"], "commit_messages": ["Add JWT middleware"]}`,
-				`{"agent_id": "web45678", "commit_hashes": ["e4f5g6h", "i7j8k9l"], "commit_messages": ["Fix login bug", "Add error handling"]}`,
-			},
-		},
-		{
-			Name:        "end_session",
-			Description: "Complete agent session with summary and final status",
-			Instructions: `End the agent's work session. This should be called when all work is complete or if the agent encounters a fatal error.
-
-The final status should reflect the outcome:
-- 'completed': All work finished successfully
-- 'failed': Work stopped due to errors
-
-Provide a summary of what was accomplished for better tracking.`,
-			Parameters: map[string]string{
-				"agent_id":     "8-character agent identifier (required)",
-				"summary":      "Summary of work completed (optional but recommended)",
-				"final_status": "Either 'completed' or 'failed' (optional, defaults to 'completed')",
-			},
-			Examples: []string{
-				`{"agent_id": "abc123de", "summary": "Successfully implemented JWT authentication with tests", "final_status": "completed"}`,
-				`{"agent_id": "web45678", "summary": "Failed to deploy due to configuration issues", "final_status": "failed"}`,
-			},
-		},
-		{
-			Name:        "help",
-			Description: "Get help information about available tools",
-			Instructions: `Get help and documentation for the Eye in the Sky MCP tools.
-
-Call without arguments to get help for all tools, or specify a tool name to get detailed help for that specific tool.
-
-This tool provides comprehensive documentation including parameters, examples, and usage instructions.`,
-			Parameters: map[string]string{
-				"tool": "Name of specific tool to get help for (optional)",
-			},
-			Examples: []string{
-				`{}`,
-				`{"tool": "register_agent"}`,
-				`{"tool": "log_action"}`,
-			},
-		},
-		{
-			Name:        "save_session_context",
-			Description: "Save current session state for resumption later",
-			Instructions: `Save the current session context to enable resuming work later. This captures:
-- Current progress and phase
-- Completed and pending tasks
-- Important decisions and notes
-- Key files and dependencies
-- Metrics and environment state
-
-This enables pausing and resuming sessions across different Claude Code instances.`,
-			Parameters: map[string]string{
-				"agent_id":         "8-character agent identifier (required)",
-				"current_phase":    "Current work phase or milestone (required)",
-				"progress":         "Progress information with completion percentage and goals (optional)",
-				"next_actions":     "Array of next steps to take (optional)",
-				"completed_tasks":  "Array of completed tasks (optional)",
-				"pending_tasks":    "Array of remaining tasks (optional)",
-				"key_decisions":    "Array of important decisions made (optional)",
-				"important_files":  "Array of key files modified or created (optional)",
-				"dependencies":     "Array of dependencies or blockers (optional)",
-				"notes":           "Array of contextual notes and observations (optional)",
-				"environment":     "Key-value pairs of environment info (optional)",
-				"metrics":         "Performance and progress metrics (optional)",
-				"auto_save":       "Whether to automatically update agent status to idle (optional)",
-			},
-			Examples: []string{
-				`{"agent_id": "abc123de", "current_phase": "Authentication implementation", "next_actions": ["Implement JWT validation", "Add password hashing"]}`,
-				`{"agent_id": "web45678", "current_phase": "Dashboard frontend", "completed_tasks": ["User login component", "Navigation bar"], "pending_tasks": ["User profile page"], "auto_save": true}`,
-			},
-		},
-		{
-			Name:        "load_session_context",
-			Description: "Load previous session state to resume work",
-			Instructions: `Load the most recent session context for an agent to resume work where it was left off. This retrieves:
-- Progress and current phase
-- Completed and pending tasks
-- Important decisions and notes
-- Key files and dependencies
-- Previous metrics and environment
-
-Enables seamless session resumption across Claude Code instances.`,
-			Parameters: map[string]string{
-				"agent_id":   "8-character agent identifier (required)",
-				"session_id": "Specific session ID to load (optional - loads latest if not provided)",
-			},
-			Examples: []string{
-				`{"agent_id": "abc123de"}`,
-				`{"agent_id": "web45678", "session_id": "web45678_1696847200"}`,
-			},
-		},
-		{
-			Name:        "add_session_note",
-			Description: "Add contextual notes to the current session",
-			Instructions: `Add timestamped notes to the current session context. Useful for:
-- Recording insights and observations
-- Noting important decisions
-- Leaving reminders for later
-- Documenting blockers or issues
-
-Note types: insight, reminder, warning, idea
-Priority levels: low, medium, high`,
-			Parameters: map[string]string{
-				"agent_id": "8-character agent identifier (required)",
-				"type":     "Note type: insight, reminder, warning, idea (required)",
-				"content":  "Note content and description (required)",
-				"priority": "Priority level: low, medium, high (optional, defaults to medium)",
-				"tags":     "Array of tags for categorization (optional)",
-			},
-			Examples: []string{
-				`{"agent_id": "abc123de", "type": "insight", "content": "JWT token validation works better with async/await pattern"}`,
-				`{"agent_id": "web45678", "type": "reminder", "content": "Need to add error handling for API calls", "priority": "high"}`,
-				`{"agent_id": "api67890", "type": "warning", "content": "Database migration needed before deploy", "priority": "high", "tags": ["deployment", "database"]}`,
-			},
-		},
-		{
-			Name:        "get_current_window",
-			Description: "Get information about the current active window (macOS only)",
-			Instructions: `Detect the currently active window and return information about it. This tool helps identify which window/application is currently in focus.
-
-This tool:
-- Detects the frontmost application
-- Gets window title, position, and size
-- Generates a window ID for tracking
-- Only works on macOS systems
-
-Useful for registering agents with accurate window information.`,
-			Parameters: map[string]string{
-				// No parameters needed
-			},
-			Examples: []string{
-				`{}`,
-			},
-		},
-		{
-			Name:        "bring_window_front",
-			Description: "Bring an agent's window to the front (macOS only)",
-			Instructions: `Bring the specified agent's window to the front, making it the active window. This is useful for quickly switching focus to a specific agent's workspace.
-
-This tool:
-- Looks up the agent's window information
-- Uses the stored window ID to identify the application
-- Brings the application/window to the front
-- Falls back to bringing terminal (ghostty) to front if no specific window ID
-
-Only works on macOS systems with AppleScript support.`,
-			Parameters: map[string]string{
-				"agent_id": "8-character agent identifier (required)",
-			},
-			Examples: []string{
-				`{"agent_id": "534002f0"}`,
-				`{"agent_id": "abc123de"}`,
-			},
-		},
-	}
 }
 
 func timePtr(t time.Time) *time.Time {

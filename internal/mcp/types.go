@@ -88,24 +88,15 @@ type SyncCommitsResult struct {
 	Message string `json:"message"`
 }
 
-// Tool represents an MCP tool descriptor
-type Tool struct {
-	Name        string            `json:"name"`
-	Description string            `json:"description"`
-	Instructions string           `json:"instructions,omitempty"`
-	Parameters  map[string]string `json:"parameters,omitempty"`
-	Examples    []string          `json:"examples,omitempty"`
+// InstructionsArgs represents the arguments for i-instructions tool
+type InstructionsArgs struct {
+	// No arguments needed
 }
 
-// HelpArgs represents the arguments for help tool
-type HelpArgs struct {
-	Tool *string `json:"tool,omitempty"`
-}
-
-type HelpResult struct {
-	Success bool   `json:"success"`
-	Message string `json:"message"`
-	Tools   []Tool `json:"tools,omitempty"`
+type InstructionsResult struct {
+	Success      bool   `json:"success"`
+	Message      string `json:"message"`
+	Instructions string `json:"instructions"`
 }
 
 // GetCurrentWindowArgs represents the arguments for get_current_window tool

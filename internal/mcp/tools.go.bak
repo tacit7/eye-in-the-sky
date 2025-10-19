@@ -1,9 +1,13 @@
 package mcp
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -45,6 +49,7 @@ func (t *Tools) RegisterAgent(args RegisterAgentArgs) (RegisterAgentResult, erro
 		ID:                 agentID,
 		Status:             database.StatusActive,
 		Source:             database.SourceWorktree,
+		Description:        args.AgentDescription,
 		GitWorktreePath:    args.WorktreePath,
 		FeatureDescription: &args.Description,
 		ProjectName:        args.ProjectName,
@@ -89,6 +94,7 @@ func (t *Tools) RegisterDesktopAgent(args RegisterDesktopAgentArgs) (RegisterDes
 		ID:                 agentID,
 		Status:             database.StatusActive,
 		Source:             database.SourceDesktop,
+		Description:        args.AgentDescription,
 		GitWorktreePath:    nil, // Desktop agents don't have worktree paths
 		FeatureDescription: &args.Description,
 		ProjectName:        &args.ProjectName,
@@ -751,6 +757,7 @@ func (t *Tools) StartSession(args StartSessionArgs) (StartSessionResult, error) 
 		ID:                 agentID,
 		Status:             database.StatusActive,
 		Source:             database.SourceWorktree,
+		Description:        args.AgentDescription,
 		GitWorktreePath:    args.WorktreePath,
 		FeatureDescription: &args.Description,
 		ProjectName:        args.ProjectName,
@@ -1048,128 +1055,58 @@ func (t *Tools) SnapshotExpertise(args SnapshotExpertiseArgs) (SnapshotExpertise
 	}, nil
 }
 
-// ExtractPersonaFromContext implements the i-persona-from-context MCP tool (legacy - kept for compatibility)
-// This extracts the current session context and creates a persona template from it
-func (t *Tools) ExtractPersonaFromContext(args ExtractPersonaArgs) (ExtractPersonaResult, error) {
-	// Get the agent
-	agent, err := t.db.GetAgent(args.AgentID)
-	if err != nil {
-		return ExtractPersonaResult{
-			Success: false,
-			Message: fmt.Sprintf("Agent not found: %s", args.AgentID),
-		}, nil
+// ListSessions implements the i-list-sessions MCP tool
+func (t *Tools) ListSessions(args ListSessionsArgs) (ListSessionsResult, error) {
+	var agentID string
+	activeOnly := false
+
+	if args.AgentID != nil {
+		agentID = *args.AgentID
+	}
+	if args.ActiveOnly != nil {
+		activeOnly = *args.ActiveOnly
 	}
 
-	// Get current session if available
-	var sessionContext string
-	if agent.CurrentSessionID != nil && *agent.CurrentSessionID != "" {
-		session, err := t.db.GetSession(*agent.CurrentSessionID)
-		if err == nil {
-			// Get session logs, notes, and context
-			logs, _ := t.db.GetLogs(session.ID)
-			notes, _ := t.db.GetNotes(session.ID)
-			contextMap, _ := t.db.GetContext(session.ID)
+	sessions, err := t.db.ListSessions(agentID, activeOnly)
+	if err != nil {
+		return ListSessionsResult{}, fmt.Errorf("failed to list sessions: %w", err)
+	}
 
-			// Build comprehensive context
-			sessionContext = fmt.Sprintf(`# Session Context
+	summaries := make([]SessionSummary, len(sessions))
+	for i, s := range sessions {
+		var endedAt *string
+		if s.EndedAt != nil {
+			formatted := s.EndedAt.Format(time.RFC3339)
+			endedAt = &formatted
+		}
 
-## Session: %s
-Started: %s
-
-## Logs (%d entries)
-`, session.ID, session.StartedAt.Format(time.RFC3339), len(logs))
-
-			for _, log := range logs {
-				sessionContext += fmt.Sprintf("- [%s] %s: %s\n",
-					log.Timestamp.Format("15:04:05"), log.Type, log.Message)
-			}
-
-			sessionContext += fmt.Sprintf("\n## Notes (%d entries)\n", len(notes))
-			for _, note := range notes {
-				sessionContext += fmt.Sprintf("- [%s] %s\n",
-					note.Timestamp.Format("15:04:05"), note.Content)
-			}
-
-			sessionContext += "\n## Context Variables\n"
-			for key, value := range contextMap {
-				sessionContext += fmt.Sprintf("- %s: %s\n", key, value)
-			}
+		summaries[i] = SessionSummary{
+			ID:                 s.ID,
+			AgentID:            s.AgentID,
+			Name:               s.Name,
+			StartedAt:          s.StartedAt.Format(time.RFC3339),
+			EndedAt:            endedAt,
+			AgentStatus:        s.AgentStatus,
+			FeatureDescription: s.FeatureDescription,
+			CurrentTask:        s.CurrentTask,
+			ProjectName:        s.ProjectName,
+			IsActive:           s.EndedAt == nil,
 		}
 	}
 
-	// Get recent actions
-	actions, _ := t.db.GetActionsForAgent(args.AgentID, 20)
-	actionsContext := fmt.Sprintf("\n## Recent Actions (%d)\n", len(actions))
-	for _, action := range actions {
-		actionsContext += fmt.Sprintf("- [%s] %s: %s\n",
-			action.Timestamp.Format("15:04:05"), action.ActionType, action.Description)
-	}
-
-	// Build initial context
-	initialContext := fmt.Sprintf(`# Persona Context for %s
-
-## Agent Information
-- ID: %s
-- Source: %s
-- Project: %s
-- Feature: %s
-- Current Task: %s
-
-%s
-
-%s
-
-## Instructions
-This persona is based on the working context of agent %s.
-Recreate similar working patterns, tools, and approaches when instantiated.
-`,
-		args.PersonaName,
-		agent.ID,
-		agent.Source,
-		strPtrOrEmpty(agent.ProjectName),
-		strPtrOrEmpty(agent.FeatureDescription),
-		strPtrOrEmpty(agent.CurrentTask),
-		sessionContext,
-		actionsContext,
-		args.AgentID,
-	)
-
-	// Auto-detect expertise from actions and session data
-	expertise := []string{}
-	if agent.Source == database.SourceDesktop {
-		expertise = append(expertise, "Claude Desktop")
+	var message string
+	if activeOnly {
+		message = fmt.Sprintf("Found %d active sessions", len(sessions))
+	} else if agentID != "" {
+		message = fmt.Sprintf("Found %d sessions for agent %s", len(sessions), agentID)
 	} else {
-		expertise = append(expertise, "Git Worktree Management")
+		message = fmt.Sprintf("Found %d sessions", len(sessions))
 	}
 
-	if agent.ProjectName != nil {
-		expertise = append(expertise, *agent.ProjectName)
-	}
-
-	expertiseJSON := fmt.Sprintf(`["%s"]`, strings.Join(expertise, `", "`))
-
-	// Create the persona
-	persona := &database.Persona{
-		ID:             args.PersonaID,
-		Name:           args.PersonaName,
-		Description:    fmt.Sprintf("Persona extracted from agent %s working on %s", args.AgentID, strPtrOrEmpty(agent.FeatureDescription)),
-		Expertise:      expertiseJSON,
-		InitialContext: initialContext,
-		Specialization: args.Specialization,
-	}
-
-	if err := t.db.CreatePersona(persona); err != nil {
-		return ExtractPersonaResult{
-			Success: false,
-			Message: fmt.Sprintf("Failed to create persona: %v", err),
-		}, fmt.Errorf("database error: %w", err)
-	}
-
-	return ExtractPersonaResult{
-		Success:        true,
-		Message:        fmt.Sprintf("Persona %s created from agent %s context", args.PersonaID, args.AgentID),
-		PersonaID:      args.PersonaID,
-		InitialContext: initialContext,
+	return ListSessionsResult{
+		Success:  true,
+		Message:  message,
+		Sessions: summaries,
 	}, nil
 }
 
@@ -1179,4 +1116,107 @@ func strPtrOrEmpty(s *string) string {
 		return "N/A"
 	}
 	return *s
+}
+
+// LogCompaction logs a conversation compaction event and backs up the JSONL file
+func (t *Tools) LogCompaction(args LogCompactionArgs) (LogCompactionResult, error) {
+	// Validate agent exists
+	agent, err := t.db.GetAgent(args.AgentID)
+	if err != nil {
+		return LogCompactionResult{Success: false, Message: fmt.Sprintf("Agent not found: %s", args.AgentID)}, nil
+	}
+
+	// Get project path from agent
+	var projectPath string
+	if agent.GitWorktreePath != nil {
+		projectPath = *agent.GitWorktreePath
+	} else {
+		return LogCompactionResult{Success: false, Message: "Agent does not have a project path - cannot locate JSONL file"}, nil
+	}
+
+	// Construct path to JSONL file
+	// Pattern: ~/.claude/projects/-Users-...-<project-name>/<session-id>.jsonl
+	homeDir := os.Getenv("HOME")
+	claudeProjectsDir := filepath.Join(homeDir, ".claude", "projects")
+
+	// Convert project path to Claude's format (replace / with -)
+	projectDirName := strings.ReplaceAll(strings.TrimPrefix(projectPath, "/"), "/", "-")
+	jsonlPath := filepath.Join(claudeProjectsDir, projectDirName, args.SessionID+".jsonl")
+
+	// Check if JSONL file exists
+	fileInfo, err := os.Stat(jsonlPath)
+	if err != nil {
+		return LogCompactionResult{Success: false, Message: fmt.Sprintf("JSONL file not found: %s", jsonlPath)}, nil
+	}
+
+	// Create compactions directory if it doesn't exist
+	compactionsDir := filepath.Join(homeDir, "projects", "eye-in-the-sky", "data", "compactions")
+	if err := os.MkdirAll(compactionsDir, 0755); err != nil {
+		return LogCompactionResult{Success: false, Message: fmt.Sprintf("Failed to create compactions directory: %v", err)}, nil
+	}
+
+	// Copy JSONL file to compactions directory
+	backupPath := filepath.Join(compactionsDir, args.SessionID+".jsonl")
+	if err := copyFile(jsonlPath, backupPath); err != nil {
+		return LogCompactionResult{Success: false, Message: fmt.Sprintf("Failed to copy JSONL file: %v", err)}, nil
+	}
+
+	// Count messages in JSONL file (optional, for metadata)
+	messageCount, _ := countJSONLLines(backupPath)
+	fileSize := fileInfo.Size()
+
+	// Create compaction record
+	compaction := &database.Compaction{
+		AgentID:       args.AgentID,
+		OldSessionID:  args.OldSessionID,
+		NewSessionID:  args.SessionID,
+		Summary:       args.Summary,
+		JsonlFilePath: &backupPath,
+		JsonlFileSize: &fileSize,
+		MessageCount:  &messageCount,
+	}
+
+	if err := t.db.CreateCompaction(compaction); err != nil {
+		return LogCompactionResult{Success: false, Message: fmt.Sprintf("Failed to log compaction: %v", err)}, nil
+	}
+
+	return LogCompactionResult{
+		Success:         true,
+		Message:         fmt.Sprintf("Compaction logged successfully for session %s", args.SessionID),
+		JsonlBackupPath: backupPath,
+	}, nil
+}
+
+// copyFile copies a file from src to dst
+func copyFile(src, dst string) error {
+	sourceFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer sourceFile.Close()
+
+	destFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer destFile.Close()
+
+	_, err = io.Copy(destFile, sourceFile)
+	return err
+}
+
+// countJSONLLines counts lines in a JSONL file
+func countJSONLLines(path string) (int, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return 0, err
+	}
+	defer file.Close()
+
+	count := 0
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		count++
+	}
+	return count, scanner.Err()
 }

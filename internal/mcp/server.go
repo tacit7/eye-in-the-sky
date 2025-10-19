@@ -123,14 +123,14 @@ func (s *Server) registerTools() {
 	}, s.handleBringWindowFront)
 
 	mcp.AddTool(s.mcp, &mcp.Tool{
-		Name:        "i-help",
-		Description: "Get detailed help and usage instructions",
-	}, s.handleHelp)
+		Name:        "i-instructions",
+		Description: "Get complete Eye in the Sky workflow and initialization instructions. Call this FIRST before starting a session to learn how to parse marker files and use the system.",
+	}, s.handleInstructions)
 
 	// POA Spec Tools - Session Management
 	mcp.AddTool(s.mcp, &mcp.Tool{
 		Name:        "i-start-session",
-		Description: "Start a new session with agent registration",
+		Description: "Start a new session with agent registration. IMPORTANT: Call i-instructions first to learn how to get agent_id and session_id from marker file.",
 	}, s.handleStartSession)
 
 	mcp.AddTool(s.mcp, &mcp.Tool{
@@ -307,15 +307,15 @@ func (s *Server) handleBringWindowFront(ctx context.Context, req *mcp.CallToolRe
 	}, result, nil
 }
 
-func (s *Server) handleHelp(ctx context.Context, req *mcp.CallToolRequest, args HelpArgs) (*mcp.CallToolResult, any, error) {
-	result, err := s.tools.Help(args)
+func (s *Server) handleInstructions(ctx context.Context, req *mcp.CallToolRequest, args InstructionsArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.Instructions(args)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
-			&mcp.TextContent{Text: "Help information retrieved successfully"},
+			&mcp.TextContent{Text: result.Instructions},
 		},
 	}, result, nil
 }
@@ -382,12 +382,9 @@ func (s *Server) HandleTool(toolName string, argsJSON []byte) (interface{}, erro
 		}
 		return s.tools.BringWindowFront(args)
 
-	case "help", "i-help":
-		var args HelpArgs
-		if err := json.Unmarshal(argsJSON, &args); err != nil {
-			return nil, err
-		}
-		return s.tools.Help(args)
+	case "instructions", "i-instructions":
+		var args InstructionsArgs
+		return s.tools.Instructions(args)
 
 	// Session context tools (placeholder implementations)
 	case "save_session_context", "i-save-session-context", "i-save-context":
