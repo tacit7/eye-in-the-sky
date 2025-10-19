@@ -90,7 +90,7 @@ func NewSession(claudePath, terminal string) tea.Cmd {
 		agentID := uuid.New().String()
 
 		// Build the claude command
-		claudeCmd := fmt.Sprintf("%s --session-id %s 'agent-id: %s'",
+		claudeCmd := fmt.Sprintf(`%s --session-id %s "agent-id: %s"`,
 			claudePath, sessionID, agentID)
 
 		fmt.Fprintf(os.Stderr, "Starting new session in %s: session=%s agent=%s\n",
