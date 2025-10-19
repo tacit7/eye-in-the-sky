@@ -245,6 +245,9 @@ func (a *App) renderDetail(agent *database.Agent, session *database.Session, log
 	v.Title = " Agent Details "
 	v.Wrap = true
 	v.Autoscroll = false
+	v.Highlight = true
+	v.SelBgColor = gocui.ColorGreen
+	v.SelFgColor = gocui.ColorBlack
 	v.Clear()
 
 	// Agent information
@@ -348,6 +351,10 @@ func (a *App) renderDetail(agent *database.Agent, session *database.Session, log
 			fmt.Fprintln(v, initialContext)
 		}
 	}
+
+	// Set cursor to beginning
+	v.SetCursor(0, 0)
+	v.SetOrigin(0, 0)
 
 	// Set as current view
 	if _, err := a.gui.SetCurrentView("details"); err != nil {
@@ -474,25 +481,34 @@ func (a *App) closeDetails(g *gocui.Gui, v *gocui.View) error {
 	return a.renderAgents()
 }
 
-// scrollUp scrolls the detail view up
+// scrollUp scrolls the detail view up with cursor navigation
 func (a *App) scrollUp(g *gocui.Gui, v *gocui.View) error {
 	if v != nil {
 		ox, oy := v.Origin()
-		if oy > 0 {
-			if err := v.SetOrigin(ox, oy-1); err != nil {
-				return err
+		cx, cy := v.Cursor()
+		if cy > 0 {
+			if err := v.SetCursor(cx, cy-1); err != nil {
+				if oy > 0 {
+					if err := v.SetOrigin(ox, oy-1); err != nil {
+						return err
+					}
+				}
 			}
 		}
 	}
 	return nil
 }
 
-// scrollDown scrolls the detail view down
+// scrollDown scrolls the detail view down with cursor navigation
 func (a *App) scrollDown(g *gocui.Gui, v *gocui.View) error {
 	if v != nil {
 		ox, oy := v.Origin()
-		// Ignore error if we're at the bottom
-		v.SetOrigin(ox, oy+1)
+		cx, cy := v.Cursor()
+		if err := v.SetCursor(cx, cy+1); err != nil {
+			if err := v.SetOrigin(ox, oy+1); err != nil {
+				// Ignore error if we're at the bottom
+			}
+		}
 	}
 	return nil
 }
