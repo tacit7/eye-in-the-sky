@@ -142,7 +142,8 @@ func (a *App) showLogs(g *gocui.Gui, v *gocui.View) error {
 			return err
 		}
 
-		// Add close keybinding
+		// Delete any existing keybinding and add close keybinding
+		g.DeleteKeybinding(viewLogs, 'q', gocui.ModNone)
 		if err := g.SetKeybinding(viewLogs, 'q', gocui.ModNone, a.closeLogs); err != nil {
 			return err
 		}
@@ -153,6 +154,9 @@ func (a *App) showLogs(g *gocui.Gui, v *gocui.View) error {
 
 // closeLogs closes the logs view
 func (a *App) closeLogs(g *gocui.Gui, v *gocui.View) error {
+	// Delete keybinding
+	g.DeleteKeybinding(viewLogs, 'q', gocui.ModNone)
+
 	if err := g.DeleteView(viewLogs); err != nil {
 		return err
 	}
@@ -299,6 +303,10 @@ func (a *App) renderDetail(agent *database.Agent, session *database.Session, log
 		return err
 	}
 
+	// Delete any existing keybindings for this view
+	a.gui.DeleteKeybinding("details", 'q', gocui.ModNone)
+	a.gui.DeleteKeybinding("details", 'r', gocui.ModNone)
+
 	// Add close keybinding
 	if err := a.gui.SetKeybinding("details", 'q', gocui.ModNone, a.closeDetails); err != nil {
 		return err
@@ -332,6 +340,10 @@ func (a *App) refreshDetails(g *gocui.Gui, v *gocui.View) error {
 func (a *App) closeDetails(g *gocui.Gui, v *gocui.View) error {
 	// Clear current agent ID
 	a.currentAgentID = ""
+
+	// Delete keybindings for details view
+	g.DeleteKeybinding("details", 'q', gocui.ModNone)
+	g.DeleteKeybinding("details", 'r', gocui.ModNone)
 
 	// Delete details view
 	if err := g.DeleteView("details"); err != nil && err != gocui.ErrUnknownView {
