@@ -384,37 +384,48 @@ func (t *Tools) Instructions(args InstructionsArgs) (InstructionsResult, error) 
 	instructions := `Eye in the Sky - Agent Lifecycle Management
 
 ═══════════════════════════════════════════════════════════════
-INITIALIZATION - Do this FIRST on every new session
+INITIALIZATION - CRITICAL: Do this FIRST on EVERY new session
 ═══════════════════════════════════════════════════════════════
+
+BACKGROUND:
+An external launcher script creates a marker file BEFORE you start:
+  .claude/eye-in-the-sky/session-{agentId}-{claudeCodeSessionId}
+
+This file contains the IDs you need. You DON'T generate them - you READ them.
 
 STEP 1: Check for marker file
 Run: ls .claude/eye-in-the-sky/session-* 2>/dev/null
 
-STEP 2: Parse agent_id and Claude Code session_id from filename
+STEP 2: If marker file exists, parse the filename
 Format: session-{agentId}-{claudeCodeSessionId}
 Example: session-a728dc53-a4ebc315-5577-4c81-b12e-1a7ae3fa907f
-  → agent_id: a728dc53 (first 8 characters - REUSE THIS)
-  → claude_session_id: a4ebc315-5577-4c81-b12e-1a7ae3fa907f (Claude Code UUID - for reference only)
 
-STEP 3: Call i-start-session with the agent_id
+Extract ONLY the agent_id (first 8 characters after 'session-'):
+  → agent_id: "a728dc53"  ← USE THIS in i-start-session
+
+The Claude Code session_id is just for reference:
+  → claude_code_session_id: "a4ebc315-5577-4c81-b12e-1a7ae3fa907f"
+
+STEP 3: Call i-start-session with the EXTRACTED agent_id
   i-start-session({
-    "agent_id": "a728dc53",  ← Use the parsed agent_id for continuity
+    "agent_id": "a728dc53",  ← The ID you extracted from marker file
     "agent_description": "Optional agent name/label",
     "description": "What you'll be working on",
     "project_name": "optional",
     "worktree_path": "optional"
   })
 
-  NOTE: i-start-session will auto-generate a NEW Eye in the Sky session_id
-  in format: {agentId}_{timestamp} (e.g., "a728dc53_1760832709")
+  RESULT: Eye in the Sky creates internal session_id in format:
+    "{agentId}_{timestamp}" (e.g., "a728dc53_1760832709")
 
 STEP 4: Delete marker file after successful registration
 Run: rm .claude/eye-in-the-sky/session-*
 
-IMPORTANT:
-- The agent_id provides continuity across multiple sessions
-- Each session gets a fresh Eye in the Sky session_id
-- If no marker file exists, omit agent_id and a new one will be auto-generated
+CRITICAL NOTES:
+- YOU DON'T GENERATE ANY IDs - you extract them from the marker file
+- The external launcher creates the marker file with pre-determined IDs
+- agent_id provides continuity across multiple Claude sessions
+- If NO marker file exists, omit agent_id and i-start-session will auto-generate one
 
 ═══════════════════════════════════════════════════════════════
 WORKFLOW - During your session

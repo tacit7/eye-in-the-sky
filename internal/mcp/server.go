@@ -130,7 +130,7 @@ func (s *Server) registerTools() {
 	// POA Spec Tools - Session Management
 	mcp.AddTool(s.mcp, &mcp.Tool{
 		Name:        "i-start-session",
-		Description: "Start a new session with agent registration. IMPORTANT: Call i-instructions first to learn how to get agent_id and session_id from marker file.",
+		Description: "Start a new session with agent registration. IMPORTANT: Before calling this, check for .claude/eye-in-the-sky/session-* marker file and extract agent_id from filename (first 8 chars after 'session-'). Pass that agent_id to maintain continuity. If no marker file exists, omit agent_id and one will be auto-generated. Call i-instructions for complete initialization workflow.",
 	}, s.handleStartSession)
 
 	mcp.AddTool(s.mcp, &mcp.Tool{
