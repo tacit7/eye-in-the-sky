@@ -160,7 +160,7 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.statusMsg = "Claude binary not found"
 			return m, nil
 		}
-		return m, NewSession(m.claudePath)
+		return m, NewSession(m.claudePath, m.config.DefaultTerminal)
 	}
 
 	if Matches(msg, m.keys.ContinueSession) {

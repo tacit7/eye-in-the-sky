@@ -83,7 +83,7 @@ func StartSession(claudePath, sessionID string) tea.Cmd {
 }
 
 // NewSession spawns claude --session-id with a new UUID and agent-id in a new terminal window
-func NewSession(claudePath string) tea.Cmd {
+func NewSession(claudePath, terminal string) tea.Cmd {
 	return func() tea.Msg {
 		// Generate session ID and agent ID
 		sessionID := uuid.New().String()
@@ -93,12 +93,31 @@ func NewSession(claudePath string) tea.Cmd {
 		claudeCmd := fmt.Sprintf("%s --session-id %s 'agent-id: %s'",
 			claudePath, sessionID, agentID)
 
-		fmt.Fprintf(os.Stderr, "Starting new session in new window: session=%s agent=%s\n",
-			sessionID[:8], agentID[:8])
+		fmt.Fprintf(os.Stderr, "Starting new session in %s: session=%s agent=%s\n",
+			terminal, sessionID[:8], agentID[:8])
 
-		// Open in new terminal window (macOS)
-		cmd := exec.Command("osascript", "-e",
-			fmt.Sprintf(`tell application "Terminal" to do script "%s"`, claudeCmd))
+		var cmd *exec.Cmd
+
+		// Build command based on terminal type
+		switch terminal {
+		case "iterm":
+			// iTerm2
+			cmd = exec.Command("osascript", "-e",
+				fmt.Sprintf(`tell application "iTerm2" to create window with default profile command "%s"`, claudeCmd))
+		case "warp":
+			// Warp
+			cmd = exec.Command("open", "-a", "Warp", "--args", claudeCmd)
+		case "kitty":
+			// Kitty
+			cmd = exec.Command("kitty", "--", "sh", "-c", claudeCmd)
+		case "alacritty":
+			// Alacritty
+			cmd = exec.Command("alacritty", "-e", "sh", "-c", claudeCmd)
+		default:
+			// Default: macOS Terminal
+			cmd = exec.Command("osascript", "-e",
+				fmt.Sprintf(`tell application "Terminal" to do script "%s"`, claudeCmd))
+		}
 
 		if err := cmd.Start(); err != nil {
 			fmt.Fprintf(os.Stderr, "Error starting session: %v\n", err)

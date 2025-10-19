@@ -28,6 +28,9 @@ type Config struct {
 
 	// Claude binary path (empty to use $PATH)
 	ClaudePath string `yaml:"claude_path"`
+
+	// Default terminal (terminal, iterm, warp, kitty, alacritty)
+	DefaultTerminal string `yaml:"default_terminal"`
 }
 
 // Theme holds color and style configuration
@@ -59,7 +62,8 @@ func DefaultConfig() Config {
 		DefaultView:     "list",
 		ShowAllAgents:   false,
 		Theme:           "default",
-		ClaudePath:      "", // Empty = use $PATH
+		ClaudePath:      "",        // Empty = use $PATH
+		DefaultTerminal: "terminal", // terminal, iterm, warp, kitty, alacritty
 	}
 }
 
