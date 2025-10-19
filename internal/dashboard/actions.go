@@ -194,12 +194,23 @@ func (a *App) viewAgentDetails(agentID string) error {
 		}
 	}
 
+	// Get actions for the agent (limit to 20)
+	actions, err := a.db.ListActions(agent.ID)
+	if err != nil {
+		// Action error is not critical, continue without actions
+		actions = nil
+	}
+	// Limit to 20 most recent
+	if len(actions) > 20 {
+		actions = actions[:20]
+	}
+
 	// Render the detail view
-	return a.renderDetail(agent, session, logs)
+	return a.renderDetail(agent, session, logs, actions)
 }
 
 // renderDetail renders the agent detail view
-func (a *App) renderDetail(agent *database.Agent, session *database.Session, logs []*database.Log) error {
+func (a *App) renderDetail(agent *database.Agent, session *database.Session, logs []*database.Log, actions []*database.Action) error {
 	maxX, maxY := a.gui.Size()
 
 	// Create detail view (full screen)
@@ -244,6 +255,21 @@ func (a *App) renderDetail(agent *database.Agent, session *database.Session, log
 
 	if agent.LastActivityAt != nil {
 		fmt.Fprintf(v, "Last activity: %s\n", agent.LastActivityAt.Format("2006-01-02 15:04:05"))
+	}
+
+	// Actions section
+	fmt.Fprintln(v, "---")
+	fmt.Fprintln(v, "[ACTIONS - agent activity]")
+
+	if len(actions) > 0 {
+		for _, action := range actions {
+			fmt.Fprintf(v, "%s  [%s] %s\n",
+				action.Timestamp.Format("15:04"),
+				action.ActionType,
+				action.Description)
+		}
+	} else {
+		fmt.Fprintln(v, "No actions logged")
 	}
 
 	// Logs section
