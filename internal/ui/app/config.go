@@ -62,8 +62,8 @@ func DefaultConfig() Config {
 		DefaultView:     "list",
 		ShowAllAgents:   false,
 		Theme:           "default",
-		ClaudePath:      "",        // Empty = use $PATH
-		DefaultTerminal: "terminal", // terminal, iterm, warp, kitty, alacritty
+		ClaudePath:      "",      // Empty = use $PATH
+		DefaultTerminal: "iterm", // terminal, iterm, warp, kitty, alacritty
 	}
 }
 
