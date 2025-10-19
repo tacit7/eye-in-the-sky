@@ -397,7 +397,7 @@ This file contains the IDs you need. You DON'T generate them - you READ them.
 STEP 1: Check for marker file
 Run: ls .claude/eye-in-the-sky/session-* 2>/dev/null
 
-STEP 2: If marker file exists, parse the filename
+STEP 2a: If marker file EXISTS, parse the filename
 Format: session-{agentId}-{claudeCodeSessionId}
 Example: session-a728dc53-a4ebc315-5577-4c81-b12e-1a7ae3fa907f
 
@@ -405,10 +405,14 @@ Extract BOTH IDs from the filename:
   → agent_id: "a728dc53" (first 8 chars after 'session-')
   → session_id: "a4ebc315-5577-4c81-b12e-1a7ae3fa907f" (Claude Code session UUID)
 
-STEP 3: Call i-start-session with BOTH extracted IDs
+STEP 2b: If NO marker file exists, prompt the user
+ASK: "Please run /status to get your Claude Code session ID and provide it"
+Wait for the user to provide the session ID before proceeding.
+
+STEP 3: Call i-start-session with the session ID
   i-start-session({
-    "agent_id": "a728dc53",
-    "session_id": "a4ebc315-5577-4c81-b12e-1a7ae3fa907f",
+    "agent_id": "a728dc53",                                    # From marker file or omit for auto-gen
+    "session_id": "a4ebc315-5577-4c81-b12e-1a7ae3fa907f",     # From marker/user or omit for auto-gen
     "agent_description": "Optional agent name/label",
     "description": "What you'll be working on",
     "project_name": "optional",
@@ -419,14 +423,15 @@ STEP 3: Call i-start-session with BOTH extracted IDs
   This uses the Claude Code session_id directly for tracking continuity.
   On macOS, window_id is automatically detected if not provided.
 
-STEP 4: Delete marker file after successful registration
-Run: rm .claude/eye-in-the-sky/session-*
+STEP 4: Delete marker file after successful registration (if it existed)
+Run: rm .claude/eye-in-the-sky/session-* 2>/dev/null
 
 CRITICAL NOTES:
-- YOU DON'T GENERATE ANY IDs - you extract BOTH agent_id AND session_id from marker file
+- YOU DON'T GENERATE session IDs - get them from marker file or user
+- If no marker file, ALWAYS ask user to run /status and provide session ID
 - The external launcher creates the marker file with pre-determined IDs before Claude starts
-- Pass BOTH IDs to i-start-session for full tracking continuity
-- If NO marker file exists, omit both IDs and i-start-session will auto-generate them
+- Pass session_id to i-start-session for full tracking continuity
+- Only omit session_id if user cannot provide it (fallback to auto-generation)
 
 ═══════════════════════════════════════════════════════════════
 WORKFLOW - During your session
