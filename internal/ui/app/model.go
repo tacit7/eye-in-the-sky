@@ -56,6 +56,7 @@ type Model struct {
 	detailOffset  int
 	actions       []Action
 	commits       []Commit
+	notes         []Note
 
 	// UI dimensions
 	width  int
@@ -71,18 +72,20 @@ type Model struct {
 
 // Agent represents an agent from the database
 type Agent struct {
-	ID               string
-	Status           string
-	Source           string
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
-	GitWorktreePath  string
-	FeatureDesc      string
-	CurrentTask      string
-	LastActivityAt   time.Time
-	WindowID         string
-	AgentDescription string
-	ProjectName      string
+	ID                  string
+	Status              string
+	Source              string
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+	GitWorktreePath     string
+	FeatureDesc         string
+	CurrentTask         string
+	LastActivityAt      time.Time
+	WindowID            string
+	TerminalApplication string
+	AgentDescription    string
+	ProjectName         string
+	CurrentSessionID    string
 }
 
 // Action represents an agent action from the database
@@ -102,6 +105,14 @@ type Commit struct {
 	CommitHash    string
 	CommitMessage string
 	Timestamp     time.Time
+}
+
+// Note represents a session note from the database
+type Note struct {
+	ID        int
+	SessionID string
+	Content   string
+	Timestamp time.Time
 }
 
 // Styles holds all lipgloss styles
@@ -220,7 +231,7 @@ func (m *Model) loadAgents() error {
 	query := `
 		SELECT id, status, source, created_at, updated_at,
 		       git_worktree_path, feature_description, current_task,
-		       last_activity_at, window_id, description, project_name
+		       last_activity_at, window_id, terminal_application, description, project_name, current_session_id
 		FROM agents
 	`
 
@@ -239,13 +250,13 @@ func (m *Model) loadAgents() error {
 	agents := []Agent{}
 	for rows.Next() {
 		var a Agent
-		var gitPath, featureDesc, currentTask, windowID, desc, projectName sql.NullString
+		var gitPath, featureDesc, currentTask, windowID, terminalApp, desc, projectName, sessionID sql.NullString
 		var lastActivity sql.NullTime
 
 		err := rows.Scan(
 			&a.ID, &a.Status, &a.Source, &a.CreatedAt, &a.UpdatedAt,
 			&gitPath, &featureDesc, &currentTask, &lastActivity,
-			&windowID, &desc, &projectName,
+			&windowID, &terminalApp, &desc, &projectName, &sessionID,
 		)
 		if err != nil {
 			return err
@@ -266,11 +277,17 @@ func (m *Model) loadAgents() error {
 		if windowID.Valid {
 			a.WindowID = windowID.String
 		}
+		if terminalApp.Valid {
+			a.TerminalApplication = terminalApp.String
+		}
 		if desc.Valid {
 			a.AgentDescription = desc.String
 		}
 		if projectName.Valid {
 			a.ProjectName = projectName.String
+		}
+		if sessionID.Valid {
+			a.CurrentSessionID = sessionID.String
 		}
 
 		agents = append(agents, a)
@@ -361,6 +378,40 @@ func (m *Model) loadAgentDetails() error {
 		commits = append(commits, c)
 	}
 	m.commits = commits
+
+	// Load notes for current session
+	notes := []Note{}
+	if agent.CurrentSessionID != "" {
+		notesQuery := `
+			SELECT id, session_id, content, created_at
+			FROM notes
+			WHERE session_id = ?
+			ORDER BY created_at DESC
+			LIMIT 20
+		`
+
+		noteRows, err := m.db.Query(notesQuery, agent.CurrentSessionID)
+		if err != nil {
+			return err
+		}
+		defer noteRows.Close()
+
+		for noteRows.Next() {
+			var n Note
+
+			err := noteRows.Scan(&n.ID, &n.SessionID, &n.Content, &n.Timestamp)
+			if err != nil {
+				return err
+			}
+
+			notes = append(notes, n)
+		}
+
+		if err := noteRows.Err(); err != nil {
+			return err
+		}
+	}
+	m.notes = notes
 
 	return commitRows.Err()
 }

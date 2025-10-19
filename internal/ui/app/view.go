@@ -316,6 +316,21 @@ func (m *Model) renderAgentDetails() string {
 		}
 	}
 
+	// Session notes
+	if len(m.notes) > 0 {
+		b.WriteString("\n")
+		b.WriteString(m.styles.Title.Render("Session Notes"))
+		b.WriteString("\n")
+		for _, note := range m.notes {
+			line := fmt.Sprintf("  %s  %s",
+				note.Timestamp.Format("15:04:05"),
+				truncate(note.Content, 80),
+			)
+			b.WriteString(m.styles.Text.Render(line))
+			b.WriteString("\n")
+		}
+	}
+
 	// Recent actions
 	if len(m.actions) > 0 {
 		b.WriteString("\n")
