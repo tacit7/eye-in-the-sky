@@ -60,15 +60,16 @@ func (s *Server) Start(ctx context.Context) error {
 
 // registerTools registers all available tools with the MCP server
 func (s *Server) registerTools() {
-	// NOTE: i-register and i-register-claude-desktop are kept internal-only
-	// Claude should use i-start-session instead for new agent registration
-	// The old tools are still available via HandleTool() for backward compatibility
+	// NOTE: The following tools are kept internal-only (not exposed to Claude):
+	// - i-register, i-register-claude-desktop (use i-start-session instead)
+	// - i-session-get, i-list-sessions (internal query tools)
+	// - i-bring-front (window management - internal use)
+	// All are still available via HandleTool() for backward compatibility
 
 	mcp.AddTool(s.mcp, &mcp.Tool{
 		Name:        "i-status",
 		Description: "Update agent status and current task",
 	}, s.handleUpdateStatus)
-
 
 	mcp.AddTool(s.mcp, &mcp.Tool{
 		Name:        "i-commits",
@@ -106,11 +107,6 @@ func (s *Server) registerTools() {
 	}, s.handleGetCurrentWindow)
 
 	mcp.AddTool(s.mcp, &mcp.Tool{
-		Name:        "i-bring-front",
-		Description: "Bring agent window to front (macOS)",
-	}, s.handleBringWindowFront)
-
-	mcp.AddTool(s.mcp, &mcp.Tool{
 		Name:        "i-instructions",
 		Description: "Get complete Eye in the Sky workflow and initialization instructions. Call this FIRST before starting a session to learn how to parse marker files and use the system.",
 	}, s.handleInstructions)
@@ -121,7 +117,6 @@ func (s *Server) registerTools() {
 		Description: "Start a new session with agent registration. IMPORTANT: Before calling this, check for .claude/eye-in-the-sky/session-* marker file and extract BOTH agent_id (first 8 chars) and session_id (UUID) from filename. Pass BOTH IDs to maintain full continuity. If no marker file exists, omit both and they will be auto-generated. Call i-instructions for complete initialization workflow.",
 	}, s.handleStartSession)
 
-
 	mcp.AddTool(s.mcp, &mcp.Tool{
 		Name:        "i-note-add",
 		Description: "Add note to session",
@@ -131,11 +126,6 @@ func (s *Server) registerTools() {
 		Name:        "i-context-set",
 		Description: "Set context key/value for session",
 	}, s.handleSetContext)
-
-	mcp.AddTool(s.mcp, &mcp.Tool{
-		Name:        "i-session-get",
-		Description: "Get session info with logs, notes, and context",
-	}, s.handleGetSession)
 
 	// Persona Management Tools
 	mcp.AddTool(s.mcp, &mcp.Tool{
@@ -152,11 +142,6 @@ func (s *Server) registerTools() {
 		Name:        "i-persona-list",
 		Description: "List all available personas",
 	}, s.handleListPersonas)
-
-	mcp.AddTool(s.mcp, &mcp.Tool{
-		Name:        "i-list-sessions",
-		Description: "List all sessions with optional filtering",
-	}, s.handleListSessions)
 }
 
 // Tool handlers using the generic AddTool pattern
