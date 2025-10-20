@@ -26,6 +26,12 @@ func (m *Model) View() string {
 		return m.renderDetailView()
 	case ViewLogs:
 		return m.renderLogsView()
+	case ViewTasks:
+		return m.renderTasksView()
+	case ViewCommits:
+		return m.renderCommitsView()
+	case ViewNotes:
+		return m.renderNotesView()
 	default:
 		return "Unknown view"
 	}
@@ -33,22 +39,18 @@ func (m *Model) View() string {
 
 // renderListView renders the agent list view
 func (m *Model) renderListView() string {
-	var b strings.Builder
+	// Build agent list content
+	var contentBuilder strings.Builder
 
-	// Header
-	header := m.renderHeader()
-	b.WriteString(header)
-	b.WriteString("\n\n")
-
-	// Agent list
-	visibleHeight := m.height - 5 // Reserve for header and footer
+	// Reserve space for header (3 lines) + title bar + footer + borders
+	visibleHeight := m.height - 8
 	if visibleHeight < 1 {
 		visibleHeight = 10
 	}
 
 	if len(m.agents) == 0 {
-		b.WriteString(m.styles.Subtle.Render("  No agents found"))
-		b.WriteString("\n")
+		contentBuilder.WriteString(m.styles.Subtle.Render("  No agents found"))
+		contentBuilder.WriteString("\n")
 	} else {
 		endIndex := m.listOffset + visibleHeight
 		if endIndex > len(m.agents) {
@@ -58,14 +60,34 @@ func (m *Model) renderListView() string {
 		for i := m.listOffset; i < endIndex; i++ {
 			agent := m.agents[i]
 			line := m.renderAgentLine(agent, i == m.selectedIndex)
-			b.WriteString(line)
-			b.WriteString("\n")
+			contentBuilder.WriteString(line)
+			contentBuilder.WriteString("\n")
 		}
 	}
 
+	// Create bordered content box
+	contentBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color(m.theme.Colors.Border)).
+		Width(m.width - 4).
+		Height(visibleHeight + 2).
+		Padding(0, 1).
+		Render(contentBuilder.String())
+
+	// Assemble full view
+	var b strings.Builder
+
+	// Top header
+	header := m.renderHeader()
+	b.WriteString(header)
+	b.WriteString("\n\n")
+
+	// Bordered content
+	b.WriteString(contentBox)
+
 	// Footer
-	footer := m.renderFooter()
 	b.WriteString("\n")
+	footer := m.renderFooter()
 	b.WriteString(footer)
 
 	return b.String()
@@ -77,66 +99,104 @@ func (m *Model) renderDetailView() string {
 		return m.styles.Subtle.Render("No agent selected")
 	}
 
+	// Build detail content
+	detailContent := m.renderAgentDetails()
+
+	// Reserve space for header, footer, and borders
+	visibleHeight := m.height - 8
+	if visibleHeight < 1 {
+		visibleHeight = 10
+	}
+
+	// Create bordered content box
+	contentBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color(m.theme.Colors.Border)).
+		Width(m.width - 4).
+		Height(visibleHeight + 2).
+		Padding(0, 1).
+		Render(detailContent)
+
+	// Assemble full view
 	var b strings.Builder
 
-	// Header
+	// Top header
 	header := m.renderHeader()
 	b.WriteString(header)
 	b.WriteString("\n\n")
 
-	// Agent details
-	b.WriteString(m.renderAgentDetails())
+	// Bordered content
+	b.WriteString(contentBox)
 
 	// Footer
-	footer := m.renderFooter()
 	b.WriteString("\n")
+	footer := m.renderFooter()
 	b.WriteString(footer)
 
 	return b.String()
 }
 
-// renderLogsView renders the logs view
+// renderLogsView renders the logs view with split panes
 func (m *Model) renderLogsView() string {
-	var b strings.Builder
+	if m.selectedAgent == nil {
+		return m.styles.Subtle.Render("No agent selected")
+	}
 
-	// Header
-	header := m.renderHeader()
-	b.WriteString(header)
-	b.WriteString("\n\n")
+	// Build item list for left pane
+	items := make([]string, len(m.logs))
+	for i, log := range m.logs {
+		timestamp := log.Timestamp.Format("15:04:05")
+		logType := truncate(log.Type, 10)
+		items[i] = fmt.Sprintf("%s  %-10s", timestamp, logType)
+	}
 
-	// Logs content
-	b.WriteString(m.styles.Title.Render("All Actions Log"))
-	b.WriteString("\n\n")
-
-	if len(m.actions) == 0 {
-		b.WriteString(m.styles.Subtle.Render("  No actions found"))
-	} else {
-		visibleHeight := m.height - 8
-		if visibleHeight < 1 {
-			visibleHeight = 10
-		}
-
-		endIndex := m.detailOffset + visibleHeight
-		if endIndex > len(m.actions) {
-			endIndex = len(m.actions)
-		}
-
-		for i := m.detailOffset; i < endIndex; i++ {
-			action := m.actions[i]
-			line := fmt.Sprintf("  %s | %s | %s",
-				action.Timestamp.Format("15:04:05"),
-				action.ActionType,
-				action.Description,
-			)
-			b.WriteString(m.styles.Text.Render(line))
-			b.WriteString("\n")
-		}
+	// Build detail content for right pane
+	var detailContent string
+	if m.logsIndex >= 0 && m.logsIndex < len(m.logs) {
+		detailContent = m.renderLogDetails(m.logs[m.logsIndex])
 	}
 
 	// Footer
-	footer := m.renderFooter()
+	footer := m.renderFooterWithKeys("[j/k] Move  [r] Refresh  [q/esc] Back")
+
+	return m.renderSplitPaneView(
+		"Logs",
+		items,
+		m.logsIndex,
+		len(m.logs),
+		detailContent,
+		footer,
+	)
+}
+
+// renderLogDetails renders the full log message
+func (m *Model) renderLogDetails(log Log) string {
+	var b strings.Builder
+
+	// Timestamp
+	b.WriteString(m.styles.Primary.Render("Time: "))
+	b.WriteString(m.styles.Text.Render(log.Timestamp.Format("2006-01-02 15:04:05")))
+	b.WriteString("\n\n")
+
+	// Type
+	b.WriteString(m.styles.Primary.Render("Type: "))
+	typeStyle := m.styles.Text
+	switch log.Type {
+	case "error":
+		typeStyle = m.styles.Failed
+	case "warning":
+		typeStyle = m.styles.Idle
+	case "info":
+		typeStyle = m.styles.Active
+	}
+	b.WriteString(typeStyle.Render(strings.ToUpper(log.Type)))
+	b.WriteString("\n\n")
+
+	// Message
+	b.WriteString(m.styles.Title.Render("Message"))
 	b.WriteString("\n")
-	b.WriteString(footer)
+	b.WriteString(m.styles.Text.Render(log.Message))
+	b.WriteString("\n")
 
 	return b.String()
 }
