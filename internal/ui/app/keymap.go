@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -162,7 +163,7 @@ func LoadKeyBindings() (KeyBindings, error) {
 	if _, err := os.Stat(keysPath); os.IsNotExist(err) {
 		keys := DefaultKeyBindings()
 		if err := SaveKeyBindingsYAML(keys); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: failed to save default keybindings: %v\n", err)
+			log.Printf("warning: failed to save default keybindings: %v", err)
 		}
 		return keys, nil
 	}
@@ -170,23 +171,23 @@ func LoadKeyBindings() (KeyBindings, error) {
 	// Read keys file
 	data, err := os.ReadFile(keysPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "warning: failed to read keys file: %v, using defaults\n", err)
+		log.Printf("warning: failed to read keys file: %v, using defaults", err)
 		return DefaultKeyBindings(), nil
 	}
 
 	// Parse YAML
 	var yamlKeys keyBindingsYAML
 	if err := yaml.Unmarshal(data, &yamlKeys); err != nil {
-		fmt.Fprintf(os.Stderr, "warning: failed to parse keys file: %v, using defaults\n", err)
+		log.Printf("warning: failed to parse keys file: %v, using defaults", err)
 		return DefaultKeyBindings(), nil
 	}
 
 	// Convert YAML to KeyBindings with conflict detection
 	keys, conflicts := convertYAMLToBindings(yamlKeys)
 	if len(conflicts) > 0 {
-		fmt.Fprintf(os.Stderr, "warning: key conflicts detected, using defaults for conflicting keys:\n")
+		log.Printf("warning: key conflicts detected, using defaults for conflicting keys:")
 		for _, conflict := range conflicts {
-			fmt.Fprintf(os.Stderr, "  - %s\n", conflict)
+			log.Printf("  - %s", conflict)
 		}
 	}
 

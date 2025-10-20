@@ -155,6 +155,12 @@ func (p *Parser) convertToDBRow(entry models.UsageEntry, project string) *db.Usa
 	// Parse timestamp
 	timestamp := entry.Timestamp.Format(time.RFC3339)
 
+	// Calculate cost if not provided in JSONL
+	cost := entry.CostUSD
+	if cost == 0 {
+		cost = calculateCost(entry.Message.Model, entry.Message.Usage)
+	}
+
 	return &db.UsageEntryRow{
 		SessionID:           entry.SessionID,
 		Timestamp:           timestamp,
@@ -164,7 +170,7 @@ func (p *Parser) convertToDBRow(entry models.UsageEntry, project string) *db.Usa
 		OutputTokens:        entry.Message.Usage.OutputTokens,
 		CacheCreationTokens: entry.Message.Usage.CacheCreationInputTokens,
 		CacheReadTokens:     entry.Message.Usage.CacheReadInputTokens,
-		TotalCost:           entry.CostUSD,
+		TotalCost:           cost,
 		MessageID:           entry.Message.ID,
 		RequestID:           entry.RequestID,
 		UniqueHash:          hash,
@@ -187,4 +193,51 @@ func (p *Parser) isDuplicate(hash string) bool {
 func createHash(input string) string {
 	hash := sha256.Sum256([]byte(input))
 	return fmt.Sprintf("%x", hash)
+}
+
+// calculateCost calculates the cost based on model and token usage
+// Pricing based on Claude 3 models as of 2025
+func calculateCost(model string, usage models.UsageMetrics) float64 {
+	// Pricing per 1M tokens
+	var inputPrice, outputPrice, cacheWritePrice, cacheReadPrice float64
+
+	// Model pricing (in USD per 1M tokens)
+	switch model {
+	case "claude-opus-4-20250514", "claude-opus-4-1-20250805":
+		inputPrice = 15.0
+		outputPrice = 75.0
+		cacheWritePrice = 18.75 // 25% of output price
+		cacheReadPrice = 1.50   // 2% of output price
+	case "claude-sonnet-4-20250514", "claude-sonnet-4-1-20250805":
+		inputPrice = 3.0
+		outputPrice = 15.0
+		cacheWritePrice = 3.75   // 25% of output price
+		cacheReadPrice = 0.30    // 2% of output price
+	case "claude-haiku-4-5-20251001":
+		inputPrice = 0.80
+		outputPrice = 4.0
+		cacheWritePrice = 1.0    // 25% of output price
+		cacheReadPrice = 0.08    // 2% of output price
+	default:
+		// Fallback to Sonnet 4 pricing if model not recognized
+		inputPrice = 3.0
+		outputPrice = 15.0
+		cacheWritePrice = 3.75
+		cacheReadPrice = 0.30
+	}
+
+	// Calculate total cost
+	// Input tokens
+	inputCost := float64(usage.InputTokens) * inputPrice / 1_000_000
+
+	// Output tokens
+	outputCost := float64(usage.OutputTokens) * outputPrice / 1_000_000
+
+	// Cache creation (write) tokens
+	cacheWriteCost := float64(usage.CacheCreationInputTokens) * cacheWritePrice / 1_000_000
+
+	// Cache read tokens
+	cacheReadCost := float64(usage.CacheReadInputTokens) * cacheReadPrice / 1_000_000
+
+	return inputCost + outputCost + cacheWriteCost + cacheReadCost
 }

@@ -16,6 +16,23 @@ import (
 )
 
 func main() {
+	// Setup logging to file
+	home, _ := os.UserHomeDir()
+	logDir := filepath.Join(home, ".config", "eye-in-the-sky")
+	os.MkdirAll(logDir, 0755)
+
+	logFile := filepath.Join(logDir, "tui.log")
+	f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		log.Printf("Warning: Could not open log file: %v", err)
+	} else {
+		defer f.Close()
+		log.SetOutput(f)
+		log.SetFlags(log.LstdFlags | log.Lshortfile)
+	}
+
+	log.Println("=== TUI Dashboard Started ===")
+
 	// Load configuration
 	config, err := app.LoadConfig()
 	if err != nil {
@@ -35,8 +52,7 @@ func main() {
 	}
 
 	// Initialize CCUsage database
-	home, _ := os.UserHomeDir()
-	ccusageDBPath := filepath.Join(home, ".config", "eye-in-the-sky", "ccusage.sqlite")
+	ccusageDBPath := filepath.Join(logDir, "ccusage.sqlite")
 
 	var ccusageDB *ccdb.CCUsageDB
 	ccusageDB, err = ccdb.New(ccusageDBPath)

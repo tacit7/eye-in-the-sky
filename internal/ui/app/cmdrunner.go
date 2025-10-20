@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 
@@ -101,7 +102,7 @@ func NewSession(claudePath, terminal string) tea.Cmd {
 		claudeCmd := fmt.Sprintf(`%s --session-id %s "agent-id: %s  session-id: %s"`,
 			claudePath, sessionID, agentID, sessionID)
 
-		fmt.Fprintf(os.Stderr, "Starting new session in %s: session=%s agent=%s\n",
+		log.Printf("Starting new session in %s: session=%s agent=%s",
 			terminal, truncateID(sessionID, 8), truncateID(agentID, 8))
 
 		var cmd *exec.Cmd
@@ -133,14 +134,14 @@ end tell`, claudeCmd)
 		}
 
 		if err := cmd.Start(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error starting session: %v\n", err)
+			log.Printf("Error starting session: %v", err)
 			return cmdResult{success: false, message: "Failed to create new session", err: err}
 		}
 
 		// Detach - don't wait
 		go cmd.Wait()
 
-		fmt.Fprintf(os.Stderr, "Session started successfully\n")
+		log.Printf("Session started successfully")
 		return cmdResult{
 			success: true,
 			message: fmt.Sprintf("Created session %s with agent %s", truncateID(sessionID, 8), truncateID(agentID, 8)),

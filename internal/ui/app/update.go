@@ -2,7 +2,7 @@ package app
 
 import (
 	"fmt"
-	"os"
+	"log"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -54,7 +54,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.ccusageDB != nil && time.Since(m.lastCCUsageSync) > 30*time.Second {
 			if err := m.loadCCUsageData(); err != nil {
 				// Log but don't fail
-				fmt.Fprintf(os.Stderr, "Warning: Failed to reload ccusage data: %v\n", err)
+				log.Printf("Warning: Failed to reload ccusage data: %v\n", err)
 			}
 		}
 		// Schedule next tick
@@ -157,8 +157,12 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "c":
 		m.listTabs.Set(2) // Claude
 		return m, nil
-	case "u":
+	case "t", "T":
 		m.listTabs.Set(3) // Usage
+		m.statusMsg = "Switched to Usage tab"
+		return m, nil
+	case "u", "U":
+		m.listTabs.Set(3) // Usage (support both u and U for backward compatibility)
 		m.statusMsg = "Switched to Usage tab"
 		return m, nil
 	case "i", "I":

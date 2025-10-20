@@ -3,7 +3,7 @@ package app
 import (
 	"database/sql"
 	"fmt"
-	"os"
+	"log"
 	"time"
 
 	"github.com/charmbracelet/bubbles/help"
@@ -259,7 +259,7 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 	claudePath, err := ResolveClaudePath(config.ClaudePath)
 	if err != nil {
 		// Don't fail startup, just log warning and leave empty
-		fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+		log.Printf("Warning: %v", err)
 		claudePath = ""
 	}
 
@@ -272,7 +272,7 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 
 	// Create tabs for overview (agent list)
 	listTabs := components.NewTabsModel(
-		[]string{"[O]verview", "[P]roject", "[C]laude", "[U]sage"},
+		[]string{"[O]verview", "[P]roject", "[C]laude", "[T]oken Usage"},
 		theme.Colors.Active,
 		theme.Colors.Text,
 	)
@@ -284,7 +284,7 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 	)
 	if err != nil {
 		// Don't fail startup, just log warning
-		fmt.Fprintf(os.Stderr, "Warning: Failed to create markdown renderer: %v\n", err)
+		log.Printf("Warning: Failed to create markdown renderer: %v", err)
 		mdRenderer = nil
 	}
 
