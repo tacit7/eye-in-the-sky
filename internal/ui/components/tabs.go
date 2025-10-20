@@ -3,6 +3,7 @@ package components
 import (
 	"strings"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -57,5 +58,20 @@ func (m *TabsModel) Prev() {
 func (m *TabsModel) Set(index int) {
 	if index >= 0 && index < len(m.Titles) {
 		m.ActiveIndex = index
+	}
+}
+
+// Update handles mouse clicks on tabs
+func (m *TabsModel) Update(msg tea.Msg) {
+	if mouse, ok := msg.(tea.MouseMsg); ok && mouse.Type == tea.MouseLeft {
+		// Approximate click region widths (you can store actual positions if needed)
+		width := 10 // assume fixed width per tab for simplicity
+		m.ActiveIndex = mouse.X / (width + 2)
+		if m.ActiveIndex >= len(m.Titles) {
+			m.ActiveIndex = len(m.Titles) - 1
+		}
+		if m.ActiveIndex < 0 {
+			m.ActiveIndex = 0
+		}
 	}
 }

@@ -137,10 +137,14 @@ func (m *Model) renderDetailView() string {
 	b.WriteString(header)
 	b.WriteString("\n")
 
-	// Tabs
-	tabs := m.tabs.View()
-	b.WriteString(tabs)
-	b.WriteString("\n\n")
+	// Tabs with bottom border
+	tabsBox := lipgloss.NewStyle().
+		BorderBottom(true).
+		BorderForeground(lipgloss.Color(m.theme.Colors.Border)).
+		Width(m.width).
+		Render(m.tabs.View())
+	b.WriteString(tabsBox)
+	b.WriteString("\n")
 
 	// Bordered content
 	b.WriteString(contentBox)

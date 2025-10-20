@@ -13,6 +13,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		return m.handleKeyPress(msg)
 
+	case tea.MouseMsg:
+		// Handle mouse clicks in detail view for tab navigation
+		if m.currentView == ViewDetail && msg.Type == tea.MouseLeft {
+			m.tabs.Update(msg)
+			// Load data for the new tab
+			if err := m.loadTabData(); err != nil {
+				m.err = err
+			}
+		}
+		return m, nil
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
