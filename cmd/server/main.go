@@ -22,8 +22,7 @@ func isRunningAsMCP() bool {
 
 func main() {
 	var (
-		dbPath = flag.String("db", "./data/agents.db", "SQLite database path")
-		help   = flag.Bool("help", false, "Show help")
+		help = flag.Bool("help", false, "Show help")
 	)
 	flag.Parse()
 
@@ -34,16 +33,23 @@ func main() {
 		os.Exit(0)
 	}
 
-	// Ensure data directory exists
-	if err := os.MkdirAll(filepath.Dir(*dbPath), 0755); err != nil {
-		log.Fatalf("Failed to create data directory: %v", err)
+	// Get database path from standard config location
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		log.Fatalf("Failed to get home directory: %v", err)
+	}
+	dbPath := filepath.Join(homeDir, ".config", "eye-in-the-sky", "agents.db")
+
+	// Ensure config directory exists
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
+		log.Fatalf("Failed to create config directory: %v", err)
 	}
 
 	fmt.Fprintf(os.Stderr, "🔍 Eye in the Sky MCP Server - Agent ID: 6d09ae9e\n")
-	fmt.Fprintf(os.Stderr, "📂 Database: %s\n", *dbPath)
+	fmt.Fprintf(os.Stderr, "📂 Database: %s\n", dbPath)
 
 	// Initialize database
-	db, err := database.New(*dbPath)
+	db, err := database.New(dbPath)
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}

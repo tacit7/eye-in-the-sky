@@ -329,6 +329,69 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// j/k navigation for split-pane tabs
+	switch msg.String() {
+	case "j", "down":
+		// Navigate down in the current tab's list
+		switch m.tabs.ActiveIndex {
+		case 1: // Commits
+			if m.commitsIndex < len(m.commits)-1 {
+				m.commitsIndex++
+				m.rightPaneOffset = 0 // Reset right pane scroll
+			}
+		case 2: // Logs
+			if m.logsIndex < len(m.logs)-1 {
+				m.logsIndex++
+				m.rightPaneOffset = 0
+			}
+		case 3: // Notes
+			if m.notesIndex < len(m.notes)-1 {
+				m.notesIndex++
+				m.rightPaneOffset = 0
+			}
+		case 4: // Actions
+			if m.actionsIndex < len(m.actions)-1 {
+				m.actionsIndex++
+				m.rightPaneOffset = 0
+			}
+		default:
+			// Overview tab - use default scrolling
+			m.detailOffset++
+		}
+		return m, nil
+
+	case "k", "up":
+		// Navigate up in the current tab's list
+		switch m.tabs.ActiveIndex {
+		case 1: // Commits
+			if m.commitsIndex > 0 {
+				m.commitsIndex--
+				m.rightPaneOffset = 0
+			}
+		case 2: // Logs
+			if m.logsIndex > 0 {
+				m.logsIndex--
+				m.rightPaneOffset = 0
+			}
+		case 3: // Notes
+			if m.notesIndex > 0 {
+				m.notesIndex--
+				m.rightPaneOffset = 0
+			}
+		case 4: // Actions
+			if m.actionsIndex > 0 {
+				m.actionsIndex--
+				m.rightPaneOffset = 0
+			}
+		default:
+			// Overview tab - use default scrolling
+			if m.detailOffset > 0 {
+				m.detailOffset--
+			}
+		}
+		return m, nil
+	}
+
 	if Matches(msg, m.keys.ScrollDown) {
 		// Scroll down
 		m.detailOffset++

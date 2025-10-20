@@ -619,65 +619,128 @@ func (m *Model) renderHelp() string {
 	)
 }
 
-// renderCommitsTab renders the commits tab content
+// renderCommitsTab renders the commits tab content with split-pane view
 func (m *Model) renderCommitsTab() string {
-	if len(m.commits) == 0 {
+	if m.selectedAgent == nil {
+		return m.styles.Subtle.Render("No agent selected")
+	}
+
+	// Build item list for left pane
+	items := make([]string, len(m.commits))
+	for i, commit := range m.commits {
+		date := commit.Timestamp.Format("2006-01-02")
+		hash := truncateCommitHash(commit.CommitHash, 8)
+		subject := truncate(commit.CommitMessage, 40)
+		items[i] = fmt.Sprintf("%s  %s  %s", date, hash, subject)
+	}
+
+	// Build detail content for right pane
+	var detailContent string
+	if m.commitsIndex >= 0 && m.commitsIndex < len(m.commits) {
+		detailContent = m.renderCommitDetails(m.commits[m.commitsIndex])
+	} else if len(m.commits) == 0 {
 		return m.styles.Subtle.Render("No commits found")
 	}
-	var b strings.Builder
-	for _, c := range m.commits {
-		line := fmt.Sprintf("%s %s %s",
-			c.Timestamp.Format("15:04:05"),
-			truncateCommitHash(c.CommitHash, 8),
-			truncate(c.CommitMessage, 60))
-		b.WriteString(line + "\n")
-	}
-	return b.String()
+
+	return m.renderSplitPaneContent(items, m.commitsIndex, detailContent)
 }
 
-// renderLogsTab renders the logs tab content
+// renderLogsTab renders the logs tab content with split-pane view
 func (m *Model) renderLogsTab() string {
 	if len(m.logs) == 0 {
 		return m.styles.Subtle.Render("No logs found")
 	}
-	var b strings.Builder
-	for _, log := range m.logs {
-		line := fmt.Sprintf("%s %s %s",
-			log.Timestamp.Format("15:04:05"),
-			log.Type,
-			truncate(log.Message, 60))
-		b.WriteString(line + "\n")
+
+	// Build item list for left pane
+	items := make([]string, len(m.logs))
+	for i, log := range m.logs {
+		timestamp := log.Timestamp.Format("15:04:05")
+		logType := truncate(log.Type, 10)
+		items[i] = fmt.Sprintf("%s  %-10s", timestamp, logType)
 	}
-	return b.String()
+
+	// Build detail content for right pane
+	var detailContent string
+	if m.logsIndex >= 0 && m.logsIndex < len(m.logs) {
+		detailContent = m.renderLogDetails(m.logs[m.logsIndex])
+	}
+
+	return m.renderSplitPaneContent(items, m.logsIndex, detailContent)
 }
 
-// renderNotesTab renders the notes tab content
+// renderNotesTab renders the notes tab content with split-pane view
 func (m *Model) renderNotesTab() string {
 	if len(m.notes) == 0 {
 		return m.styles.Subtle.Render("No notes available")
 	}
-	var b strings.Builder
-	for _, note := range m.notes {
-		line := fmt.Sprintf("%s %s",
-			note.Timestamp.Format("15:04:05"),
-			truncate(note.Content, 80))
-		b.WriteString(line + "\n")
+
+	// Build item list for left pane
+	items := make([]string, len(m.notes))
+	for i, note := range m.notes {
+		timestamp := note.Timestamp.Format("15:04:05")
+		preview := truncate(note.Content, 30)
+		items[i] = fmt.Sprintf("%s  %s", timestamp, preview)
 	}
-	return b.String()
+
+	// Build detail content for right pane
+	var detailContent string
+	if m.notesIndex >= 0 && m.notesIndex < len(m.notes) {
+		detailContent = m.renderNoteDetails(m.notes[m.notesIndex])
+	}
+
+	return m.renderSplitPaneContent(items, m.notesIndex, detailContent)
 }
 
-// renderActionsTab renders the actions tab content
+// renderActionsTab renders the actions tab content with split-pane view
 func (m *Model) renderActionsTab() string {
 	if len(m.actions) == 0 {
 		return m.styles.Subtle.Render("No actions recorded")
 	}
-	var b strings.Builder
-	for _, a := range m.actions {
-		line := fmt.Sprintf("%s %-12s %s",
-			a.Timestamp.Format("15:04:05"),
-			a.ActionType,
-			truncate(a.Description, 60))
-		b.WriteString(line + "\n")
+
+	// Build item list for left pane
+	items := make([]string, len(m.actions))
+	for i, action := range m.actions {
+		timestamp := action.Timestamp.Format("15:04:05")
+		actionType := truncate(action.ActionType, 15)
+		items[i] = fmt.Sprintf("%s  %-15s", timestamp, actionType)
 	}
+
+	// Build detail content for right pane
+	var detailContent string
+	if m.actionsIndex >= 0 && m.actionsIndex < len(m.actions) {
+		detailContent = m.renderActionDetails(m.actions[m.actionsIndex])
+	}
+
+	return m.renderSplitPaneContent(items, m.actionsIndex, detailContent)
+}
+
+// renderActionDetails renders the full action details
+func (m *Model) renderActionDetails(action Action) string {
+	var b strings.Builder
+
+	// Action type
+	b.WriteString(m.styles.Primary.Render("Action: "))
+	b.WriteString(m.styles.Text.Render(action.ActionType))
+	b.WriteString("\n")
+
+	// Timestamp
+	b.WriteString(m.styles.Primary.Render("Time: "))
+	b.WriteString(m.styles.Text.Render(action.Timestamp.Format("2006-01-02 15:04:05")))
+	b.WriteString("\n\n")
+
+	// Description
+	b.WriteString(m.styles.Title.Render("Description"))
+	b.WriteString("\n")
+	b.WriteString(m.styles.Text.Render(action.Description))
+	b.WriteString("\n\n")
+
+	// Details (if available)
+	if action.Details != "" {
+		b.WriteString(m.styles.Title.Render("Details"))
+		b.WriteString("\n")
+		b.WriteString(m.styles.Text.Render(action.Details))
+		b.WriteString("\n")
+	}
+
 	return b.String()
 }

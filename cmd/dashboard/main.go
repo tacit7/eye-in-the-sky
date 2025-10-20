@@ -12,22 +12,6 @@ import (
 )
 
 func main() {
-	// Get executable directory for config paths
-	execPath, err := os.Executable()
-	if err != nil {
-		log.Fatalf("Failed to get executable path: %v", err)
-	}
-	execDir := filepath.Dir(execPath)
-	projectRoot := filepath.Dir(execDir) // bin is one level down from project root
-
-	// Command line flags with paths relative to project root
-	defaultDBPath := filepath.Join(projectRoot, "data", "agents.db")
-	defaultConfigPath := filepath.Join(projectRoot, "cmd", "dashboard", "config", "config.json")
-	defaultKeysPath := filepath.Join(projectRoot, "cmd", "dashboard", "config", "keys.json")
-
-	dbPath := flag.String("db", defaultDBPath, "Path to the SQLite database")
-	configPath := flag.String("config", defaultConfigPath, "Path to config file")
-	keysPath := flag.String("keys", defaultKeysPath, "Path to keys config file")
 	help := flag.Bool("help", false, "Show help")
 	flag.Parse()
 
@@ -38,8 +22,22 @@ func main() {
 		os.Exit(0)
 	}
 
+	// Get database path from standard config location
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		log.Fatalf("Failed to get home directory: %v", err)
+	}
+	dbPath := filepath.Join(homeDir, ".config", "eye-in-the-sky", "agents.db")
+
+	// Ensure config directory exists
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
+		log.Fatalf("Failed to create config directory: %v", err)
+	}
+
+	fmt.Fprintf(os.Stderr, "📂 Database: %s\n", dbPath)
+
 	// Initialize database
-	db, err := database.New(*dbPath)
+	db, err := database.New(dbPath)
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
@@ -50,8 +48,8 @@ func main() {
 		log.Fatalf("Database health check failed: %v", err)
 	}
 
-	// Create and run dashboard
-	app, err := dashboard.NewApp(db, *configPath, *keysPath)
+	// Create and run dashboard (config paths from app package)
+	app, err := dashboard.NewApp(db, "", "")
 	if err != nil {
 		log.Fatalf("Failed to create dashboard: %v", err)
 	}

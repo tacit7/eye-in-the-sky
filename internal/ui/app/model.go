@@ -76,6 +76,8 @@ type Model struct {
 	notesOffset   int
 	logsIndex     int
 	logsOffset    int
+	actionsIndex  int
+	actionsOffset int
 
 	// Right pane scroll state
 	rightPaneOffset int

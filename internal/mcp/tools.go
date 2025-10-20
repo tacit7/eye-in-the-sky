@@ -595,6 +595,7 @@ func (t *Tools) StartSession(args StartSessionArgs) (StartSessionResult, error) 
 
 	// Detect window ID on macOS if not provided
 	var windowID *string
+	var terminalApp *string
 	if args.WindowID != nil && *args.WindowID != "" {
 		windowID = args.WindowID
 	} else if runtime.GOOS == "darwin" {
@@ -605,22 +606,25 @@ func (t *Tools) StartSession(args StartSessionArgs) (StartSessionResult, error) 
 			// Format: "Application:WindowID"
 			detectedWindowID := fmt.Sprintf("%s:%s", winInfo.Application, winInfo.ID)
 			windowID = &detectedWindowID
+			// Store terminal application separately
+			terminalApp = &winInfo.Application
 		}
 		// If detection fails, just continue without window ID
 	}
 
 	// Create agent
 	agent := &database.Agent{
-		ID:                 agentID,
-		Status:             database.StatusActive,
-		Source:             database.SourceWorktree,
-		Description:        args.AgentDescription,
-		GitWorktreePath:    args.WorktreePath,
-		FeatureDescription: &args.Description,
-		ProjectName:        args.ProjectName,
-		PersonaID:          personaID,
-		WindowID:           windowID,
-		LastActivityAt:     timePtr(time.Now()),
+		ID:                  agentID,
+		Status:              database.StatusActive,
+		Source:              database.SourceWorktree,
+		Description:         args.AgentDescription,
+		GitWorktreePath:     args.WorktreePath,
+		FeatureDescription:  &args.Description,
+		ProjectName:         args.ProjectName,
+		PersonaID:           personaID,
+		WindowID:            windowID,
+		TerminalApplication: terminalApp,
+		LastActivityAt:      timePtr(time.Now()),
 	}
 
 	if err := t.db.CreateAgent(agent); err != nil {

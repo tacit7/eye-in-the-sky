@@ -58,7 +58,7 @@ func DefaultConfig() Config {
 	homeDir, _ := os.UserHomeDir()
 	return Config{
 		RefreshInterval: 5,
-		DatabasePath:    filepath.Join(homeDir, "projects", "eye-in-the-sky", "data", "agents.db"),
+		DatabasePath:    filepath.Join(homeDir, ".config", "eye-in-the-sky", "agents.db"),
 		DefaultView:     "list",
 		ShowAllAgents:   false,
 		Theme:           "default",
@@ -95,7 +95,7 @@ var ConfigDir = func() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to get home directory: %w", err)
 	}
-	return filepath.Join(homeDir, ".config", ".eyeinthesky"), nil
+	return filepath.Join(homeDir, ".config", "eye-in-the-sky"), nil
 }
 
 // LoadConfig loads configuration from file or creates default

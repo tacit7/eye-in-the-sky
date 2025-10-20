@@ -33,8 +33,10 @@ claude-code-mcp/
 ├── web/
 │   ├── templates/                 # HTML templates
 │   └── static/                    # CSS and JavaScript
-├── data/agents.db                 # SQLite database (created at runtime)
 └── tests/                         # Go test files
+
+### Database Location
+SQLite database: `~/.config/eye-in-the-sky/agents.db` (created at runtime)
 ```
 
 ## Key Concepts
@@ -68,14 +70,8 @@ The system exposes these MCP tools for Claude Code integration:
 # Build the application
 go build -o bin/eye-in-the-sky ./cmd/server
 
-# Run with default settings
+# Run with default settings (database at ~/.config/eye-in-the-sky/agents.db)
 ./bin/eye-in-the-sky
-
-# Run with custom port
-./bin/eye-in-the-sky -port 8081
-
-# Run with custom database path
-./bin/eye-in-the-sky -db ./custom/path/agents.db
 ```
 
 ### Testing
@@ -98,10 +94,10 @@ go test -v ./...
 ### Database Management
 ```bash
 # The SQLite database is created automatically at runtime
-# Default location: ./data/agents.db
+# Location: ~/.config/eye-in-the-sky/agents.db
 
 # To reset the database, simply delete the file
-rm ./data/agents.db
+rm ~/.config/eye-in-the-sky/agents.db
 
 # Database schema is initialized on first run
 ```

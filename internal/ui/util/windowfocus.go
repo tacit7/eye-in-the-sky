@@ -10,7 +10,7 @@ import (
 
 // WindowFocuser provides window focusing functionality
 type WindowFocuser interface {
-	Focus(windowID string) error
+	Focus(windowID string, terminalApp string) error
 }
 
 // macOSWindowFocuser implements WindowFocuser for macOS using AppleScript
@@ -29,22 +29,25 @@ func NewWindowFocuser() WindowFocuser {
 }
 
 // Focus brings a window to the front on macOS
-func (f *macOSWindowFocuser) Focus(windowID string) error {
+func (f *macOSWindowFocuser) Focus(windowID string, terminalApp string) error {
 	if windowID == "" {
 		return fmt.Errorf("empty window ID")
 	}
 
-	// Use existing window manager to bring window to front
-	// Assume windowID format is "application:identifier"
-	// For now, we'll use Claude as the application
-	return f.manager.BringToFront("Claude", windowID)
+	// Use the terminal application from the agent record
+	// Default to "iTerm2" if not specified
+	if terminalApp == "" {
+		terminalApp = "iTerm2"
+	}
+
+	return f.manager.BringToFront(terminalApp, windowID)
 }
 
 // stubWindowFocuser is a stub implementation for unsupported platforms
 type stubWindowFocuser struct{}
 
 // Focus returns a not implemented error on unsupported platforms
-func (f *stubWindowFocuser) Focus(windowID string) error {
+func (f *stubWindowFocuser) Focus(windowID string, terminalApp string) error {
 	return fmt.Errorf("window focusing not implemented on %s", runtime.GOOS)
 }
 
@@ -56,7 +59,7 @@ type FocusResult struct {
 }
 
 // FocusWindowCmd returns a tea.Cmd that focuses a window
-func FocusWindowCmd(focuser WindowFocuser, windowID string) tea.Cmd {
+func FocusWindowCmd(focuser WindowFocuser, windowID string, terminalApp string) tea.Cmd {
 	return func() tea.Msg {
 		if windowID == "" {
 			return FocusResult{
@@ -66,7 +69,7 @@ func FocusWindowCmd(focuser WindowFocuser, windowID string) tea.Cmd {
 			}
 		}
 
-		if err := focuser.Focus(windowID); err != nil {
+		if err := focuser.Focus(windowID, terminalApp); err != nil {
 			return FocusResult{
 				Success: false,
 				Message: "Failed to focus window",

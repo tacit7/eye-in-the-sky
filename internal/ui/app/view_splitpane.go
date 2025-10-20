@@ -115,3 +115,81 @@ func (m *Model) renderFooterWithKeys(keys string) string {
 
 	return footerStyle.Render(keys)
 }
+
+// renderSplitPaneContent renders just the split-pane content for tabs (no header/footer)
+func (m *Model) renderSplitPaneContent(
+	items []string,
+	selectedIndex int,
+	detailContent string,
+) string {
+	if len(items) == 0 {
+		return ""
+	}
+
+	// Calculate pane widths (40/60 split)
+	leftWidth := (m.width * 40) / 100
+	rightWidth := m.width - leftWidth - 7 // Account for borders and padding
+
+	// Available height for content (tab view has less space)
+	contentHeight := m.height - 12 // Reserve for header, tabs, footer, borders
+
+	if contentHeight < 5 {
+		contentHeight = 5
+	}
+
+	// Left pane: item list
+	var leftBuilder strings.Builder
+	for i, item := range items {
+		if i == selectedIndex {
+			leftBuilder.WriteString(m.styles.Primary.Reverse(true).Render(item))
+		} else {
+			leftBuilder.WriteString(m.styles.Text.Render(item))
+		}
+		leftBuilder.WriteString("\n")
+	}
+
+	// Right pane: detail content with scrolling
+	rightContent := detailContent
+	if rightContent == "" {
+		rightContent = m.styles.Subtle.Render("Select an item to view details")
+	}
+
+	// Apply scrolling to right pane content
+	rightLines := strings.Split(rightContent, "\n")
+	visibleLines := contentHeight - 2
+	if visibleLines < 1 {
+		visibleLines = 1
+	}
+
+	// Window the content based on scroll offset
+	startLine := m.rightPaneOffset
+	endLine := startLine + visibleLines
+	if startLine >= len(rightLines) {
+		startLine = 0
+		m.rightPaneOffset = 0
+	}
+	if endLine > len(rightLines) {
+		endLine = len(rightLines)
+	}
+
+	visibleContent := strings.Join(rightLines[startLine:endLine], "\n")
+
+	// Style panes
+	leftPane := lipgloss.NewStyle().
+		Width(leftWidth).
+		Height(contentHeight).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderRight(true).
+		BorderForeground(lipgloss.Color(m.theme.Colors.Border)).
+		Padding(0, 1).
+		Render(leftBuilder.String())
+
+	rightPane := lipgloss.NewStyle().
+		Width(rightWidth).
+		Height(contentHeight).
+		Padding(0, 1).
+		Render(visibleContent)
+
+	// Join panes horizontally
+	return lipgloss.JoinHorizontal(lipgloss.Top, leftPane, rightPane)
+}
