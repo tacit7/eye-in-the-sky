@@ -237,6 +237,24 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Tab navigation (left/right arrow keys or tab/shift-tab)
+	switch msg.String() {
+	case "tab", "right":
+		m.tabs.Next()
+		// Load data for the new tab
+		if err := m.loadTabData(); err != nil {
+			m.err = err
+		}
+		return m, nil
+	case "shift+tab", "left":
+		m.tabs.Prev()
+		// Load data for the new tab
+		if err := m.loadTabData(); err != nil {
+			m.err = err
+		}
+		return m, nil
+	}
+
 	// View navigation keys (only from Detail view)
 	switch msg.String() {
 	case "t":

@@ -93,17 +93,29 @@ func (m *Model) renderListView() string {
 	return b.String()
 }
 
-// renderDetailView renders the agent detail view
+// renderDetailView renders the agent detail view with tabs
 func (m *Model) renderDetailView() string {
 	if m.selectedAgent == nil {
 		return m.styles.Subtle.Render("No agent selected")
 	}
 
-	// Build detail content
-	detailContent := m.renderAgentDetails()
+	// Build detail content based on active tab
+	var detailContent string
+	switch m.tabs.ActiveIndex {
+	case 0: // Commits
+		detailContent = m.renderCommitsTab()
+	case 1: // Logs
+		detailContent = m.renderLogsTab()
+	case 2: // Notes
+		detailContent = m.renderNotesTab()
+	case 3: // Actions
+		detailContent = m.renderActionsTab()
+	default:
+		detailContent = m.renderAgentDetails()
+	}
 
-	// Reserve space for header, footer, and borders
-	visibleHeight := m.height - 8
+	// Reserve space for header, tabs, footer, and borders
+	visibleHeight := m.height - 10
 	if visibleHeight < 1 {
 		visibleHeight = 10
 	}
@@ -123,6 +135,11 @@ func (m *Model) renderDetailView() string {
 	// Top header
 	header := m.renderHeader()
 	b.WriteString(header)
+	b.WriteString("\n")
+
+	// Tabs
+	tabs := m.tabs.View()
+	b.WriteString(tabs)
 	b.WriteString("\n\n")
 
 	// Bordered content
@@ -594,4 +611,104 @@ func (m *Model) renderHelp() string {
 		lipgloss.Center, lipgloss.Center,
 		helpBox,
 	)
+}
+
+// renderCommitsTab renders the commits tab content
+func (m *Model) renderCommitsTab() string {
+	var b strings.Builder
+
+	if len(m.commits) == 0 {
+		b.WriteString(m.styles.Subtle.Render("No commits found"))
+		return b.String()
+	}
+
+	for _, commit := range m.commits {
+		line := fmt.Sprintf("%s  %s  %s",
+			commit.Timestamp.Format("2006-01-02 15:04"),
+			truncateCommitHash(commit.CommitHash, 8),
+			truncate(commit.CommitMessage, 80),
+		)
+		b.WriteString(m.styles.Text.Render(line))
+		b.WriteString("\n")
+	}
+
+	return b.String()
+}
+
+// renderLogsTab renders the logs tab content
+func (m *Model) renderLogsTab() string {
+	var b strings.Builder
+
+	if len(m.logs) == 0 {
+		b.WriteString(m.styles.Subtle.Render("No logs found"))
+		return b.String()
+	}
+
+	for _, log := range m.logs {
+		timestamp := log.Timestamp.Format("15:04:05")
+		logType := truncate(log.Type, 10)
+		message := truncate(log.Message, 100)
+
+		typeStyle := m.styles.Text
+		switch log.Type {
+		case "error":
+			typeStyle = m.styles.Failed
+		case "warning":
+			typeStyle = m.styles.Idle
+		case "info":
+			typeStyle = m.styles.Active
+		}
+
+		line := fmt.Sprintf("%s  %s  %s",
+			m.styles.Subtle.Render(timestamp),
+			typeStyle.Render(logType),
+			m.styles.Text.Render(message),
+		)
+		b.WriteString(line)
+		b.WriteString("\n")
+	}
+
+	return b.String()
+}
+
+// renderNotesTab renders the notes tab content
+func (m *Model) renderNotesTab() string {
+	var b strings.Builder
+
+	if len(m.notes) == 0 {
+		b.WriteString(m.styles.Subtle.Render("No notes found"))
+		return b.String()
+	}
+
+	for _, note := range m.notes {
+		timestamp := note.Timestamp.Format("2006-01-02 15:04")
+		b.WriteString(m.styles.Primary.Render(timestamp))
+		b.WriteString("\n")
+		b.WriteString(m.styles.Text.Render(note.Content))
+		b.WriteString("\n\n")
+	}
+
+	return b.String()
+}
+
+// renderActionsTab renders the actions tab content
+func (m *Model) renderActionsTab() string {
+	var b strings.Builder
+
+	if len(m.actions) == 0 {
+		b.WriteString(m.styles.Subtle.Render("No actions found"))
+		return b.String()
+	}
+
+	for _, action := range m.actions {
+		line := fmt.Sprintf("%s  %-15s  %s",
+			action.Timestamp.Format("15:04:05"),
+			action.ActionType,
+			action.Description,
+		)
+		b.WriteString(m.styles.Text.Render(line))
+		b.WriteString("\n")
+	}
+
+	return b.String()
 }

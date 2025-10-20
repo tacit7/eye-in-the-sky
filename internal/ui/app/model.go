@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/help"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/tacit7/eye-in-the-sky/internal/ui/components"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/util"
 )
 
@@ -44,6 +45,9 @@ type Model struct {
 
 	// Claude binary path
 	claudePath string
+
+	// Tabs for detail view
+	tabs components.TabsModel
 
 	// View state
 	currentView ViewMode
@@ -213,6 +217,13 @@ func NewModel(db *sql.DB) (*Model, error) {
 		claudePath = ""
 	}
 
+	// Create tabs for detail view
+	tabs := components.NewTabsModel(
+		[]string{"Commits", "Logs", "Notes", "Actions"},
+		theme.Colors.Active,
+		theme.Colors.Text,
+	)
+
 	m := &Model{
 		db:            db,
 		config:        config,
@@ -223,6 +234,7 @@ func NewModel(db *sql.DB) (*Model, error) {
 		showHelp:      false,
 		windowFocuser: windowFocuser,
 		claudePath:    claudePath,
+		tabs:          tabs,
 		currentView:   ViewList,
 		showAll:       config.ShowAllAgents,
 		agents:        []Agent{},
@@ -501,6 +513,21 @@ func (m *Model) loadLogs() error {
 	}
 
 	return rows.Err()
+}
+
+// loadTabData loads data for the currently active tab
+func (m *Model) loadTabData() error {
+	if m.selectedAgent == nil {
+		return nil
+	}
+
+	switch m.tabs.ActiveIndex {
+	case 1: // Logs tab
+		return m.loadLogs()
+	default:
+		// Other tabs (Commits, Notes, Actions) already loaded by loadAgentDetails
+		return nil
+	}
 }
 
 // SelectedAgent returns the currently selected agent
