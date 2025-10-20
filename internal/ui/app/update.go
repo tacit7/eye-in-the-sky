@@ -2,7 +2,6 @@ package app
 
 import (
 	"fmt"
-	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/util"
@@ -101,13 +100,6 @@ func (m *Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Fallback logging (temporary)
-	if msg.String() == "j" {
-		fmt.Fprintf(os.Stderr, "fallback key j used\n")
-	}
-	if msg.String() == "k" {
-		fmt.Fprintf(os.Stderr, "fallback key k used\n")
-	}
 
 	// List-specific keys (only if we're in list view)
 	if m.currentView == ViewList {
@@ -119,8 +111,6 @@ func (m *Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleListKeys handles keys in list view
 func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	fmt.Fprintf(os.Stderr, "handleListKeys called with key: %s\n", msg.String())
-
 	if Matches(msg, m.keys.NavigateDown) {
 		if m.selectedIndex < len(m.agents)-1 {
 			m.selectedIndex++
@@ -163,10 +153,8 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if Matches(msg, m.keys.NewSession) {
-		fmt.Fprintf(os.Stderr, "NewSession key pressed! claudePath='%s' terminal='%s'\n", m.claudePath, m.config.DefaultTerminal)
 		if m.claudePath == "" {
 			m.statusMsg = "ERROR: Claude binary not found in PATH"
-			fmt.Fprintf(os.Stderr, "ERROR: Claude binary not found\n")
 			return m, nil
 		}
 		m.statusMsg = "Creating new session..."
