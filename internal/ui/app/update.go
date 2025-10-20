@@ -253,6 +253,30 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.err = err
 		}
 		return m, nil
+	case "c":
+		m.tabs.Set(0) // Commits tab
+		if err := m.loadTabData(); err != nil {
+			m.err = err
+		}
+		return m, nil
+	case "l":
+		m.tabs.Set(1) // Logs tab
+		if err := m.loadTabData(); err != nil {
+			m.err = err
+		}
+		return m, nil
+	case "n":
+		m.tabs.Set(2) // Notes tab
+		if err := m.loadTabData(); err != nil {
+			m.err = err
+		}
+		return m, nil
+	case "a":
+		m.tabs.Set(3) // Actions tab
+		if err := m.loadTabData(); err != nil {
+			m.err = err
+		}
+		return m, nil
 	}
 
 	// View navigation keys (only from Detail view)
