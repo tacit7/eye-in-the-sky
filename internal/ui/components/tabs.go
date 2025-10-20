@@ -7,10 +7,18 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// TabZone defines the clickable region for a tab
+type TabZone struct {
+	StartX int
+	EndX   int
+	Title  string
+}
+
 // TabsModel handles which tab is active, rendering, and keyboard navigation
 type TabsModel struct {
 	Titles      []string
 	ActiveIndex int
+	Zones       []TabZone
 	StyleActive lipgloss.Style
 	StyleNormal lipgloss.Style
 }
@@ -31,16 +39,29 @@ func NewTabsModel(titles []string, activeColor, normalColor string) TabsModel {
 	}
 }
 
-// View renders the tabs
-func (m TabsModel) View() string {
+// View renders the tabs and calculates click zones
+func (m *TabsModel) View() string {
 	var out []string
+	m.Zones = make([]TabZone, 0)
+	cursor := 0
+
 	for i, t := range m.Titles {
+		var rendered string
 		if i == m.ActiveIndex {
-			out = append(out, m.StyleActive.Render(t))
+			rendered = m.StyleActive.Render(t)
 		} else {
-			out = append(out, m.StyleNormal.Render(t))
+			rendered = m.StyleNormal.Render(t)
 		}
+		width := lipgloss.Width(rendered)
+		m.Zones = append(m.Zones, TabZone{
+			StartX: cursor,
+			EndX:   cursor + width,
+			Title:  t,
+		})
+		cursor += width + 1 // +1 for space between tabs
+		out = append(out, rendered)
 	}
+
 	return strings.Join(out, " ")
 }
 
@@ -61,17 +82,14 @@ func (m *TabsModel) Set(index int) {
 	}
 }
 
-// Update handles mouse clicks on tabs
+// Update handles mouse clicks on tabs using zone detection
 func (m *TabsModel) Update(msg tea.Msg) {
 	if mouse, ok := msg.(tea.MouseMsg); ok && mouse.Type == tea.MouseLeft {
-		// Approximate click region widths (you can store actual positions if needed)
-		width := 10 // assume fixed width per tab for simplicity
-		m.ActiveIndex = mouse.X / (width + 2)
-		if m.ActiveIndex >= len(m.Titles) {
-			m.ActiveIndex = len(m.Titles) - 1
-		}
-		if m.ActiveIndex < 0 {
-			m.ActiveIndex = 0
+		for i, z := range m.Zones {
+			if mouse.X >= z.StartX && mouse.X < z.EndX {
+				m.ActiveIndex = i
+				break
+			}
 		}
 	}
 }
