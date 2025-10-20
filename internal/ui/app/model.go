@@ -219,7 +219,7 @@ func NewModel(db *sql.DB) (*Model, error) {
 
 	// Create tabs for detail view
 	tabs := components.NewTabsModel(
-		[]string{"Overview", "Commits", "Logs", "Notes", "Actions"},
+		[]string{"[O]verview", "[C]ommits", "[L]ogs", "[N]otes", "[A]ctions"},
 		theme.Colors.Active,
 		theme.Colors.Text,
 	)
