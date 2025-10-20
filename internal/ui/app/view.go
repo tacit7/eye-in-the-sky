@@ -203,23 +203,69 @@ func (m *Model) renderLogDetails(log Log) string {
 
 // renderHeader renders the application header
 func (m *Model) renderHeader() string {
-	title := "Eye in the Sky - Agent Dashboard"
+	// App name and icon
+	appName := m.styles.Title.Render("■ eye-in-the-sky")
 
+	// Current path/view indicator
+	var viewPath string
+	switch m.currentView {
+	case ViewList:
+		viewPath = "/agents"
+	case ViewDetail:
+		if m.selectedAgent != nil {
+			viewPath = fmt.Sprintf("/agents/%s", truncateID(m.selectedAgent.ID, 8))
+		} else {
+			viewPath = "/agents/detail"
+		}
+	case ViewTasks:
+		viewPath = "/agents/tasks"
+	case ViewCommits:
+		viewPath = "/agents/commits"
+	case ViewNotes:
+		viewPath = "/agents/notes"
+	case ViewLogs:
+		viewPath = "/agents/logs"
+	}
+
+	pathStyle := m.styles.Subtle.Render(viewPath)
+
+	// Top line: app name + path
+	topLine := lipgloss.JoinHorizontal(
+		lipgloss.Left,
+		appName,
+		"  ",
+		pathStyle,
+	)
+
+	// Stats bar
 	filterStatus := "Active"
 	if m.showAll {
 		filterStatus = "All"
 	}
 
-	info := fmt.Sprintf("Agents: %d | Filter: %s | Last refresh: %s",
+	stats := fmt.Sprintf("Agents: %d │ Filter: %s │ Last refresh: %s",
 		len(m.agents),
 		filterStatus,
 		m.lastRefresh.Format("15:04:05"),
 	)
 
-	titleStyle := m.styles.Title.Width(m.width)
-	infoStyle := m.styles.Subtle.Width(m.width)
+	statsLine := m.styles.Subtle.Render(stats)
 
-	return titleStyle.Render(title) + "\n" + infoStyle.Render(info)
+	// Create bordered header box
+	headerContent := lipgloss.JoinVertical(
+		lipgloss.Left,
+		topLine,
+		statsLine,
+	)
+
+	headerBox := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder(), false, false, true, false).
+		BorderForeground(lipgloss.Color(m.theme.Colors.Border)).
+		Width(m.width - 2).
+		Padding(0, 1).
+		Render(headerContent)
+
+	return headerBox
 }
 
 // renderFooter renders the application footer with key bindings
