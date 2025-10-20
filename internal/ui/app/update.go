@@ -390,6 +390,50 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
+
+	case "h":
+		// Scroll right pane up (only for split-pane tabs)
+		if m.tabs.ActiveIndex >= 1 && m.tabs.ActiveIndex <= 4 {
+			if m.rightPaneOffset > 0 {
+				m.rightPaneOffset--
+			}
+			return m, nil
+		}
+
+	case "l":
+		// Scroll right pane down (only for split-pane tabs)
+		if m.tabs.ActiveIndex >= 1 && m.tabs.ActiveIndex <= 4 {
+			m.rightPaneOffset++
+			return m, nil
+		}
+
+	case "ctrl+u":
+		// Page up in right pane (or overview)
+		if m.tabs.ActiveIndex >= 1 && m.tabs.ActiveIndex <= 4 {
+			// Split-pane tabs: page up right pane
+			m.rightPaneOffset -= 10
+			if m.rightPaneOffset < 0 {
+				m.rightPaneOffset = 0
+			}
+		} else {
+			// Overview tab: page up content
+			m.detailOffset -= 10
+			if m.detailOffset < 0 {
+				m.detailOffset = 0
+			}
+		}
+		return m, nil
+
+	case "ctrl+d":
+		// Page down in right pane (or overview)
+		if m.tabs.ActiveIndex >= 1 && m.tabs.ActiveIndex <= 4 {
+			// Split-pane tabs: page down right pane
+			m.rightPaneOffset += 10
+		} else {
+			// Overview tab: page down content
+			m.detailOffset += 10
+		}
+		return m, nil
 	}
 
 	if Matches(msg, m.keys.ScrollDown) {
