@@ -2,11 +2,8 @@ package app
 
 import (
 	"fmt"
-	"os"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/tacit7/eye-in-the-sky/internal/ccusage/parser"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/util"
 )
 
@@ -44,18 +41,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if err := m.loadAgents(); err != nil {
 			m.err = err
 		}
-		// Refresh CCUsage data if needed (every 30 seconds)
-		if m.ccusageDB != nil && time.Since(m.lastCCUsageSync) > 30*time.Second {
-			if err := m.loadCCUsageData(); err != nil {
-				// Log but don't fail
-				fmt.Fprintf(os.Stderr, "Warning: Failed to reload ccusage data: %v\n", err)
-			}
-		}
 		// Schedule next tick
-		return m, m.tickCmd()
-
-	case initCCUsageMsg:
-		// Sync complete, data reloaded
 		return m, m.tickCmd()
 
 	case cmdResult:
@@ -151,20 +137,6 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "c":
 		m.listTabs.Set(2) // Claude
 		return m, nil
-	case "u":
-		m.listTabs.Set(3) // Usage
-		return m, nil
-	case "i", "I":
-		// Initialize CCUsage database (only in Usage tab when empty)
-		if m.listTabs.ActiveIndex == 3 && m.ccusageDB != nil && m.ccusageEntryCount == 0 && !m.ccusageSyncing {
-			m.ccusageSyncing = true
-			m.ccusageSyncStatus = "Initializing database..."
-			return m, tea.Batch(
-				m.initCCUsageCmd(),
-				m.tickCmd(),
-			)
-		}
-		return m, nil
 	}
 
 	if Matches(msg, m.keys.NavigateDown) {
@@ -207,14 +179,11 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 
 	if Matches(msg, m.keys.NewSession) {
-		// Always set a status message so we know the key was detected
 		if m.claudePath == "" {
 			m.statusMsg = "ERROR: Claude binary not found in PATH"
-			m.err = nil // Clear any previous errors
 			return m, nil
 		}
 		m.statusMsg = "Creating new session..."
-		m.err = nil // Clear any previous errors
 		return m, NewSession(m.claudePath, m.config.DefaultTerminal)
 	}
 
@@ -363,22 +332,22 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "j", "down":
 		// Navigate down in the current tab's list
 		switch m.tabs.ActiveIndex {
-		case 2: // Commits
+		case 1: // Commits
 			if m.commitsIndex < len(m.commits)-1 {
 				m.commitsIndex++
 				m.rightPaneOffset = 0 // Reset right pane scroll
 			}
-		case 3: // Logs
+		case 2: // Logs
 			if m.logsIndex < len(m.logs)-1 {
 				m.logsIndex++
 				m.rightPaneOffset = 0
 			}
-		case 4: // Notes
+		case 3: // Notes
 			if m.notesIndex < len(m.notes)-1 {
 				m.notesIndex++
 				m.rightPaneOffset = 0
 			}
-		case 5: // Actions
+		case 4: // Actions
 			if m.actionsIndex < len(m.actions)-1 {
 				m.actionsIndex++
 				m.rightPaneOffset = 0
@@ -392,22 +361,22 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "k", "up":
 		// Navigate up in the current tab's list
 		switch m.tabs.ActiveIndex {
-		case 2: // Commits
+		case 1: // Commits
 			if m.commitsIndex > 0 {
 				m.commitsIndex--
 				m.rightPaneOffset = 0
 			}
-		case 3: // Logs
+		case 2: // Logs
 			if m.logsIndex > 0 {
 				m.logsIndex--
 				m.rightPaneOffset = 0
 			}
-		case 4: // Notes
+		case 3: // Notes
 			if m.notesIndex > 0 {
 				m.notesIndex--
 				m.rightPaneOffset = 0
 			}
-		case 5: // Actions
+		case 4: // Actions
 			if m.actionsIndex > 0 {
 				m.actionsIndex--
 				m.rightPaneOffset = 0
@@ -422,7 +391,7 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "h":
 		// Scroll right pane up (only for split-pane tabs)
-		if m.tabs.ActiveIndex >= 2 && m.tabs.ActiveIndex <= 5 {
+		if m.tabs.ActiveIndex >= 1 && m.tabs.ActiveIndex <= 4 {
 			if m.rightPaneOffset > 0 {
 				m.rightPaneOffset--
 			}
@@ -431,14 +400,14 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "l":
 		// Scroll right pane down (only for split-pane tabs)
-		if m.tabs.ActiveIndex >= 2 && m.tabs.ActiveIndex <= 5 {
+		if m.tabs.ActiveIndex >= 1 && m.tabs.ActiveIndex <= 4 {
 			m.rightPaneOffset++
 			return m, nil
 		}
 
 	case "ctrl+u":
 		// Page up in right pane (or overview)
-		if m.tabs.ActiveIndex >= 2 && m.tabs.ActiveIndex <= 5 {
+		if m.tabs.ActiveIndex >= 1 && m.tabs.ActiveIndex <= 4 {
 			// Split-pane tabs: page up right pane
 			m.rightPaneOffset -= 10
 			if m.rightPaneOffset < 0 {
@@ -455,7 +424,7 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "ctrl+d":
 		// Page down in right pane (or overview)
-		if m.tabs.ActiveIndex >= 2 && m.tabs.ActiveIndex <= 5 {
+		if m.tabs.ActiveIndex >= 1 && m.tabs.ActiveIndex <= 4 {
 			// Split-pane tabs: page down right pane
 			m.rightPaneOffset += 10
 		} else {
@@ -940,31 +909,5 @@ func (m *Model) adjustNotesScroll() {
 
 	if m.notesIndex >= m.notesOffset+visibleHeight {
 		m.notesOffset = m.notesIndex - visibleHeight + 1
-	}
-}
-
-// initCCUsageCmd runs database initialization in background
-func (m *Model) initCCUsageCmd() tea.Cmd {
-	return func() tea.Msg {
-		if m.ccusageDB == nil {
-			return initCCUsageMsg{}
-		}
-
-		syncMgr := parser.NewSyncManager(m.ccusageDB)
-		if err := syncMgr.Sync(); err != nil {
-			m.ccusageSyncStatus = fmt.Sprintf("Error: %v", err)
-			m.ccusageSyncing = false
-			return initCCUsageMsg{}
-		}
-
-		// Reload data
-		if err := m.loadCCUsageData(); err != nil {
-			m.ccusageSyncStatus = fmt.Sprintf("Error loading data: %v", err)
-		} else {
-			m.ccusageSyncStatus = fmt.Sprintf("Initialized! Found %d entries", m.ccusageEntryCount)
-		}
-
-		m.ccusageSyncing = false
-		return initCCUsageMsg{}
 	}
 }

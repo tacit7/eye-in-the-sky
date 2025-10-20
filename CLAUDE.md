@@ -10,29 +10,28 @@ This is the **Claude Code Multi-Agent Management System** (Eye in the Sky) - a d
 
 ### Core Components
 - **MCP Server**: Go-based server implementing Model Context Protocol for Claude Code integration
-- **Web Dashboard**: HTTP server providing real-time agent visibility at localhost:8080
+- **TUI Dashboard**: Terminal UI (Bubble Tea) providing real-time agent visibility and control
 - **Database**: SQLite for tracking agents, actions, and git commits
 - **Integration Layer**: MCP tools interface for seamless Claude Code integration
 
 ### Technology Stack
-- **Backend**: Go 1.21+ with standard library `net/http` and `html/template`
+- **Backend**: Go 1.21+
+- **TUI**: Bubble Tea framework with Lipgloss for styling
 - **Database**: SQLite 3 with `github.com/mattn/go-sqlite3`
-- **Frontend**: HTML5, Bootstrap 5, vanilla JavaScript
 - **MCP**: Official Go SDK `github.com/modelcontextprotocol/go-sdk/mcp`
 
 ### Project Structure
 ```
-claude-code-mcp/
-├── main.go                        # Entry point
-├── cmd/server/main.go             # Main server executable
+eye-in-the-sky/
+├── cmd/
+│   ├── server/main.go             # MCP server executable
+│   └── eye-ui/main.go             # TUI dashboard executable
 ├── internal/
 │   ├── mcp/                       # MCP server implementation
-│   ├── dashboard/                 # HTTP server for web dashboard
+│   ├── ui/                        # TUI dashboard (Bubble Tea)
 │   ├── database/                  # SQLite connection and queries
-│   └── utils/                     # Utility functions
-├── web/
-│   ├── templates/                 # HTML templates
-│   └── static/                    # CSS and JavaScript
+│   ├── utils/                     # Utility functions
+│   └── window/                    # Window management utilities
 └── tests/                         # Go test files
 
 ### Database Location
@@ -85,7 +84,7 @@ go test -cover ./...
 # Run specific test package
 go test ./internal/database
 go test ./internal/mcp
-go test ./internal/dashboard
+go test ./internal/ui
 
 # Run with verbose output
 go test -v ./...
@@ -158,19 +157,22 @@ When finishing work:
 - Tracks git commit hashes and messages
 - Associates commits with agent sessions
 
-## Dashboard Features
+## TUI Dashboard Features
 
-### Agent Overview (localhost:8080)
+### Agent List View
 - Real-time status of all active agents
-- Visual indicators for agent health (Green/Yellow/Red)
-- Quick access to agent details
-- Summary statistics for active sessions
+- Visual indicators for agent health (color-coded status)
+- Hierarchical display with green │ for subagents
+- Grouped by parent-child relationships
+- j/k navigation, enter to view details
 
-### Agent Details (localhost:8080/agent/<id>)
-- Complete activity timeline
-- All git commits made during session
-- Current status and task information
-- Session management actions
+### Agent Detail View (Tabbed Interface)
+- **[O]verview**: Agent info, recent commits, and notes summary
+- **[C]ommits**: Split-pane view of commits with diff details
+- **[L]ogs**: Session logs with timestamp and type filtering
+- **[N]otes**: Session notes with creation timestamps
+- **[A]ctions**: All agent actions with descriptions
+- Keyboard navigation: o/c/l/n/a for tabs, j/k for items, h/l for scrolling
 
 ## Development Guidelines
 
@@ -197,8 +199,8 @@ When finishing work:
 
 ## Performance Considerations
 
-- Dashboard should load within 2 seconds for up to 100 active agents
+- TUI should render within 100ms and update smoothly at 60fps
 - MCP tool calls must respond within 500ms
 - Database operations should be atomic to prevent corruption
 - System should maintain 99% uptime during development sessions
-- Gracefully handle agent disconnections and network issues
+- Gracefully handle agent disconnections and database lock contention

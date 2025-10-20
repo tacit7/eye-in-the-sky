@@ -39,7 +39,7 @@ func (m *Model) renderNotesView() string {
 	)
 }
 
-// renderNoteDetails renders the full note content
+// renderNoteDetails renders the full note content with markdown syntax highlighting
 func (m *Model) renderNoteDetails(note Note) string {
 	var b strings.Builder
 
@@ -48,20 +48,18 @@ func (m *Model) renderNoteDetails(note Note) string {
 	b.WriteString(m.styles.Text.Render(note.Timestamp.Format("2006-01-02 15:04:05")))
 	b.WriteString("\n\n")
 
-	// Full content
+	// Full content with markdown rendering
 	b.WriteString(m.styles.Title.Render("Content"))
 	b.WriteString("\n")
-	b.WriteString(m.styles.Text.Render(note.Content))
+
+	// Try to render as markdown, fall back to plain text if it fails
+	rendered, err := m.renderMarkdown(note.Content)
+	if err != nil {
+		b.WriteString(m.styles.Text.Render(note.Content))
+	} else {
+		b.WriteString(rendered)
+	}
 	b.WriteString("\n")
 
 	return b.String()
-}
-
-// getFirstLine extracts the first line from multi-line text
-func getFirstLine(text string) string {
-	lines := strings.Split(text, "\n")
-	if len(lines) > 0 {
-		return lines[0]
-	}
-	return text
 }

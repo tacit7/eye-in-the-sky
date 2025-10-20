@@ -24,14 +24,6 @@ func (m *Model) View() string {
 		return m.renderListView()
 	case ViewDetail:
 		return m.renderDetailView()
-	case ViewLogs:
-		return m.renderLogsView()
-	case ViewTasks:
-		return m.renderTasksView()
-	case ViewCommits:
-		return m.renderCommitsView()
-	case ViewNotes:
-		return m.renderNotesView()
 	default:
 		return "Unknown view"
 	}
@@ -39,7 +31,7 @@ func (m *Model) View() string {
 
 // renderListView renders the agent list view
 func (m *Model) renderListView() string {
-	// Build agent list content
+	// Check which tab is active
 	var contentBuilder strings.Builder
 
 	// Reserve space for header (3 lines) + title bar + footer + borders
@@ -48,20 +40,26 @@ func (m *Model) renderListView() string {
 		visibleHeight = 10
 	}
 
-	if len(m.agents) == 0 {
-		contentBuilder.WriteString(m.styles.Subtle.Render("  No agents found"))
-		contentBuilder.WriteString("\n")
-	} else {
-		endIndex := m.listOffset + visibleHeight
-		if endIndex > len(m.agents) {
-			endIndex = len(m.agents)
-		}
-
-		for i := m.listOffset; i < endIndex; i++ {
-			agent := m.agents[i]
-			line := m.renderAgentLine(agent, i == m.selectedIndex)
-			contentBuilder.WriteString(line)
+	// Render content based on active tab
+	switch m.listTabs.ActiveIndex {
+	case 3: // Usage tab
+		contentBuilder.WriteString(m.renderUsageTab())
+	default: // Overview, Project, Claude tabs
+		if len(m.agents) == 0 {
+			contentBuilder.WriteString(m.styles.Subtle.Render("  No agents found"))
 			contentBuilder.WriteString("\n")
+		} else {
+			endIndex := m.listOffset + visibleHeight
+			if endIndex > len(m.agents) {
+				endIndex = len(m.agents)
+			}
+
+			for i := m.listOffset; i < endIndex; i++ {
+				agent := m.agents[i]
+				line := m.renderAgentLine(agent, i == m.selectedIndex)
+				contentBuilder.WriteString(line)
+				contentBuilder.WriteString("\n")
+			}
 		}
 	}
 
@@ -80,7 +78,16 @@ func (m *Model) renderListView() string {
 	// Top header
 	header := m.renderHeader()
 	b.WriteString(header)
-	b.WriteString("\n\n")
+	b.WriteString("\n")
+
+	// Tabs with bottom border
+	tabsBox := lipgloss.NewStyle().
+		BorderBottom(true).
+		BorderForeground(lipgloss.Color(m.theme.Colors.Border)).
+		Width(m.width).
+		Render(m.listTabs.View())
+	b.WriteString(tabsBox)
+	b.WriteString("\n")
 
 	// Bordered content
 	b.WriteString(contentBox)
@@ -102,22 +109,24 @@ func (m *Model) renderDetailView() string {
 	// Build detail content based on active tab
 	var detailContent string
 	switch m.tabs.ActiveIndex {
-	case 0: // Overview
+	case 0: // Back arrow - should not be shown, handled by update logic
 		detailContent = m.renderAgentDetails()
-	case 1: // Commits
+	case 1: // Overview
+		detailContent = m.renderAgentDetails()
+	case 2: // Commits
 		detailContent = m.renderCommitsTab()
-	case 2: // Logs
+	case 3: // Logs
 		detailContent = m.renderLogsTab()
-	case 3: // Notes
+	case 4: // Notes
 		detailContent = m.renderNotesTab()
-	case 4: // Actions
+	case 5: // Actions
 		detailContent = m.renderActionsTab()
 	default:
 		detailContent = m.renderAgentDetails()
 	}
 
-	// Reserve space for header, tabs, footer, and borders
-	visibleHeight := m.height - 10
+	// Reserve space for header, agent info header, tabs, footer, and borders
+	visibleHeight := m.height - 13
 	if visibleHeight < 1 {
 		visibleHeight = 10
 	}
@@ -137,6 +146,11 @@ func (m *Model) renderDetailView() string {
 	// Top header
 	header := m.renderHeader()
 	b.WriteString(header)
+	b.WriteString("\n")
+
+	// Agent info header
+	agentHeader := m.renderAgentInfoHeader()
+	b.WriteString(agentHeader)
 	b.WriteString("\n")
 
 	// Tabs with bottom border
@@ -192,7 +206,7 @@ func (m *Model) renderLogsView() string {
 	)
 }
 
-// renderLogDetails renders the full log message
+// renderLogDetails renders the full log message with markdown syntax highlighting
 func (m *Model) renderLogDetails(log Log) string {
 	var b strings.Builder
 
@@ -215,13 +229,75 @@ func (m *Model) renderLogDetails(log Log) string {
 	b.WriteString(typeStyle.Render(strings.ToUpper(log.Type)))
 	b.WriteString("\n\n")
 
-	// Message
+	// Message with markdown rendering
 	b.WriteString(m.styles.Title.Render("Message"))
 	b.WriteString("\n")
-	b.WriteString(m.styles.Text.Render(log.Message))
+
+	// Try to render as markdown, fall back to plain text if it fails
+	rendered, err := m.renderMarkdown(log.Message)
+	if err != nil {
+		b.WriteString(m.styles.Text.Render(log.Message))
+	} else {
+		b.WriteString(rendered)
+	}
 	b.WriteString("\n")
 
 	return b.String()
+}
+
+// renderMarkdown renders markdown content with syntax highlighting
+func (m *Model) renderMarkdown(content string) (string, error) {
+	// If renderer is not available, return error to fall back to plain text
+	if m.mdRenderer == nil {
+		return "", fmt.Errorf("markdown renderer not available")
+	}
+
+	// Render the markdown using cached renderer
+	rendered, err := m.mdRenderer.Render(content)
+	if err != nil {
+		return "", err
+	}
+
+	return rendered, nil
+}
+
+// renderAgentInfoHeader renders the agent information header (project, ID, description)
+func (m *Model) renderAgentInfoHeader() string {
+	if m.selectedAgent == nil {
+		return ""
+	}
+
+	agent := m.selectedAgent
+	var parts []string
+
+	// Project name
+	if agent.ProjectName != "" {
+		projectText := m.styles.Primary.Render("Project: ") + m.styles.Text.Render(agent.ProjectName)
+		parts = append(parts, projectText)
+	}
+
+	// Agent ID
+	idText := m.styles.Primary.Render("Agent: ") + m.styles.Active.Render(agent.ID)
+	parts = append(parts, idText)
+
+	// Agent description
+	if agent.AgentDescription != "" {
+		descText := m.styles.Subtle.Render(agent.AgentDescription)
+		parts = append(parts, descText)
+	}
+
+	// Join parts with separator
+	headerContent := strings.Join(parts, " │ ")
+
+	// Create bordered header box
+	headerBox := lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder(), false, false, true, false).
+		BorderForeground(lipgloss.Color(m.theme.Colors.Border)).
+		Width(m.width - 2).
+		Padding(0, 1).
+		Render(headerContent)
+
+	return headerBox
 }
 
 // renderHeader renders the application header
@@ -240,14 +316,6 @@ func (m *Model) renderHeader() string {
 		} else {
 			viewPath = "/agents/detail"
 		}
-	case ViewTasks:
-		viewPath = "/agents/tasks"
-	case ViewCommits:
-		viewPath = "/agents/commits"
-	case ViewNotes:
-		viewPath = "/agents/notes"
-	case ViewLogs:
-		viewPath = "/agents/logs"
 	}
 
 	pathStyle := m.styles.Subtle.Render(viewPath)
@@ -274,12 +342,30 @@ func (m *Model) renderHeader() string {
 
 	statsLine := m.styles.Subtle.Render(stats)
 
+	// Status message or error (if present)
+	var statusLine string
+	if m.err != nil {
+		statusLine = m.styles.Failed.Render("✗ Error: " + m.err.Error())
+	} else if m.statusMsg != "" {
+		statusLine = m.styles.Active.Render("● " + m.statusMsg)
+	}
+
 	// Create bordered header box
-	headerContent := lipgloss.JoinVertical(
-		lipgloss.Left,
-		topLine,
-		statsLine,
-	)
+	var headerContent string
+	if statusLine != "" {
+		headerContent = lipgloss.JoinVertical(
+			lipgloss.Left,
+			topLine,
+			statsLine,
+			statusLine,
+		)
+	} else {
+		headerContent = lipgloss.JoinVertical(
+			lipgloss.Left,
+			topLine,
+			statsLine,
+		)
+	}
 
 	headerBox := lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder(), false, false, true, false).
@@ -303,14 +389,17 @@ func (m *Model) renderFooter() string {
 			"[a] Toggle Filter",
 			"[j/k] Navigate",
 			"[enter] Details",
-			"[L] Logs",
+			"[c] Continue",
+			"[s] Start",
+			"[n] New",
 		}
-	case ViewDetail, ViewLogs:
+	case ViewDetail:
 		keys = []string{
 			"[q/esc] Back",
-			"[j/k] Scroll",
+			"[o/c/l/n/a] Tabs",
+			"[j/k] Navigate",
+			"[h/l] Scroll",
 			"[ctrl+u/d] Page",
-			"[g/G] Top/Bottom",
 		}
 	}
 
@@ -327,10 +416,23 @@ func (m *Model) renderFooter() string {
 
 // renderAgentLine renders a single agent line in the list
 func (m *Model) renderAgentLine(agent Agent, selected bool) string {
-	// Status indicator
-	status := m.getStatusIndicator(agent.Status)
+	// Subagent indicator - green fullwidth vertical for child agents
+	var prefix string
+	var status string
 	statusStyle := m.getStatusStyle(agent.Status, agent.LastActivityAt)
-	statusText := statusStyle.Render(status + " " + strings.ToUpper(agent.Status))
+
+	if agent.ParentAgentID != "" {
+		// Subagent: fullwidth vertical, no circle
+		prefix = m.styles.Active.Render("｜") + " "
+		status = strings.ToUpper(agent.Status)
+	} else {
+		// Parent agent: normal prefix, with circle
+		prefix = "  "
+		statusIndicator := m.getStatusIndicator(agent.Status)
+		status = statusIndicator + " " + strings.ToUpper(agent.Status)
+	}
+
+	statusText := statusStyle.Render(status)
 
 	// Agent info
 	info := fmt.Sprintf("%s", agent.ID)
@@ -356,8 +458,9 @@ func (m *Model) renderAgentLine(agent Agent, selected bool) string {
 		source = agent.Source
 	}
 
-	// Combine into line
-	line := fmt.Sprintf("  %-12s  %-40s  %-40s  %s",
+	// Combine into line with prefix
+	line := fmt.Sprintf("%s%-12s  %-40s  %-40s  %s",
+		prefix,
 		statusText,
 		truncate(info, 40),
 		truncate(task, 40),
@@ -370,7 +473,7 @@ func (m *Model) renderAgentLine(agent Agent, selected bool) string {
 	return m.styles.Text.Render(line)
 }
 
-// renderAgentDetails renders detailed information about an agent
+// renderAgentDetails renders the agent view (detailed information about an agent)
 func (m *Model) renderAgentDetails() string {
 	if m.selectedAgent == nil {
 		return ""
@@ -429,12 +532,54 @@ func (m *Model) renderAgentDetails() string {
 		b.WriteString("\n")
 	}
 
-	// Recent commits
+	// Session costs summary
+	if len(m.sessionMetrics) > 0 {
+		latest := m.sessionMetrics[0]
+		b.WriteString("\n")
+		b.WriteString(m.styles.Title.Render("Current Session Costs"))
+		b.WriteString("\n")
+
+		// Token usage
+		usagePercent := float64(latest.TokensUsed) / float64(latest.TokensBudget) * 100
+		b.WriteString(m.styles.Primary.Render("  Tokens: "))
+		tokenInfo := fmt.Sprintf("%d / %d (%.1f%%)", latest.TokensUsed, latest.TokensBudget, usagePercent)
+		b.WriteString(m.styles.Text.Render(tokenInfo))
+		b.WriteString("\n")
+
+		// Cost estimate
+		if latest.EstimatedCostUSD > 0 {
+			b.WriteString(m.styles.Primary.Render("  Cost: "))
+			costInfo := fmt.Sprintf("$%.4f", latest.EstimatedCostUSD)
+			b.WriteString(m.styles.Text.Render(costInfo))
+			b.WriteString("\n")
+		}
+
+		// Model name
+		if latest.ModelName != "" {
+			b.WriteString(m.styles.Primary.Render("  Model: "))
+			b.WriteString(m.styles.Text.Render(latest.ModelName))
+			b.WriteString("\n")
+		}
+
+		// Last updated
+		b.WriteString(m.styles.Primary.Render("  Updated: "))
+		b.WriteString(m.styles.Subtle.Render(formatTimestamp(latest.Timestamp)))
+		b.WriteString("\n")
+	}
+
+	// Recent commits (last 5 only)
 	if len(m.commits) > 0 {
 		b.WriteString("\n")
-		b.WriteString(m.styles.Title.Render("Recent Commits"))
+		b.WriteString(m.styles.Title.Render("Recent Commits (last 5)"))
 		b.WriteString("\n")
-		for _, commit := range m.commits {
+
+		maxCommits := 5
+		if len(m.commits) < maxCommits {
+			maxCommits = len(m.commits)
+		}
+
+		for i := 0; i < maxCommits; i++ {
+			commit := m.commits[i]
 			line := fmt.Sprintf("  %s  %s  %s",
 				commit.Timestamp.Format("15:04:05"),
 				truncateCommitHash(commit.CommitHash, 8),
@@ -443,53 +588,66 @@ func (m *Model) renderAgentDetails() string {
 			b.WriteString(m.styles.Text.Render(line))
 			b.WriteString("\n")
 		}
-	}
 
-	// Session notes
-	if len(m.notes) > 0 {
-		b.WriteString("\n")
-		b.WriteString(m.styles.Title.Render("Session Notes"))
-		b.WriteString("\n")
-		for _, note := range m.notes {
-			line := fmt.Sprintf("  %s  %s",
-				note.Timestamp.Format("15:04:05"),
-				truncate(note.Content, 80),
-			)
-			b.WriteString(m.styles.Text.Render(line))
+		if len(m.commits) > 5 {
+			b.WriteString(m.styles.Subtle.Render(fmt.Sprintf("  ... %d more (see Commits tab)", len(m.commits)-5)))
 			b.WriteString("\n")
 		}
 	}
 
-	// Recent actions
+	// Session notes (first line only, last 5)
+	if len(m.notes) > 0 {
+		b.WriteString("\n")
+		b.WriteString(m.styles.Title.Render("Session Notes (last 5)"))
+		b.WriteString("\n")
+
+		maxNotes := 5
+		if len(m.notes) < maxNotes {
+			maxNotes = len(m.notes)
+		}
+
+		for i := 0; i < maxNotes; i++ {
+			note := m.notes[i]
+			// Get first line only
+			firstLine := getFirstLine(note.Content)
+			line := fmt.Sprintf("  %s  %s",
+				note.Timestamp.Format("15:04:05"),
+				truncate(firstLine, 80),
+			)
+			b.WriteString(m.styles.Text.Render(line))
+			b.WriteString("\n")
+		}
+
+		if len(m.notes) > 5 {
+			b.WriteString(m.styles.Subtle.Render(fmt.Sprintf("  ... %d more (see Notes tab)", len(m.notes)-5)))
+			b.WriteString("\n")
+		}
+	}
+
+	// Recent actions (last 5 only)
 	if len(m.actions) > 0 {
 		b.WriteString("\n")
-		b.WriteString(m.styles.Title.Render("Recent Actions"))
+		b.WriteString(m.styles.Title.Render("Recent Actions (last 5)"))
 		b.WriteString("\n")
 
-		visibleHeight := m.height - 25
-		if visibleHeight < 5 {
-			visibleHeight = 5
+		maxActions := 5
+		if len(m.actions) < maxActions {
+			maxActions = len(m.actions)
 		}
 
-		endIndex := m.detailOffset + visibleHeight
-		if endIndex > len(m.actions) {
-			endIndex = len(m.actions)
-		}
-
-		for i := m.detailOffset; i < endIndex; i++ {
+		for i := 0; i < maxActions; i++ {
 			action := m.actions[i]
 			line := fmt.Sprintf("  %s  %-15s  %s",
 				action.Timestamp.Format("15:04:05"),
-				action.ActionType,
-				action.Description,
+				truncate(action.ActionType, 15),
+				truncate(action.Description, 50),
 			)
 			b.WriteString(m.styles.Text.Render(line))
 			b.WriteString("\n")
 		}
 
-		if endIndex < len(m.actions) {
-			remaining := len(m.actions) - endIndex
-			b.WriteString(m.styles.Subtle.Render(fmt.Sprintf("  ... %d more actions", remaining)))
+		if len(m.actions) > 5 {
+			b.WriteString(m.styles.Subtle.Render(fmt.Sprintf("  ... %d more (see Actions tab)", len(m.actions)-5)))
 			b.WriteString("\n")
 		}
 	}
@@ -578,6 +736,15 @@ func formatTimestamp(t time.Time) string {
 	} else {
 		return t.Format("2006-01-02 15:04")
 	}
+}
+
+// getFirstLine extracts the first line from multi-line text
+func getFirstLine(text string) string {
+	lines := strings.Split(text, "\n")
+	if len(lines) > 0 {
+		return lines[0]
+	}
+	return text
 }
 
 // renderHelp renders the help overlay
@@ -741,6 +908,265 @@ func (m *Model) renderActionDetails(action Action) string {
 		b.WriteString(m.styles.Text.Render(action.Details))
 		b.WriteString("\n")
 	}
+
+	return b.String()
+}
+
+// renderUsageTab renders session costs for all agents with monthly breakdown
+func (m *Model) renderUsageTab() string {
+	var b strings.Builder
+
+	// Show Claude Code empty state if database is empty
+	if m.ccusageDB != nil && m.ccusageEntryCount == 0 {
+		b.WriteString(m.styles.Title.Render("Claude Code Usage"))
+		b.WriteString("\n\n")
+
+		if m.ccusageSyncing {
+			b.WriteString(m.styles.Working.Render("  ⏳ " + m.ccusageSyncStatus))
+		} else {
+			b.WriteString(m.styles.Subtle.Render("  No Claude Code usage data found"))
+			b.WriteString("\n\n")
+			b.WriteString(m.styles.Primary.Render("  Press 'I' to initialize database"))
+			b.WriteString("\n")
+			b.WriteString(m.styles.Subtle.Render("  This will discover and parse JSONL files from:"))
+			b.WriteString("\n")
+			b.WriteString(m.styles.Subtle.Render("  ~/.config/claude/projects/"))
+			b.WriteString("\n")
+			b.WriteString(m.styles.Subtle.Render("  ~/.claude/projects/"))
+		}
+
+		b.WriteString("\n\n")
+		b.WriteString(m.styles.Border.Render(strings.Repeat("─", 70)))
+		b.WriteString("\n\n")
+	}
+
+	if len(m.allSessionMetrics) == 0 && len(m.monthlyCosts) == 0 && m.ccusageEntryCount == 0 {
+		return m.styles.Subtle.Render("  No usage data available")
+	}
+
+	// Current Session Summary
+	if len(m.allSessionMetrics) > 0 {
+		b.WriteString(m.styles.Title.Render("Eye-in-the-Sky Session Metrics"))
+		b.WriteString("\n\n")
+
+		// Column headers
+		headerLine := fmt.Sprintf("%-10s %-8s %-12s %-10s %-12s",
+			"Agent", "Usage %", "Tokens", "Cost USD", "Model")
+		b.WriteString(m.styles.Primary.Render(headerLine))
+		b.WriteString("\n")
+		b.WriteString(m.styles.Border.Render(strings.Repeat("─", 70)))
+		b.WriteString("\n")
+
+		// Data rows
+		totalCost := 0.0
+		totalTokens := 0
+
+		for _, metric := range m.allSessionMetrics {
+			usagePercent := float64(metric.TokensUsed) / float64(metric.TokensBudget) * 100
+
+			agentID := truncate(metric.AgentID, 8)
+			usage := fmt.Sprintf("%.1f%%", usagePercent)
+			tokens := fmt.Sprintf("%d", metric.TokensUsed)
+			cost := fmt.Sprintf("$%.4f", metric.EstimatedCostUSD)
+			model := truncate(metric.ModelName, 12)
+
+			line := fmt.Sprintf("%-10s %-8s %-12s %-10s %-12s",
+				agentID, usage, tokens, cost, model)
+			b.WriteString(m.styles.Text.Render(line))
+			b.WriteString("\n")
+
+			totalCost += metric.EstimatedCostUSD
+			totalTokens += metric.TokensUsed
+		}
+
+		b.WriteString(m.styles.Subtle.Render(fmt.Sprintf("Total: $%.4f | %d tokens\n", totalCost, totalTokens)))
+	}
+
+	// Monthly Cost Breakdown
+	if len(m.monthlyCosts) > 0 {
+		b.WriteString("\n\n")
+		b.WriteString(m.styles.Title.Render("Monthly Cost Breakdown"))
+		b.WriteString("\n\n")
+
+		// Column headers
+		headerLine := fmt.Sprintf("%-20s %-8s %-12s %-10s %-8s",
+			"Timestamp", "Usage %", "Tokens Used", "Cost USD", "Model")
+		b.WriteString(m.styles.Primary.Render(headerLine))
+		b.WriteString("\n")
+		b.WriteString(m.styles.Border.Render(strings.Repeat("─", 70)))
+		b.WriteString("\n")
+
+		// Data rows
+		totalMonthlyCost := 0.0
+		totalMonthlyTokens := 0
+
+		for _, metric := range m.monthlyCosts {
+			usagePercent := float64(metric.TokensUsed) / float64(metric.TokensBudget) * 100
+
+			timestamp := metric.Timestamp.Format("2006-01-02 15:04")
+			usage := fmt.Sprintf("%.1f%%", usagePercent)
+			tokens := fmt.Sprintf("%d", metric.TokensUsed)
+			cost := fmt.Sprintf("$%.4f", metric.EstimatedCostUSD)
+			model := truncate(metric.ModelName, 8)
+
+			line := fmt.Sprintf("%-20s %-8s %-12s %-10s %-8s",
+				timestamp, usage, tokens, cost, model)
+			b.WriteString(m.styles.Text.Render(line))
+			b.WriteString("\n")
+
+			totalMonthlyCost += metric.EstimatedCostUSD
+			totalMonthlyTokens += metric.TokensUsed
+		}
+
+		b.WriteString(m.styles.Subtle.Render(fmt.Sprintf("Monthly Total: $%.4f | %d tokens across %d snapshots\n",
+			totalMonthlyCost, totalMonthlyTokens, len(m.monthlyCosts))))
+	}
+
+	// Claude Code metrics (if available)
+	if m.ccusageDB != nil && m.ccusageEntryCount > 0 {
+		b.WriteString(m.renderClaudeCodeMetrics())
+		b.WriteString("\n\n")
+		b.WriteString(m.renderCombinedSummary())
+	}
+
+	return b.String()
+}
+
+// renderClaudeCodeMetrics renders Claude Code usage data
+func (m *Model) renderClaudeCodeMetrics() string {
+	var b strings.Builder
+
+	// Daily Usage Section
+	if len(m.ccusageDaily) > 0 {
+		b.WriteString(m.styles.Title.Render("Claude Code Daily Usage (Last 7 Days)"))
+		b.WriteString("\n\n")
+
+		headerLine := fmt.Sprintf("%-12s %-15s %-10s %-10s %-10s",
+			"Date", "Project", "Input", "Output", "Cost USD")
+		b.WriteString(m.styles.Primary.Render(headerLine))
+		b.WriteString("\n")
+		b.WriteString(m.styles.Border.Render(strings.Repeat("─", 70)))
+		b.WriteString("\n")
+
+		totalCost := 0.0
+		for _, report := range m.ccusageDaily {
+			line := fmt.Sprintf("%-12s %-15s %-10d %-10d %-10s",
+				report.Date,
+				truncate(report.Project, 12),
+				report.InputTokens,
+				report.OutputTokens,
+				fmt.Sprintf("$%.4f", report.TotalCost))
+			b.WriteString(m.styles.Text.Render(line))
+			b.WriteString("\n")
+			totalCost += report.TotalCost
+		}
+
+		b.WriteString(m.styles.Subtle.Render(fmt.Sprintf("Daily Total: $%.4f\n", totalCost)))
+	}
+
+	// Session Usage Section
+	if len(m.ccusageSessions) > 0 {
+		b.WriteString("\n\n")
+		b.WriteString(m.styles.Title.Render("Claude Code Sessions"))
+		b.WriteString("\n\n")
+
+		headerLine := fmt.Sprintf("%-20s %-15s %-12s %-10s %-10s",
+			"SessionId", "Project", "Duration", "Tokens", "Cost USD")
+		b.WriteString(m.styles.Primary.Render(headerLine))
+		b.WriteString("\n")
+		b.WriteString(m.styles.Border.Render(strings.Repeat("─", 70)))
+		b.WriteString("\n")
+
+		for _, report := range m.ccusageSessions {
+			tokens := report.InputTokens + report.OutputTokens
+			line := fmt.Sprintf("%-20s %-15s %-12s %-10d %-10s",
+				truncate(report.SessionID, 18),
+				truncate(report.Project, 13),
+				report.Duration,
+				tokens,
+				fmt.Sprintf("$%.4f", report.TotalCost))
+			b.WriteString(m.styles.Text.Render(line))
+			b.WriteString("\n")
+		}
+	}
+
+	// Monthly Summary Section
+	if m.ccusageMonthly != nil {
+		b.WriteString("\n\n")
+		b.WriteString(m.styles.Title.Render("Claude Code Monthly Summary"))
+		b.WriteString("\n\n")
+
+		summary := fmt.Sprintf("Month: %s | Days: %d | Total Tokens: %d | Total Cost: $%.4f\n",
+			m.ccusageMonthly.Month,
+			m.ccusageMonthly.Days,
+			m.ccusageMonthly.TotalInputTokens+m.ccusageMonthly.TotalOutputTokens,
+			m.ccusageMonthly.TotalCost)
+		b.WriteString(m.styles.Text.Render(summary))
+
+		if m.ccusageMonthly.AverageDailyCost > 0 {
+			summary2 := fmt.Sprintf("Avg Daily: $%.4f | Highest Day: $%.4f\n",
+				m.ccusageMonthly.AverageDailyCost,
+				m.ccusageMonthly.HighestDailyCost)
+			b.WriteString(m.styles.Subtle.Render(summary2))
+		}
+	}
+
+	// Active Block Section
+	if m.ccusageBlock != nil {
+		b.WriteString("\n\n")
+		b.WriteString(m.styles.Title.Render("Current Billing Block"))
+		b.WriteString("\n\n")
+
+		blockInfo := fmt.Sprintf("Block: %s to %s | Time Remaining: %s\n",
+			m.ccusageBlock.StartTime,
+			m.ccusageBlock.EndTime,
+			m.ccusageBlock.TimeRemaining)
+		b.WriteString(m.styles.Text.Render(blockInfo))
+
+		blockUsage := fmt.Sprintf("Usage: %d input | %d output | $%.4f total\n",
+			m.ccusageBlock.InputTokens,
+			m.ccusageBlock.OutputTokens,
+			m.ccusageBlock.TotalCost)
+		b.WriteString(m.styles.Text.Render(blockUsage))
+	}
+
+	return b.String()
+}
+
+// renderCombinedSummary renders both data sources combined
+func (m *Model) renderCombinedSummary() string {
+	var b strings.Builder
+
+	b.WriteString(m.styles.Title.Render("Combined Cost Summary"))
+	b.WriteString("\n\n")
+
+	eyeInTheSkyTotal := 0.0
+	for _, metric := range m.monthlyCosts {
+		eyeInTheSkyTotal += metric.EstimatedCostUSD
+	}
+
+	claudeCodeTotal := 0.0
+	if m.ccusageMonthly != nil {
+		claudeCodeTotal = m.ccusageMonthly.TotalCost
+	}
+
+	grandTotal := eyeInTheSkyTotal + claudeCodeTotal
+
+	line1 := fmt.Sprintf("Eye-in-the-Sky Sessions:  $%.4f", eyeInTheSkyTotal)
+	b.WriteString(m.styles.Text.Render(line1))
+	b.WriteString("\n")
+
+	line2 := fmt.Sprintf("Claude Code Usage:        $%.4f", claudeCodeTotal)
+	b.WriteString(m.styles.Text.Render(line2))
+	b.WriteString("\n")
+
+	line3 := "─────────────────────────────────"
+	b.WriteString(m.styles.Border.Render(line3))
+	b.WriteString("\n")
+
+	line4 := fmt.Sprintf("Total Monthly Cost:       $%.4f", grandTotal)
+	b.WriteString(m.styles.Primary.Render(line4))
+	b.WriteString("\n")
 
 	return b.String()
 }

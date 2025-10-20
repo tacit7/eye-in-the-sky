@@ -8,11 +8,11 @@ import (
 // CreateAgent inserts a new agent
 func (db *DB) CreateAgent(agent *Agent) error {
 	query := `
-		INSERT INTO agents (id, status, source, git_worktree_path, feature_description, current_task, last_activity_at, window_id, terminal_application, project_name)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO agents (id, status, source, git_worktree_path, feature_description, current_task, last_activity_at, window_id, terminal_application, project_name, parent_agent_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	_, err := db.conn.Exec(query, agent.ID, agent.Status, agent.Source, agent.GitWorktreePath,
-		agent.FeatureDescription, agent.CurrentTask, agent.LastActivityAt, agent.WindowID, agent.TerminalApplication, agent.ProjectName)
+		agent.FeatureDescription, agent.CurrentTask, agent.LastActivityAt, agent.WindowID, agent.TerminalApplication, agent.ProjectName, agent.ParentAgentID)
 	if err != nil {
 		return fmt.Errorf("failed to create agent: %w", err)
 	}
@@ -26,13 +26,13 @@ func (db *DB) GetAgent(id string) (*Agent, error) {
 	}
 
 	query := `
-		SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, current_session_id, persona_id
+		SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, current_session_id, persona_id, parent_agent_id
 		FROM agents WHERE id = ?
 	`
 	var agent Agent
 	row := db.conn.QueryRow(query, id)
 	err := row.Scan(&agent.ID, &agent.Status, &agent.Source, &agent.Description, &agent.CreatedAt, &agent.UpdatedAt,
-		&agent.GitWorktreePath, &agent.FeatureDescription, &agent.CurrentTask, &agent.LastActivityAt, &agent.WindowID, &agent.ProjectName, &agent.CurrentSessionID, &agent.PersonaID)
+		&agent.GitWorktreePath, &agent.FeatureDescription, &agent.CurrentTask, &agent.LastActivityAt, &agent.WindowID, &agent.ProjectName, &agent.CurrentSessionID, &agent.PersonaID, &agent.ParentAgentID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, NewAgentError(id, "get", ErrAgentNotFound)
@@ -925,4 +925,155 @@ func (db *DB) CreateSessionContext(ctx *SessionContext) error {
 	}
 
 	return nil
+}
+
+// LogSessionMetrics logs token usage and cost information for a session
+func (db *DB) LogSessionMetrics(metrics *SessionMetrics) error {
+	query := `
+		INSERT INTO session_metrics (
+			agent_id, session_id, tokens_used, tokens_budget, tokens_remaining,
+			input_tokens, output_tokens, estimated_cost_usd, model_name, notes
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
+
+	_, err := db.conn.Exec(
+		query,
+		metrics.AgentID,
+		metrics.SessionID,
+		metrics.TokensUsed,
+		metrics.TokensBudget,
+		metrics.TokensRemaining,
+		metrics.InputTokens,
+		metrics.OutputTokens,
+		metrics.EstimatedCostUSD,
+		metrics.ModelName,
+		metrics.Notes,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to log session metrics: %w", err)
+	}
+
+	return nil
+}
+
+// GetSessionMetrics retrieves all metrics for a specific agent
+func (db *DB) GetSessionMetrics(agentID string, limit int) ([]*SessionMetrics, error) {
+	query := `
+		SELECT id, agent_id, session_id, tokens_used, tokens_budget, tokens_remaining,
+		       input_tokens, output_tokens, estimated_cost_usd, model_name, timestamp, created_at, notes
+		FROM session_metrics
+		WHERE agent_id = ?
+		ORDER BY timestamp DESC
+		LIMIT ?
+	`
+
+	rows, err := db.conn.Query(query, agentID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get session metrics: %w", err)
+	}
+	defer rows.Close()
+
+	var metrics []*SessionMetrics
+	for rows.Next() {
+		var m SessionMetrics
+		err := rows.Scan(
+			&m.ID,
+			&m.AgentID,
+			&m.SessionID,
+			&m.TokensUsed,
+			&m.TokensBudget,
+			&m.TokensRemaining,
+			&m.InputTokens,
+			&m.OutputTokens,
+			&m.EstimatedCostUSD,
+			&m.ModelName,
+			&m.Timestamp,
+			&m.CreatedAt,
+			&m.Notes,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan session metrics: %w", err)
+		}
+		metrics = append(metrics, &m)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating session metrics: %w", err)
+	}
+
+	return metrics, nil
+}
+
+// GetMonthlyCosts retrieves all session metrics from the current month with timestamps
+func (db *DB) GetMonthlyCosts() ([]*SessionMetrics, error) {
+	query := `
+		SELECT id, agent_id, session_id, tokens_used, tokens_budget, tokens_remaining,
+		       input_tokens, output_tokens, estimated_cost_usd, model_name, timestamp, created_at, notes
+		FROM session_metrics
+		WHERE strftime('%Y-%m', timestamp) = strftime('%Y-%m', 'now')
+		ORDER BY timestamp DESC
+	`
+
+	rows, err := db.conn.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get monthly costs: %w", err)
+	}
+	defer rows.Close()
+
+	var metrics []*SessionMetrics
+	for rows.Next() {
+		var m SessionMetrics
+		var sessionID, modelName, notes sql.NullString
+		var inputTokens, outputTokens sql.NullInt64
+		var estimatedCost sql.NullFloat64
+
+		err := rows.Scan(
+			&m.ID,
+			&m.AgentID,
+			&sessionID,
+			&m.TokensUsed,
+			&m.TokensBudget,
+			&m.TokensRemaining,
+			&inputTokens,
+			&outputTokens,
+			&estimatedCost,
+			&modelName,
+			&m.Timestamp,
+			&m.CreatedAt,
+			&notes,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan monthly costs: %w", err)
+		}
+
+		if sessionID.Valid {
+			m.SessionID = &sessionID.String
+		}
+		if inputTokens.Valid {
+			val := int(inputTokens.Int64)
+			m.InputTokens = &val
+		}
+		if outputTokens.Valid {
+			val := int(outputTokens.Int64)
+			m.OutputTokens = &val
+		}
+		if estimatedCost.Valid {
+			m.EstimatedCostUSD = &estimatedCost.Float64
+		}
+		if modelName.Valid {
+			m.ModelName = &modelName.String
+		}
+		if notes.Valid {
+			m.Notes = &notes.String
+		}
+
+		metrics = append(metrics, &m)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating monthly costs: %w", err)
+	}
+
+	return metrics, nil
 }

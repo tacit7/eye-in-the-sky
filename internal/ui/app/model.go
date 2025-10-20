@@ -352,6 +352,9 @@ func (m *Model) tickCmd() tea.Cmd {
 // tickMsg is sent on each refresh interval
 type tickMsg time.Time
 
+// initCCUsageMsg triggers CCUsage database initialization
+type initCCUsageMsg struct{}
+
 // loadAgents loads agents from database
 func (m *Model) loadAgents() error {
 	query := `

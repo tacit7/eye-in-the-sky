@@ -135,6 +135,7 @@ type StartSessionArgs struct {
 	WorktreePath     *string `json:"worktree_path,omitempty" jsonschema:"description:Path to git repository (optional)"`
 	PersonaID        *string `json:"persona_id,omitempty" jsonschema:"description:Persona ID to load initial context from (optional)"`
 	WindowID         *string `json:"window_id,omitempty" jsonschema:"description:Claude Desktop window identifier for window management (optional)"`
+	ParentAgentID    *string `json:"parent_agent_id,omitempty" jsonschema:"description:Parent agent ID if this is a subagent (optional)"`
 }
 
 type StartSessionResult struct {
@@ -323,5 +324,24 @@ type LogCompactionResult struct {
 	Message         string `json:"message"`
 	CompactionID    int    `json:"compaction_id,omitempty"`
 	JsonlBackupPath string `json:"jsonl_backup_path,omitempty"`
+}
+
+// LogSessionCostArgs represents the arguments for i-log-session-cost tool
+type LogSessionCostArgs struct {
+	AgentID          string   `json:"agent_id" jsonschema:"description:8-character agent identifier"`
+	SessionID        *string  `json:"session_id,omitempty" jsonschema:"description:Session ID (optional)"`
+	TokensUsed       int      `json:"tokens_used" jsonschema:"description:Total tokens used in session"`
+	TokensBudget     int      `json:"tokens_budget" jsonschema:"description:Total token budget for session"`
+	TokensRemaining  int      `json:"tokens_remaining" jsonschema:"description:Remaining tokens in budget"`
+	InputTokens      *int     `json:"input_tokens,omitempty" jsonschema:"description:Input tokens used (optional)"`
+	OutputTokens     *int     `json:"output_tokens,omitempty" jsonschema:"description:Output tokens used (optional)"`
+	EstimatedCostUSD *float64 `json:"estimated_cost_usd,omitempty" jsonschema:"description:Estimated cost in USD (optional)"`
+	ModelName        *string  `json:"model_name,omitempty" jsonschema:"description:Model name (e.g., 'claude-sonnet-4-5') (optional)"`
+	Notes            *string  `json:"notes,omitempty" jsonschema:"description:Additional notes about the session (optional)"`
+}
+
+type LogSessionCostResult struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
 }
 

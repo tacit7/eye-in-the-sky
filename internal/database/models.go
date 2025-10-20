@@ -19,6 +19,7 @@ type Agent struct {
 	ProjectName         *string    `json:"project_name,omitempty"`
 	CurrentSessionID    *string    `json:"current_session_id,omitempty"`
 	PersonaID           *string    `json:"persona_id,omitempty"`
+	ParentAgentID       *string    `json:"parent_agent_id,omitempty"`
 }
 
 // Action represents an activity performed by an agent
@@ -158,4 +159,21 @@ type SessionContext struct {
 	Metrics         *string   `json:"metrics,omitempty"`
 	AutoSave        bool      `json:"auto_save"`
 	LearnedContext  *string   `json:"learned_context,omitempty"`
+}
+
+// SessionMetrics represents token usage and cost tracking for a session
+type SessionMetrics struct {
+	ID               int       `json:"id"`
+	AgentID          string    `json:"agent_id"`
+	SessionID        *string   `json:"session_id,omitempty"`
+	TokensUsed       int       `json:"tokens_used"`
+	TokensBudget     int       `json:"tokens_budget"`
+	TokensRemaining  int       `json:"tokens_remaining"`
+	InputTokens      *int      `json:"input_tokens,omitempty"`
+	OutputTokens     *int      `json:"output_tokens,omitempty"`
+	EstimatedCostUSD *float64  `json:"estimated_cost_usd,omitempty"`
+	ModelName        *string   `json:"model_name,omitempty"`
+	Timestamp        time.Time `json:"timestamp"`
+	CreatedAt        time.Time `json:"created_at"`
+	Notes            *string   `json:"notes,omitempty"`
 }

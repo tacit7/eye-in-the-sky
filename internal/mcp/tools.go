@@ -283,6 +283,57 @@ func (t *Tools) EndSession(args EndSessionArgs) (EndSessionResult, error) {
 	return EndSessionResult{Success: true, Message: message}, nil
 }
 
+// LogSessionCost implements the i-log-session-cost MCP tool
+func (t *Tools) LogSessionCost(args LogSessionCostArgs) (LogSessionCostResult, error) {
+	// Validate agent exists
+	agent, err := t.db.GetAgent(args.AgentID)
+	if err != nil {
+		return LogSessionCostResult{Success: false, Message: fmt.Sprintf("Agent not found: %v", err)}, nil
+	}
+
+	// Create session metrics record
+	metrics := &database.SessionMetrics{
+		AgentID:          args.AgentID,
+		SessionID:        args.SessionID,
+		TokensUsed:       args.TokensUsed,
+		TokensBudget:     args.TokensBudget,
+		TokensRemaining:  args.TokensRemaining,
+		InputTokens:      args.InputTokens,
+		OutputTokens:     args.OutputTokens,
+		EstimatedCostUSD: args.EstimatedCostUSD,
+		ModelName:        args.ModelName,
+		Notes:            args.Notes,
+	}
+
+	// Log to database
+	if err := t.db.LogSessionMetrics(metrics); err != nil {
+		return LogSessionCostResult{Success: false, Message: fmt.Sprintf("Failed to log session cost: %v", err)}, nil
+	}
+
+	// Build success message
+	message := fmt.Sprintf("Session cost logged for agent %s: %d/%d tokens used",
+		args.AgentID, args.TokensUsed, args.TokensBudget)
+
+	if args.EstimatedCostUSD != nil {
+		message += fmt.Sprintf(" (~$%.4f)", *args.EstimatedCostUSD)
+	}
+
+	// Also log as action for visibility in timeline
+	action := &database.Action{
+		AgentID:     args.AgentID,
+		ActionType:  database.ActionStatusUpdate,
+		Description: message,
+	}
+
+	if err := t.db.CreateAction(action); err != nil {
+		// Don't fail the whole operation if action logging fails
+		fmt.Fprintf(os.Stderr, "Warning: Failed to log cost action: %v\n", err)
+	}
+
+	_ = agent // Suppress unused variable warning
+	return LogSessionCostResult{Success: true, Message: message}, nil
+}
+
 // GetCurrentWindow implements the get_current_window MCP tool
 func (t *Tools) GetCurrentWindow(args GetCurrentWindowArgs) (GetCurrentWindowResult, error) {
 	if runtime.GOOS != "darwin" {
@@ -624,6 +675,7 @@ func (t *Tools) StartSession(args StartSessionArgs) (StartSessionResult, error) 
 		PersonaID:           personaID,
 		WindowID:            windowID,
 		TerminalApplication: terminalApp,
+		ParentAgentID:       args.ParentAgentID,
 		LastActivityAt:      timePtr(time.Now()),
 	}
 

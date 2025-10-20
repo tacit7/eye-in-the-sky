@@ -116,6 +116,11 @@ func (s *Server) registerTools() {
 		Description: "Add note to session",
 	}, s.handleAddNote)
 
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "i-log-session-cost",
+		Description: "Log session token usage and cost metrics",
+	}, s.handleLogSessionCost)
+
 	// Persona Management Tools
 	mcp.AddTool(s.mcp, &mcp.Tool{
 		Name:        "i-snapshot-expertise",
@@ -352,6 +357,19 @@ func (s *Server) handleStartSession(ctx context.Context, req *mcp.CallToolReques
 
 func (s *Server) handleAddNote(ctx context.Context, req *mcp.CallToolRequest, args AddNoteArgs) (*mcp.CallToolResult, any, error) {
 	result, err := s.tools.AddNote(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: result.Message},
+		},
+	}, result, nil
+}
+
+func (s *Server) handleLogSessionCost(ctx context.Context, req *mcp.CallToolRequest, args LogSessionCostArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.LogSessionCost(args)
 	if err != nil {
 		return nil, nil, err
 	}

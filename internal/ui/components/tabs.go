@@ -30,8 +30,8 @@ func NewTabsModel(titles []string, activeColor, normalColor string) TabsModel {
 		ActiveIndex: 0,
 		StyleActive: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(activeColor)).
-			Background(lipgloss.Color("#6")).
 			Bold(true).
+			Underline(true).
 			Padding(0, 2),
 		StyleNormal: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(normalColor)).

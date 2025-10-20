@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 
 	tea "github.com/charmbracelet/bubbletea"
 	_ "github.com/mattn/go-sqlite3"
 
+	ccdb "github.com/tacit7/eye-in-the-sky/internal/ccusage/db"
+	"github.com/tacit7/eye-in-the-sky/internal/ccusage/parser"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/app"
 )
 
@@ -31,8 +34,27 @@ func main() {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 
+	// Initialize CCUsage database
+	home, _ := os.UserHomeDir()
+	ccusageDBPath := filepath.Join(home, ".config", "eye-in-the-sky", "ccusage.sqlite")
+
+	var ccusageDB *ccdb.CCUsageDB
+	ccusageDB, err = ccdb.New(ccusageDBPath)
+	if err != nil {
+		log.Printf("Warning: CCUsage database unavailable: %v", err)
+		ccusageDB = nil
+	} else {
+		defer ccusageDB.Close()
+
+		// Perform initial sync
+		syncMgr := parser.NewSyncManager(ccusageDB)
+		if err := syncMgr.Sync(); err != nil {
+			log.Printf("Warning: Initial CCUsage sync failed: %v", err)
+		}
+	}
+
 	// Create model
-	model, err := app.NewModel(db)
+	model, err := app.NewModel(db, ccusageDB)
 	if err != nil {
 		log.Fatalf("Failed to create model: %v", err)
 	}
