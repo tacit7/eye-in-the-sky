@@ -196,6 +196,16 @@ func (a *App) refreshAgents() error {
 
 // loadConfig loads configuration from file
 func loadConfig(path string) (*Config, error) {
+	// If no path provided, use default config
+	if path == "" {
+		return &Config{
+			PollInterval:   5, // 5 seconds
+			DefaultFilter:  "active",
+			ScrollMode:     "vim",
+			PaginationMode: "auto",
+		}, nil
+	}
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -211,6 +221,11 @@ func loadConfig(path string) (*Config, error) {
 
 // loadKeymap loads keymap from file
 func loadKeymap(path string) (*Keymap, error) {
+	// If no path provided, use default keymap
+	if path == "" {
+		return &Keymap{}, nil
+	}
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
