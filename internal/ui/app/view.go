@@ -615,100 +615,63 @@ func (m *Model) renderHelp() string {
 
 // renderCommitsTab renders the commits tab content
 func (m *Model) renderCommitsTab() string {
-	var b strings.Builder
-
 	if len(m.commits) == 0 {
-		b.WriteString(m.styles.Subtle.Render("No commits found"))
-		return b.String()
+		return m.styles.Subtle.Render("No commits found")
 	}
-
-	for _, commit := range m.commits {
-		line := fmt.Sprintf("%s  %s  %s",
-			commit.Timestamp.Format("2006-01-02 15:04"),
-			truncateCommitHash(commit.CommitHash, 8),
-			truncate(commit.CommitMessage, 80),
-		)
-		b.WriteString(m.styles.Text.Render(line))
-		b.WriteString("\n")
+	var b strings.Builder
+	for _, c := range m.commits {
+		line := fmt.Sprintf("%s %s %s",
+			c.Timestamp.Format("15:04:05"),
+			truncateCommitHash(c.CommitHash, 8),
+			truncate(c.CommitMessage, 60))
+		b.WriteString(line + "\n")
 	}
-
 	return b.String()
 }
 
 // renderLogsTab renders the logs tab content
 func (m *Model) renderLogsTab() string {
-	var b strings.Builder
-
 	if len(m.logs) == 0 {
-		b.WriteString(m.styles.Subtle.Render("No logs found"))
-		return b.String()
+		return m.styles.Subtle.Render("No logs found")
 	}
-
+	var b strings.Builder
 	for _, log := range m.logs {
-		timestamp := log.Timestamp.Format("15:04:05")
-		logType := truncate(log.Type, 10)
-		message := truncate(log.Message, 100)
-
-		typeStyle := m.styles.Text
-		switch log.Type {
-		case "error":
-			typeStyle = m.styles.Failed
-		case "warning":
-			typeStyle = m.styles.Idle
-		case "info":
-			typeStyle = m.styles.Active
-		}
-
-		line := fmt.Sprintf("%s  %s  %s",
-			m.styles.Subtle.Render(timestamp),
-			typeStyle.Render(logType),
-			m.styles.Text.Render(message),
-		)
-		b.WriteString(line)
-		b.WriteString("\n")
+		line := fmt.Sprintf("%s %s %s",
+			log.Timestamp.Format("15:04:05"),
+			log.Type,
+			truncate(log.Message, 60))
+		b.WriteString(line + "\n")
 	}
-
 	return b.String()
 }
 
 // renderNotesTab renders the notes tab content
 func (m *Model) renderNotesTab() string {
-	var b strings.Builder
-
 	if len(m.notes) == 0 {
-		b.WriteString(m.styles.Subtle.Render("No notes found"))
-		return b.String()
+		return m.styles.Subtle.Render("No notes available")
 	}
-
+	var b strings.Builder
 	for _, note := range m.notes {
-		timestamp := note.Timestamp.Format("2006-01-02 15:04")
-		b.WriteString(m.styles.Primary.Render(timestamp))
-		b.WriteString("\n")
-		b.WriteString(m.styles.Text.Render(note.Content))
-		b.WriteString("\n\n")
+		line := fmt.Sprintf("%s %s",
+			note.Timestamp.Format("15:04:05"),
+			truncate(note.Content, 80))
+		b.WriteString(line + "\n")
 	}
-
 	return b.String()
 }
 
 // renderActionsTab renders the actions tab content
 func (m *Model) renderActionsTab() string {
-	var b strings.Builder
-
 	if len(m.actions) == 0 {
-		b.WriteString(m.styles.Subtle.Render("No actions found"))
-		return b.String()
+		return m.styles.Subtle.Render("No actions recorded")
 	}
-
-	for _, action := range m.actions {
-		line := fmt.Sprintf("%s  %-15s  %s",
-			action.Timestamp.Format("15:04:05"),
-			action.ActionType,
-			action.Description,
-		)
-		b.WriteString(m.styles.Text.Render(line))
-		b.WriteString("\n")
+	var b strings.Builder
+	for _, a := range m.actions {
+		line := fmt.Sprintf("%s %-12s %s",
+			a.Timestamp.Format("15:04:05"),
+			a.ActionType,
+			truncate(a.Description, 60))
+		b.WriteString(line + "\n")
 	}
-
 	return b.String()
 }
