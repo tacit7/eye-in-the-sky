@@ -17,18 +17,24 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleKeyPress(msg)
 
 	case tea.MouseMsg:
-		// Handle mouse clicks in detail view for tab navigation
-		if m.currentView == ViewDetail && msg.Type == tea.MouseLeft {
-			m.tabs.Update(msg)
-			// If user clicked on back arrow (index 0), go back to list
-			if m.tabs.ActiveIndex == 0 {
-				m.currentView = ViewList
-				m.detailOffset = 0
-				return m, nil
-			}
-			// Load data for the new tab
-			if err := m.loadTabData(); err != nil {
-				m.err = err
+		// Handle mouse clicks on tabs
+		if msg.Type == tea.MouseLeft {
+			if m.currentView == ViewList {
+				// List view tab clicks
+				m.listTabs.Update(msg)
+			} else if m.currentView == ViewDetail {
+				// Detail view tab clicks
+				m.tabs.Update(msg)
+				// If user clicked on back arrow (index 0), go back to list
+				if m.tabs.ActiveIndex == 0 {
+					m.currentView = ViewList
+					m.detailOffset = 0
+					return m, nil
+				}
+				// Load data for the new tab
+				if err := m.loadTabData(); err != nil {
+					m.err = err
+				}
 			}
 		}
 		return m, nil
@@ -153,6 +159,7 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "u":
 		m.listTabs.Set(3) // Usage
+		m.statusMsg = "Switched to Usage tab"
 		return m, nil
 	case "i", "I":
 		// Initialize CCUsage database (only in Usage tab when empty)
