@@ -264,26 +264,32 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.err = err
 		}
 		return m, nil
+	case "o":
+		m.tabs.Set(0) // Overview tab
+		if err := m.loadTabData(); err != nil {
+			m.err = err
+		}
+		return m, nil
 	case "c":
-		m.tabs.Set(0) // Commits tab
+		m.tabs.Set(1) // Commits tab
 		if err := m.loadTabData(); err != nil {
 			m.err = err
 		}
 		return m, nil
 	case "l":
-		m.tabs.Set(1) // Logs tab
+		m.tabs.Set(2) // Logs tab
 		if err := m.loadTabData(); err != nil {
 			m.err = err
 		}
 		return m, nil
 	case "n":
-		m.tabs.Set(2) // Notes tab
+		m.tabs.Set(3) // Notes tab
 		if err := m.loadTabData(); err != nil {
 			m.err = err
 		}
 		return m, nil
 	case "a":
-		m.tabs.Set(3) // Actions tab
+		m.tabs.Set(4) // Actions tab
 		if err := m.loadTabData(); err != nil {
 			m.err = err
 		}

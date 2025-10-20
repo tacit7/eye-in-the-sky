@@ -102,13 +102,15 @@ func (m *Model) renderDetailView() string {
 	// Build detail content based on active tab
 	var detailContent string
 	switch m.tabs.ActiveIndex {
-	case 0: // Commits
+	case 0: // Overview
+		detailContent = m.renderAgentDetails()
+	case 1: // Commits
 		detailContent = m.renderCommitsTab()
-	case 1: // Logs
+	case 2: // Logs
 		detailContent = m.renderLogsTab()
-	case 2: // Notes
+	case 3: // Notes
 		detailContent = m.renderNotesTab()
-	case 3: // Actions
+	case 4: // Actions
 		detailContent = m.renderActionsTab()
 	default:
 		detailContent = m.renderAgentDetails()

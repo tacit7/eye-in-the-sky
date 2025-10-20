@@ -219,7 +219,7 @@ func NewModel(db *sql.DB) (*Model, error) {
 
 	// Create tabs for detail view
 	tabs := components.NewTabsModel(
-		[]string{"Commits", "Logs", "Notes", "Actions"},
+		[]string{"Overview", "Commits", "Logs", "Notes", "Actions"},
 		theme.Colors.Active,
 		theme.Colors.Text,
 	)
@@ -522,10 +522,10 @@ func (m *Model) loadTabData() error {
 	}
 
 	switch m.tabs.ActiveIndex {
-	case 1: // Logs tab
+	case 2: // Logs tab
 		return m.loadLogs()
 	default:
-		// Other tabs (Commits, Notes, Actions) already loaded by loadAgentDetails
+		// Other tabs (Overview, Commits, Notes, Actions) already loaded by loadAgentDetails
 		return nil
 	}
 }
