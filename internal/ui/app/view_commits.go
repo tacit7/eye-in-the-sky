@@ -4,6 +4,10 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+
+	"github.com/alecthomas/chroma/v2/formatters"
+	"github.com/alecthomas/chroma/v2/lexers"
+	"github.com/alecthomas/chroma/v2/styles"
 )
 
 // renderCommitsView renders the commits view with split panes
@@ -67,7 +71,9 @@ func (m *Model) renderCommitDetails(commit Commit) string {
 		if err == nil && diff != "" {
 			b.WriteString(m.styles.Title.Render("Diff"))
 			b.WriteString("\n")
-			b.WriteString(m.styles.Subtle.Render(diff))
+			// Apply syntax highlighting to the diff
+			highlightedDiff := highlightDiff(diff)
+			b.WriteString(highlightedDiff)
 		}
 	}
 
@@ -76,18 +82,55 @@ func (m *Model) renderCommitDetails(commit Commit) string {
 
 // getCommitDiff retrieves the diff for a commit
 func getCommitDiff(hash string, worktreePath string) (string, error) {
-	cmd := exec.Command("git", "show", "--stat", hash)
+	cmd := exec.Command("git", "show", "--color=never", hash)
 	cmd.Dir = worktreePath
 	output, err := cmd.Output()
 	if err != nil {
 		return "", err
 	}
 
-	// Truncate if too large (>5000 chars)
 	diff := string(output)
+
+	// Truncate if too large (>5000 chars)
 	if len(diff) > 5000 {
 		diff = diff[:5000] + "\n... (diff truncated)"
 	}
 
 	return diff, nil
+}
+
+// highlightDiff applies syntax highlighting to git diff output
+func highlightDiff(diff string) string {
+	// Get the diff lexer
+	lexer := lexers.Get("diff")
+	if lexer == nil {
+		lexer = lexers.Fallback
+	}
+
+	// Use a terminal-friendly style
+	style := styles.Get("monokai")
+	if style == nil {
+		style = styles.Fallback
+	}
+
+	// Create a terminal256 formatter with ANSI colors
+	formatter := formatters.Get("terminal256")
+	if formatter == nil {
+		formatter = formatters.Fallback
+	}
+
+	// Tokenize the diff
+	iterator, err := lexer.Tokenise(nil, diff)
+	if err != nil {
+		return diff // Return unhighlighted on error
+	}
+
+	// Format with colors
+	var builder strings.Builder
+	err = formatter.Format(&builder, style, iterator)
+	if err != nil {
+		return diff // Return unhighlighted on error
+	}
+
+	return builder.String()
 }
