@@ -8,7 +8,10 @@ import (
 
 	"github.com/charmbracelet/bubbles/help"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/tacit7/eye-in-the-sky/internal/ccusage/api"
+	"github.com/tacit7/eye-in-the-sky/internal/ccusage/db"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/components"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/util"
 )
@@ -19,10 +22,6 @@ type ViewMode int
 const (
 	ViewList ViewMode = iota
 	ViewDetail
-	ViewLogs
-	ViewTasks
-	ViewCommits
-	ViewNotes
 )
 
 // Model represents the application state
@@ -46,8 +45,14 @@ type Model struct {
 	// Claude binary path
 	claudePath string
 
+	// Markdown renderer
+	mdRenderer *glamour.TermRenderer
+
 	// Tabs for detail view
 	tabs components.TabsModel
+
+	// Tabs for list view
+	listTabs components.TabsModel
 
 	// View state
 	currentView ViewMode
@@ -59,13 +64,18 @@ type Model struct {
 	listOffset    int
 
 	// Agent detail state
-	selectedAgent *Agent
-	detailOffset  int
-	actions       []Action
-	commits       []Commit
-	notes         []Note
-	tasks         []Task
-	logs          []Log
+	selectedAgent  *Agent
+	detailOffset   int
+	actions        []Action
+	commits        []Commit
+	notes          []Note
+	tasks          []Task
+	logs           []Log
+	sessionMetrics []SessionMetric
+
+	// Overview state
+	allSessionMetrics  []SessionMetric // All metrics from all agents
+	monthlyCosts       []*SessionMetric // Monthly costs with timestamps
 
 	// Per-view scroll state
 	tasksIndex    int
@@ -92,6 +102,22 @@ type Model struct {
 
 	// Status message
 	statusMsg string
+
+	// CCUsage database connection
+	ccusageDB *db.CCUsageDB
+
+	// Cached ccusage data
+	ccusageDaily    []api.DailyReport
+	ccusageSessions []api.SessionReport
+	ccusageMonthly  *api.MonthlyReport
+	ccusageBlock    *api.ActiveBlockReport
+	ccusageCosts    *api.CostSummary
+
+	// CCUsage sync state
+	ccusageSyncing    bool
+	ccusageSyncStatus string
+	ccusageEntryCount int
+	lastCCUsageSync   time.Time
 }
 
 // Agent represents an agent from the database
@@ -110,6 +136,7 @@ type Agent struct {
 	AgentDescription    string
 	ProjectName         string
 	CurrentSessionID    string
+	ParentAgentID       string
 }
 
 // Action represents an agent action from the database
@@ -167,6 +194,23 @@ type Log struct {
 	Timestamp time.Time
 }
 
+// SessionMetric represents token usage and cost tracking
+type SessionMetric struct {
+	ID               int
+	AgentID          string
+	SessionID        string
+	TokensUsed       int
+	TokensBudget     int
+	TokensRemaining  int
+	InputTokens      int
+	OutputTokens     int
+	EstimatedCostUSD float64
+	ModelName        string
+	Timestamp        time.Time
+	CreatedAt        time.Time
+	Notes            string
+}
+
 // Styles holds all lipgloss styles
 type Styles struct {
 	Active    lipgloss.Style
@@ -185,7 +229,7 @@ type Styles struct {
 }
 
 // NewModel creates a new application model
-func NewModel(db *sql.DB) (*Model, error) {
+func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 	// Load configuration
 	config, err := LoadConfig()
 	if err != nil {
@@ -219,15 +263,34 @@ func NewModel(db *sql.DB) (*Model, error) {
 		claudePath = ""
 	}
 
-	// Create tabs for detail view
+	// Create tabs for agent detail view (← is back arrow, unicode 8678)
 	tabs := components.NewTabsModel(
-		[]string{"[O]verview", "[C]ommits", "[L]ogs", "[N]otes", "[A]ctions"},
+		[]string{"← Back", "[A]gent View", "[C]ommits", "[L]ogs", "[N]otes", "[A]ctions"},
 		theme.Colors.Active,
 		theme.Colors.Text,
 	)
 
+	// Create tabs for overview (agent list)
+	listTabs := components.NewTabsModel(
+		[]string{"[O]verview", "[P]roject", "[C]laude", "[U]sage"},
+		theme.Colors.Active,
+		theme.Colors.Text,
+	)
+
+	// Create markdown renderer (initialize with default width, will be updated on resize)
+	mdRenderer, err := glamour.NewTermRenderer(
+		glamour.WithAutoStyle(),
+		glamour.WithWordWrap(80),
+	)
+	if err != nil {
+		// Don't fail startup, just log warning
+		fmt.Fprintf(os.Stderr, "Warning: Failed to create markdown renderer: %v\n", err)
+		mdRenderer = nil
+	}
+
 	m := &Model{
 		db:            db,
+		ccusageDB:     ccusageDB,
 		config:        config,
 		keys:          keys,
 		theme:         theme,
@@ -236,10 +299,13 @@ func NewModel(db *sql.DB) (*Model, error) {
 		showHelp:      false,
 		windowFocuser: windowFocuser,
 		claudePath:    claudePath,
+		mdRenderer:    mdRenderer,
 		tabs:          tabs,
+		listTabs:      listTabs,
 		currentView:   ViewList,
 		showAll:       config.ShowAllAgents,
 		agents:        []Agent{},
+		ccusageSyncing: false,
 	}
 
 	// Load initial agent list
@@ -291,7 +357,7 @@ func (m *Model) loadAgents() error {
 	query := `
 		SELECT id, status, source, created_at, updated_at,
 		       git_worktree_path, feature_description, current_task,
-		       last_activity_at, window_id, terminal_application, description, project_name, current_session_id
+		       last_activity_at, window_id, terminal_application, description, project_name, current_session_id, parent_agent_id
 		FROM agents
 	`
 
@@ -299,7 +365,10 @@ func (m *Model) loadAgents() error {
 		query += ` WHERE status IN ('active', 'working', 'idle', 'stale', 'unknown')`
 	}
 
-	query += ` ORDER BY last_activity_at DESC`
+	query += ` ORDER BY
+		CASE WHEN parent_agent_id IS NULL THEN id ELSE parent_agent_id END,
+		CASE WHEN parent_agent_id IS NULL THEN 0 ELSE 1 END,
+		last_activity_at DESC`
 
 	rows, err := m.db.Query(query)
 	if err != nil {
@@ -310,13 +379,13 @@ func (m *Model) loadAgents() error {
 	agents := []Agent{}
 	for rows.Next() {
 		var a Agent
-		var gitPath, featureDesc, currentTask, windowID, terminalApp, desc, projectName, sessionID sql.NullString
+		var gitPath, featureDesc, currentTask, windowID, terminalApp, desc, projectName, sessionID, parentAgentID sql.NullString
 		var lastActivity sql.NullTime
 
 		err := rows.Scan(
 			&a.ID, &a.Status, &a.Source, &a.CreatedAt, &a.UpdatedAt,
 			&gitPath, &featureDesc, &currentTask, &lastActivity,
-			&windowID, &terminalApp, &desc, &projectName, &sessionID,
+			&windowID, &terminalApp, &desc, &projectName, &sessionID, &parentAgentID,
 		)
 		if err != nil {
 			return err
@@ -349,6 +418,9 @@ func (m *Model) loadAgents() error {
 		if sessionID.Valid {
 			a.CurrentSessionID = sessionID.String
 		}
+		if parentAgentID.Valid {
+			a.ParentAgentID = parentAgentID.String
+		}
 
 		agents = append(agents, a)
 	}
@@ -359,6 +431,18 @@ func (m *Model) loadAgents() error {
 	// Adjust selected index if needed
 	if m.selectedIndex >= len(m.agents) && len(m.agents) > 0 {
 		m.selectedIndex = len(m.agents) - 1
+	}
+
+	// Also load all session metrics for the Usage tab
+	if err := m.loadAllSessionMetrics(); err != nil {
+		// Don't fail if metrics fail to load
+		return nil
+	}
+
+	// Load monthly costs for the Usage tab
+	if err := m.loadMonthlyCosts(); err != nil {
+		// Don't fail if monthly costs fail to load
+		return nil
 	}
 
 	return rows.Err()
@@ -473,6 +557,12 @@ func (m *Model) loadAgentDetails() error {
 	}
 	m.notes = notes
 
+	// Load session metrics
+	if err := m.loadSessionMetrics(); err != nil {
+		// Don't fail if metrics loading fails, just log it
+		m.err = err
+	}
+
 	return commitRows.Err()
 }
 
@@ -515,6 +605,280 @@ func (m *Model) loadLogs() error {
 	}
 
 	return rows.Err()
+}
+
+// loadMonthlyCosts loads all session metrics from the current month with timestamps
+func (m *Model) loadMonthlyCosts() error {
+	query := `
+		SELECT id, agent_id, session_id, tokens_used, tokens_budget, tokens_remaining,
+		       input_tokens, output_tokens, estimated_cost_usd, model_name, timestamp, created_at, notes
+		FROM session_metrics
+		WHERE strftime('%Y-%m', timestamp) = strftime('%Y-%m', 'now')
+		ORDER BY timestamp DESC
+	`
+
+	rows, err := m.db.Query(query)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	metrics := []*SessionMetric{}
+	for rows.Next() {
+		var metric SessionMetric
+		var sessionID, modelName, notes sql.NullString
+		var inputTokens, outputTokens sql.NullInt64
+		var estimatedCost sql.NullFloat64
+
+		err := rows.Scan(
+			&metric.ID,
+			&metric.AgentID,
+			&sessionID,
+			&metric.TokensUsed,
+			&metric.TokensBudget,
+			&metric.TokensRemaining,
+			&inputTokens,
+			&outputTokens,
+			&estimatedCost,
+			&modelName,
+			&metric.Timestamp,
+			&metric.CreatedAt,
+			&notes,
+		)
+		if err != nil {
+			return err
+		}
+
+		if sessionID.Valid {
+			metric.SessionID = sessionID.String
+		}
+		if inputTokens.Valid {
+			metric.InputTokens = int(inputTokens.Int64)
+		}
+		if outputTokens.Valid {
+			metric.OutputTokens = int(outputTokens.Int64)
+		}
+		if estimatedCost.Valid {
+			metric.EstimatedCostUSD = estimatedCost.Float64
+		}
+		if modelName.Valid {
+			metric.ModelName = modelName.String
+		}
+		if notes.Valid {
+			metric.Notes = notes.String
+		}
+
+		metrics = append(metrics, &metric)
+	}
+
+	m.monthlyCosts = metrics
+	return rows.Err()
+}
+
+// loadAllSessionMetrics loads the latest session metrics for all agents
+func (m *Model) loadAllSessionMetrics() error {
+	query := `
+		SELECT DISTINCT ON (agent_id) id, agent_id, session_id, tokens_used, tokens_budget, tokens_remaining,
+		       input_tokens, output_tokens, estimated_cost_usd, model_name, timestamp, created_at, notes
+		FROM session_metrics
+		ORDER BY agent_id, timestamp DESC
+	`
+
+	rows, err := m.db.Query(query)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	metrics := []SessionMetric{}
+	for rows.Next() {
+		var metric SessionMetric
+		var sessionID, modelName, notes sql.NullString
+		var inputTokens, outputTokens sql.NullInt64
+		var estimatedCost sql.NullFloat64
+
+		err := rows.Scan(
+			&metric.ID,
+			&metric.AgentID,
+			&sessionID,
+			&metric.TokensUsed,
+			&metric.TokensBudget,
+			&metric.TokensRemaining,
+			&inputTokens,
+			&outputTokens,
+			&estimatedCost,
+			&modelName,
+			&metric.Timestamp,
+			&metric.CreatedAt,
+			&notes,
+		)
+		if err != nil {
+			return err
+		}
+
+		if sessionID.Valid {
+			metric.SessionID = sessionID.String
+		}
+		if inputTokens.Valid {
+			metric.InputTokens = int(inputTokens.Int64)
+		}
+		if outputTokens.Valid {
+			metric.OutputTokens = int(outputTokens.Int64)
+		}
+		if estimatedCost.Valid {
+			metric.EstimatedCostUSD = estimatedCost.Float64
+		}
+		if modelName.Valid {
+			metric.ModelName = modelName.String
+		}
+		if notes.Valid {
+			metric.Notes = notes.String
+		}
+
+		metrics = append(metrics, metric)
+	}
+
+	m.allSessionMetrics = metrics
+	return rows.Err()
+}
+
+// loadSessionMetrics loads session metrics for the current agent
+func (m *Model) loadSessionMetrics() error {
+	if m.selectedAgent == nil {
+		m.sessionMetrics = []SessionMetric{}
+		return nil
+	}
+
+	metricsQuery := `
+		SELECT id, agent_id, session_id, tokens_used, tokens_budget, tokens_remaining,
+		       input_tokens, output_tokens, estimated_cost_usd, model_name, timestamp, created_at, notes
+		FROM session_metrics
+		WHERE agent_id = ?
+		ORDER BY timestamp DESC
+		LIMIT 10
+	`
+
+	rows, err := m.db.Query(metricsQuery, m.selectedAgent.ID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	metrics := []SessionMetric{}
+	for rows.Next() {
+		var metric SessionMetric
+		var sessionID, modelName, notes sql.NullString
+		var inputTokens, outputTokens sql.NullInt64
+		var estimatedCost sql.NullFloat64
+
+		err := rows.Scan(
+			&metric.ID,
+			&metric.AgentID,
+			&sessionID,
+			&metric.TokensUsed,
+			&metric.TokensBudget,
+			&metric.TokensRemaining,
+			&inputTokens,
+			&outputTokens,
+			&estimatedCost,
+			&modelName,
+			&metric.Timestamp,
+			&metric.CreatedAt,
+			&notes,
+		)
+		if err != nil {
+			return err
+		}
+
+		if sessionID.Valid {
+			metric.SessionID = sessionID.String
+		}
+		if inputTokens.Valid {
+			metric.InputTokens = int(inputTokens.Int64)
+		}
+		if outputTokens.Valid {
+			metric.OutputTokens = int(outputTokens.Int64)
+		}
+		if estimatedCost.Valid {
+			metric.EstimatedCostUSD = estimatedCost.Float64
+		}
+		if modelName.Valid {
+			metric.ModelName = modelName.String
+		}
+		if notes.Valid {
+			metric.Notes = notes.String
+		}
+
+		metrics = append(metrics, metric)
+	}
+
+	m.sessionMetrics = metrics
+
+	return rows.Err()
+}
+
+// loadCCUsageData loads Claude Code usage data from ccusage database
+func (m *Model) loadCCUsageData() error {
+	if m.ccusageDB == nil {
+		return nil
+	}
+
+	// Get entry count
+	count, err := m.ccusageDB.GetEntryCount()
+	if err != nil {
+		m.ccusageEntryCount = 0
+	} else {
+		m.ccusageEntryCount = count
+	}
+
+	// If no entries, don't bother querying
+	if m.ccusageEntryCount == 0 {
+		m.ccusageDaily = []api.DailyReport{}
+		m.ccusageSessions = []api.SessionReport{}
+		m.ccusageMonthly = nil
+		m.ccusageBlock = nil
+		m.ccusageCosts = nil
+		return nil
+	}
+
+	// Load daily usage (last 7 days)
+	daily, err := api.GetDailyUsageReport(m.ccusageDB, 7)
+	if err != nil {
+		return fmt.Errorf("failed to load daily usage: %w", err)
+	}
+	m.ccusageDaily = daily
+
+	// Load sessions
+	sessions, err := api.GetSessionUsageReport(m.ccusageDB, 10)
+	if err != nil {
+		return fmt.Errorf("failed to load sessions: %w", err)
+	}
+	m.ccusageSessions = sessions
+
+	// Load monthly summary
+	now := time.Now()
+	monthly, err := api.GetMonthlyUsageReport(m.ccusageDB, now.Year(), int(now.Month()))
+	if err != nil {
+		return fmt.Errorf("failed to load monthly: %w", err)
+	}
+	m.ccusageMonthly = monthly
+
+	// Load active block
+	block, err := api.GetActiveBlockReport(m.ccusageDB)
+	if err != nil {
+		return fmt.Errorf("failed to load active block: %w", err)
+	}
+	m.ccusageBlock = block
+
+	// Load cost summary
+	costs, err := api.GetTotalCostSummary(m.ccusageDB, 30)
+	if err != nil {
+		return fmt.Errorf("failed to load cost summary: %w", err)
+	}
+	m.ccusageCosts = costs
+
+	m.lastCCUsageSync = time.Now()
+	return nil
 }
 
 // loadTabData loads data for the currently active tab

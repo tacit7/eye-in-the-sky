@@ -266,3 +266,17 @@ func (c *CCUsageDB) GetMonthlyUsage(year, month int, project string) (models.Dai
 
 	return usage, nil
 }
+
+// GetEntryCount returns the number of entries in the database
+func (c *CCUsageDB) GetEntryCount() (int, error) {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	var count int
+	err := c.db.QueryRow("SELECT COUNT(*) FROM usage_entries").Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count entries: %w", err)
+	}
+
+	return count, nil
+}
