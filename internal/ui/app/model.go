@@ -19,6 +19,9 @@ const (
 	ViewList ViewMode = iota
 	ViewDetail
 	ViewLogs
+	ViewTasks
+	ViewCommits
+	ViewNotes
 )
 
 // Model represents the application state
@@ -57,6 +60,21 @@ type Model struct {
 	actions       []Action
 	commits       []Commit
 	notes         []Note
+	tasks         []Task
+	logs          []Log
+
+	// Per-view scroll state
+	tasksIndex    int
+	tasksOffset   int
+	commitsIndex  int
+	commitsOffset int
+	notesIndex    int
+	notesOffset   int
+	logsIndex     int
+	logsOffset    int
+
+	// Right pane scroll state
+	rightPaneOffset int
 
 	// UI dimensions
 	width  int
@@ -112,6 +130,34 @@ type Note struct {
 	ID        int
 	SessionID string
 	Content   string
+	Timestamp time.Time
+}
+
+// Task represents a Taskwarrior task
+type Task struct {
+	UUID        string
+	Description string
+	Status      string
+	Priority    string
+	Project     string
+	Tags        []string
+	Due         time.Time
+	Entry       time.Time
+	Annotations []TaskAnnotation
+}
+
+// TaskAnnotation represents a task annotation with timestamp
+type TaskAnnotation struct {
+	Entry       time.Time
+	Description string
+}
+
+// Log represents a session log entry
+type Log struct {
+	ID        int
+	SessionID string
+	Type      string
+	Message   string
 	Timestamp time.Time
 }
 
@@ -414,6 +460,47 @@ func (m *Model) loadAgentDetails() error {
 	m.notes = notes
 
 	return commitRows.Err()
+}
+
+// loadLogs loads logs for the current agent session
+func (m *Model) loadLogs() error {
+	if m.selectedAgent == nil || m.selectedAgent.CurrentSessionID == "" {
+		m.logs = []Log{}
+		return nil
+	}
+
+	logsQuery := `
+		SELECT id, session_id, type, message, created_at
+		FROM logs
+		WHERE session_id = ?
+		ORDER BY created_at DESC
+		LIMIT 100
+	`
+
+	rows, err := m.db.Query(logsQuery, m.selectedAgent.CurrentSessionID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	logs := []Log{}
+	for rows.Next() {
+		var log Log
+		err := rows.Scan(&log.ID, &log.SessionID, &log.Type, &log.Message, &log.Timestamp)
+		if err != nil {
+			return err
+		}
+		logs = append(logs, log)
+	}
+
+	m.logs = logs
+
+	// Reset scroll position if needed
+	if len(m.logs) > 0 && m.logsIndex >= len(m.logs) {
+		m.logsIndex = len(m.logs) - 1
+	}
+
+	return rows.Err()
 }
 
 // SelectedAgent returns the currently selected agent

@@ -73,6 +73,12 @@ func (m *Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleDetailKeys(msg)
 	case ViewLogs:
 		return m.handleLogsKeys(msg)
+	case ViewTasks:
+		return m.handleTasksKeys(msg)
+	case ViewCommits:
+		return m.handleCommitsKeys(msg)
+	case ViewNotes:
+		return m.handleNotesKeys(msg)
 	case ViewList:
 		// List view falls through to global keys, then list-specific
 	}
@@ -243,6 +249,39 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// View navigation keys (only from Detail view)
+	switch msg.String() {
+	case "t":
+		// Switch to Tasks view
+		m.currentView = ViewTasks
+		if err := m.loadTasks(); err != nil {
+			m.err = err
+			m.statusMsg = fmt.Sprintf("Failed to load tasks: %v", err)
+		}
+		return m, nil
+
+	case "C":
+		// Switch to Commits view
+		m.currentView = ViewCommits
+		m.commitsIndex = 0
+		return m, nil
+
+	case "N":
+		// Switch to Notes view
+		m.currentView = ViewNotes
+		m.notesIndex = 0
+		return m, nil
+
+	case "L":
+		// Switch to Logs view
+		m.currentView = ViewLogs
+		if err := m.loadLogs(); err != nil {
+			m.err = err
+			m.statusMsg = fmt.Sprintf("Failed to load logs: %v", err)
+		}
+		return m, nil
+	}
+
 	if Matches(msg, m.keys.ScrollDown) {
 		// Scroll down
 		m.detailOffset++
@@ -372,5 +411,351 @@ func (m *Model) archiveAgentCmd(agentID string) tea.Cmd {
 			success: true,
 			message: fmt.Sprintf("Archived agent %s", truncateID(agentID, 8)),
 		}
+	}
+}
+
+// handleTasksKeys handles keys in tasks view
+func (m *Model) handleTasksKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// In tasks view, q/esc go back to detail instead of quitting
+	if Matches(msg, m.keys.Back) || Matches(msg, m.keys.Quit) {
+		// Go back to detail view
+		m.currentView = ViewDetail
+		m.tasksIndex = 0
+		m.tasksOffset = 0
+		return m, nil
+	}
+
+	if Matches(msg, m.keys.NavigateDown) {
+		// Move down in list
+		if m.tasksIndex < len(m.tasks)-1 {
+			m.tasksIndex++
+			m.adjustTasksScroll()
+			m.rightPaneOffset = 0 // Reset detail scroll
+		}
+		return m, nil
+	}
+
+	if Matches(msg, m.keys.NavigateUp) {
+		// Move up in list
+		if m.tasksIndex > 0 {
+			m.tasksIndex--
+			m.adjustTasksScroll()
+			m.rightPaneOffset = 0 // Reset detail scroll
+		}
+		return m, nil
+	}
+
+	if Matches(msg, m.keys.ScrollDown) {
+		// Scroll detail pane down
+		m.rightPaneOffset++
+		return m, nil
+	}
+
+	if Matches(msg, m.keys.ScrollUp) {
+		// Scroll detail pane up
+		if m.rightPaneOffset > 0 {
+			m.rightPaneOffset--
+		}
+		return m, nil
+	}
+
+	if Matches(msg, m.keys.Refresh) {
+		// Reload tasks
+		if err := m.loadTasks(); err != nil {
+			m.err = err
+			m.statusMsg = fmt.Sprintf("Failed to reload tasks: %v", err)
+		} else {
+			m.statusMsg = "Tasks refreshed"
+		}
+		return m, nil
+	}
+
+	if Matches(msg, m.keys.PageDown) {
+		// Page down
+		m.tasksIndex += 10
+		if m.tasksIndex >= len(m.tasks) {
+			m.tasksIndex = len(m.tasks) - 1
+		}
+		if m.tasksIndex < 0 {
+			m.tasksIndex = 0
+		}
+		m.adjustTasksScroll()
+		return m, nil
+	}
+
+	if Matches(msg, m.keys.PageUp) {
+		// Page up
+		m.tasksIndex -= 10
+		if m.tasksIndex < 0 {
+			m.tasksIndex = 0
+		}
+		m.adjustTasksScroll()
+		return m, nil
+	}
+
+	// Fallback keys (temporary)
+	switch msg.String() {
+	case "g":
+		// Go to top
+		m.tasksIndex = 0
+		m.tasksOffset = 0
+	case "G":
+		// Go to bottom
+		if len(m.tasks) > 0 {
+			m.tasksIndex = len(m.tasks) - 1
+			m.adjustTasksScroll()
+		}
+	case "d":
+		// Mark task done
+		if m.tasksIndex >= 0 && m.tasksIndex < len(m.tasks) {
+			if err := m.markTaskDone(); err != nil {
+				m.err = err
+				m.statusMsg = fmt.Sprintf("Failed to mark task done: %v", err)
+			} else {
+				m.statusMsg = "Task marked done"
+			}
+		}
+	}
+
+	return m, nil
+}
+
+// handleCommitsKeys handles keys in commits view
+func (m *Model) handleCommitsKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// In commits view, q/esc go back to detail instead of quitting
+	if Matches(msg, m.keys.Back) || Matches(msg, m.keys.Quit) {
+		// Go back to detail view
+		m.currentView = ViewDetail
+		m.commitsIndex = 0
+		m.commitsOffset = 0
+		return m, nil
+	}
+
+	if Matches(msg, m.keys.NavigateDown) {
+		// Move down in list
+		if m.commitsIndex < len(m.commits)-1 {
+			m.commitsIndex++
+			m.adjustCommitsScroll()
+			m.rightPaneOffset = 0 // Reset detail scroll
+		}
+		return m, nil
+	}
+
+	if Matches(msg, m.keys.NavigateUp) {
+		// Move up in list
+		if m.commitsIndex > 0 {
+			m.commitsIndex--
+			m.adjustCommitsScroll()
+			m.rightPaneOffset = 0 // Reset detail scroll
+		}
+		return m, nil
+	}
+
+	if Matches(msg, m.keys.ScrollDown) {
+		// Scroll detail pane down
+		m.rightPaneOffset++
+		return m, nil
+	}
+
+	if Matches(msg, m.keys.ScrollUp) {
+		// Scroll detail pane up
+		if m.rightPaneOffset > 0 {
+			m.rightPaneOffset--
+		}
+		return m, nil
+	}
+
+	if Matches(msg, m.keys.Refresh) {
+		// Reload commits
+		if err := m.loadAgentDetails(); err != nil {
+			m.err = err
+			m.statusMsg = fmt.Sprintf("Failed to reload commits: %v", err)
+		} else {
+			m.statusMsg = "Commits refreshed"
+		}
+		return m, nil
+	}
+
+	if Matches(msg, m.keys.PageDown) {
+		// Page down
+		m.commitsIndex += 10
+		if m.commitsIndex >= len(m.commits) {
+			m.commitsIndex = len(m.commits) - 1
+		}
+		if m.commitsIndex < 0 {
+			m.commitsIndex = 0
+		}
+		m.adjustCommitsScroll()
+		return m, nil
+	}
+
+	if Matches(msg, m.keys.PageUp) {
+		// Page up
+		m.commitsIndex -= 10
+		if m.commitsIndex < 0 {
+			m.commitsIndex = 0
+		}
+		m.adjustCommitsScroll()
+		return m, nil
+	}
+
+	// Fallback keys (temporary)
+	switch msg.String() {
+	case "g":
+		// Go to top
+		m.commitsIndex = 0
+		m.commitsOffset = 0
+	case "G":
+		// Go to bottom
+		if len(m.commits) > 0 {
+			m.commitsIndex = len(m.commits) - 1
+			m.adjustCommitsScroll()
+		}
+	}
+
+	return m, nil
+}
+
+// handleNotesKeys handles keys in notes view
+func (m *Model) handleNotesKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// In notes view, q/esc go back to detail instead of quitting
+	if Matches(msg, m.keys.Back) || Matches(msg, m.keys.Quit) {
+		// Go back to detail view
+		m.currentView = ViewDetail
+		m.notesIndex = 0
+		m.notesOffset = 0
+		return m, nil
+	}
+
+	if Matches(msg, m.keys.NavigateDown) {
+		// Move down in list
+		if m.notesIndex < len(m.notes)-1 {
+			m.notesIndex++
+			m.adjustNotesScroll()
+			m.rightPaneOffset = 0 // Reset detail scroll
+		}
+		return m, nil
+	}
+
+	if Matches(msg, m.keys.NavigateUp) {
+		// Move up in list
+		if m.notesIndex > 0 {
+			m.notesIndex--
+			m.adjustNotesScroll()
+			m.rightPaneOffset = 0 // Reset detail scroll
+		}
+		return m, nil
+	}
+
+	if Matches(msg, m.keys.ScrollDown) {
+		// Scroll detail pane down
+		m.rightPaneOffset++
+		return m, nil
+	}
+
+	if Matches(msg, m.keys.ScrollUp) {
+		// Scroll detail pane up
+		if m.rightPaneOffset > 0 {
+			m.rightPaneOffset--
+		}
+		return m, nil
+	}
+
+	if Matches(msg, m.keys.Refresh) {
+		// Reload notes
+		if err := m.loadAgentDetails(); err != nil {
+			m.err = err
+			m.statusMsg = fmt.Sprintf("Failed to reload notes: %v", err)
+		} else {
+			m.statusMsg = "Notes refreshed"
+		}
+		return m, nil
+	}
+
+	if Matches(msg, m.keys.PageDown) {
+		// Page down
+		m.notesIndex += 10
+		if m.notesIndex >= len(m.notes) {
+			m.notesIndex = len(m.notes) - 1
+		}
+		if m.notesIndex < 0 {
+			m.notesIndex = 0
+		}
+		m.adjustNotesScroll()
+		return m, nil
+	}
+
+	if Matches(msg, m.keys.PageUp) {
+		// Page up
+		m.notesIndex -= 10
+		if m.notesIndex < 0 {
+			m.notesIndex = 0
+		}
+		m.adjustNotesScroll()
+		return m, nil
+	}
+
+	// Fallback keys (temporary)
+	switch msg.String() {
+	case "g":
+		// Go to top
+		m.notesIndex = 0
+		m.notesOffset = 0
+	case "G":
+		// Go to bottom
+		if len(m.notes) > 0 {
+			m.notesIndex = len(m.notes) - 1
+			m.adjustNotesScroll()
+		}
+	}
+
+	return m, nil
+}
+
+// adjustTasksScroll adjusts tasks scroll offset to keep selected item visible
+func (m *Model) adjustTasksScroll() {
+	visibleHeight := m.height - 8
+	if visibleHeight < 1 {
+		visibleHeight = 10
+	}
+
+	if m.tasksIndex < m.tasksOffset {
+		m.tasksOffset = m.tasksIndex
+	}
+
+	if m.tasksIndex >= m.tasksOffset+visibleHeight {
+		m.tasksOffset = m.tasksIndex - visibleHeight + 1
+	}
+}
+
+// adjustCommitsScroll adjusts commits scroll offset to keep selected item visible
+func (m *Model) adjustCommitsScroll() {
+	visibleHeight := m.height - 8
+	if visibleHeight < 1 {
+		visibleHeight = 10
+	}
+
+	if m.commitsIndex < m.commitsOffset {
+		m.commitsOffset = m.commitsIndex
+	}
+
+	if m.commitsIndex >= m.commitsOffset+visibleHeight {
+		m.commitsOffset = m.commitsIndex - visibleHeight + 1
+	}
+}
+
+// adjustNotesScroll adjusts notes scroll offset to keep selected item visible
+func (m *Model) adjustNotesScroll() {
+	visibleHeight := m.height - 8
+	if visibleHeight < 1 {
+		visibleHeight = 10
+	}
+
+	if m.notesIndex < m.notesOffset {
+		m.notesOffset = m.notesIndex
+	}
+
+	if m.notesIndex >= m.notesOffset+visibleHeight {
+		m.notesOffset = m.notesIndex - visibleHeight + 1
 	}
 }
