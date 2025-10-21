@@ -69,7 +69,12 @@ func (m *Model) renderAgentTasks() string {
 		if len(status) > 10 {
 			status = status[:10]
 		}
-		items[i] = fmt.Sprintf("[%-10s] %s", status, truncate(task.Description, 50))
+		// Extract short UUID (first 8 chars) for ticket number display
+		shortUUID := task.UUID
+		if len(shortUUID) > 8 {
+			shortUUID = shortUUID[:8]
+		}
+		items[i] = fmt.Sprintf("[%s] [%-10s] %s", shortUUID, status, truncate(task.Description, 40))
 	}
 
 	// Build detail content for right pane
@@ -187,16 +192,16 @@ func (m *Model) loadTasks() error {
 	// Build task filter for current session
 	// Filter by session tag with underscores: session:45045287_a68c_4ec5_833f_5c46535be414
 	// Show all tasks (pending, completed, deleted, etc.)
-	if m.selectedAgent.CurrentSessionID == "" {
+	if m.selectedAgent.SessionID == "" {
 		// No session ID, return empty list
 		m.tasks = make([]Task, 0)
 		return nil
 	}
 
-	sessionID := strings.ReplaceAll(m.selectedAgent.CurrentSessionID, "-", "_")
+	sessionID := strings.ReplaceAll(m.selectedAgent.SessionID, "-", "_")
 	// Search for session ID in task descriptions since tags with colons aren't parsed correctly
 	// This is a workaround for Taskwarrior not supporting colons in tag names
-	log.Printf("[TASKS] Loading tasks for session: %s (formatted: %s)", m.selectedAgent.CurrentSessionID, sessionID)
+	log.Printf("[TASKS] Loading tasks for session: %s (formatted: %s)", m.selectedAgent.SessionID, sessionID)
 
 	// Run task export and filter by session ID in description
 	cmd := exec.Command("task", "export")
@@ -362,12 +367,12 @@ func (m *Model) loadTasksCmd() tea.Cmd {
 		}
 
 		// Handle no session ID
-		if m.selectedAgent.CurrentSessionID == "" {
+		if m.selectedAgent.SessionID == "" {
 			return TasksLoadedMsg{Tasks: make([]Task, 0)}
 		}
 
-		sessionID := strings.ReplaceAll(m.selectedAgent.CurrentSessionID, "-", "_")
-		log.Printf("[TASKS] Async loading tasks for session: %s", m.selectedAgent.CurrentSessionID)
+		sessionID := strings.ReplaceAll(m.selectedAgent.SessionID, "-", "_")
+		log.Printf("[TASKS] Async loading tasks for session: %s", m.selectedAgent.SessionID)
 
 		// Run task export
 		cmd := exec.Command("task", "export")
