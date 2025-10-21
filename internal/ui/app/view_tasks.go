@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"sort"
 	"strings"
 	"time"
 )
@@ -122,7 +123,7 @@ func (m *Model) renderTaskDetails(task Task) string {
 	return b.String()
 }
 
-// loadTasks loads tasks for the current agent from Taskwarrior
+// loadTasks loads tasks for the current session from Taskwarrior
 func (m *Model) loadTasks() error {
 	if m.selectedAgent == nil {
 		return fmt.Errorf("no agent selected")
@@ -133,16 +134,19 @@ func (m *Model) loadTasks() error {
 		return fmt.Errorf("taskwarrior not installed")
 	}
 
-	// Build task filter for current agent
-	// Filter by agent tag: +agent:68F3F2EA
+	// Build task filter for current session
+	// Filter by session tag with underscores: session:45045287_a68c_4ec5_833f_5c46535be414
 	// Show all tasks (pending, completed, deleted, etc.)
-	agentTag := fmt.Sprintf("+agent:%s", m.selectedAgent.ID)
+	sessionID := strings.ReplaceAll(m.selectedAgent.CurrentSessionID, "-", "_")
+	sessionTag := fmt.Sprintf("+session:%s", sessionID)
 
-	// Run task export - shows all statuses for this agent
-	cmd := exec.Command("task", agentTag, "export")
+	// Run task export - shows all statuses for this session
+	cmd := exec.Command("task", sessionTag, "export")
 	output, err := cmd.Output()
 	if err != nil {
-		return fmt.Errorf("failed to export tasks: %w", err)
+		// Return empty list if no tasks found (not an error)
+		m.tasks = make([]Task, 0)
+		return nil
 	}
 
 	// Parse JSON output
@@ -168,12 +172,40 @@ func (m *Model) loadTasks() error {
 		m.tasks = append(m.tasks, task)
 	}
 
+	// Sort tasks: by priority first, deleted tasks at bottom
+	sortTasksByPriorityAndStatus(m.tasks)
+
 	// Reset scroll position
 	if len(m.tasks) > 0 && m.tasksIndex >= len(m.tasks) {
 		m.tasksIndex = len(m.tasks) - 1
 	}
 
 	return nil
+}
+
+// sortTasksByPriorityAndStatus sorts tasks by priority, with deleted tasks at the bottom
+func sortTasksByPriorityAndStatus(tasks []Task) {
+	sort.SliceStable(tasks, func(i, j int) bool {
+		// Deleted tasks always go to the bottom
+		if tasks[i].Status == "deleted" && tasks[j].Status != "deleted" {
+			return false
+		}
+		if tasks[i].Status != "deleted" && tasks[j].Status == "deleted" {
+			return true
+		}
+
+		// Priority order: H > M > L > (empty)
+		priorityOrder := map[string]int{"H": 3, "M": 2, "L": 1, "": 0}
+		priorityI := priorityOrder[tasks[i].Priority]
+		priorityJ := priorityOrder[tasks[j].Priority]
+
+		if priorityI != priorityJ {
+			return priorityI > priorityJ
+		}
+
+		// If priorities are equal, sort by entry time (oldest first)
+		return tasks[i].Entry.Before(tasks[j].Entry)
+	})
 }
 
 // markTaskDone marks the currently selected task as done
