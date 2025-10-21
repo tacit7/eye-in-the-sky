@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/tacit7/eye-in-the-sky/internal/database"
 	"github.com/tacit7/eye-in-the-sky/internal/utils"
 	"github.com/tacit7/eye-in-the-sky/internal/window"
@@ -688,7 +689,7 @@ func (t *Tools) StartSession(args StartSessionArgs) (StartSessionResult, error) 
 	if args.SessionID != nil && *args.SessionID != "" {
 		sessionID = *args.SessionID
 	} else {
-		sessionID = fmt.Sprintf("%s_%d", agentID, time.Now().Unix())
+		sessionID = uuid.New().String()
 	}
 
 	session := &database.Session{

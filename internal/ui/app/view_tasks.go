@@ -146,11 +146,12 @@ func (m *Model) loadTasks() error {
 	}
 
 	sessionID := strings.ReplaceAll(m.selectedAgent.CurrentSessionID, "-", "_")
-	sessionTag := fmt.Sprintf("+session:%s", sessionID)
+	// Search for session ID in task descriptions since tags with colons aren't parsed correctly
+	// This is a workaround for Taskwarrior not supporting colons in tag names
 	log.Printf("[TASKS] Loading tasks for session: %s (formatted: %s)", m.selectedAgent.CurrentSessionID, sessionID)
 
-	// Run task export - shows all statuses for this session
-	cmd := exec.Command("task", sessionTag, "export")
+	// Run task export and filter by session ID in description
+	cmd := exec.Command("task", "export")
 	output, err := cmd.Output()
 	if err != nil {
 		log.Printf("[TASKS] Task command failed: %v", err)
@@ -166,12 +167,25 @@ func (m *Model) loadTasks() error {
 		return fmt.Errorf("failed to parse tasks: %w", err)
 	}
 
-	// Convert to Task structs
+	// Convert to Task structs, filtering by session ID in description
 	m.tasks = make([]Task, 0, len(tasks))
+	sessionSearchStr := fmt.Sprintf("+session:%s", sessionID)
+	agentSearchStr := fmt.Sprintf("+agent:%s", strings.ReplaceAll(m.selectedAgent.ID, "-", "_"))
 	for _, taskData := range tasks {
+		description := getString(taskData, "description")
+		// Filter tasks that contain the session ID (workaround for Taskwarrior tag parsing)
+		if !strings.Contains(description, sessionSearchStr) {
+			continue
+		}
+		// Clean up description by removing agent and session tags
+		cleanDescription := strings.TrimSpace(description)
+		cleanDescription = strings.ReplaceAll(cleanDescription, sessionSearchStr, "")
+		cleanDescription = strings.ReplaceAll(cleanDescription, agentSearchStr, "")
+		cleanDescription = strings.TrimSpace(cleanDescription)
+
 		task := Task{
 			UUID:        getString(taskData, "uuid"),
-			Description: getString(taskData, "description"),
+			Description: cleanDescription,
 			Status:      getString(taskData, "status"),
 			Priority:    getString(taskData, "priority"),
 			Project:     getString(taskData, "project"),
