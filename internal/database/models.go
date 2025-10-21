@@ -17,7 +17,7 @@ type Agent struct {
 	WindowID            *string    `json:"window_id,omitempty"`
 	TerminalApplication *string    `json:"terminal_application,omitempty"`
 	ProjectName         *string    `json:"project_name,omitempty"`
-	CurrentSessionID    *string    `json:"current_session_id,omitempty"`
+	SessionID           *string    `json:"session_id,omitempty"`
 	PersonaID           *string    `json:"persona_id,omitempty"`
 	ParentAgentID       *string    `json:"parent_agent_id,omitempty"`
 }

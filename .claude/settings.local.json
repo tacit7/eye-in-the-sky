@@ -22,7 +22,15 @@
       "mcp__eye-in-the-sky__i-commits",
       "Bash(task 22 info:*)",
       "Bash(mcp__eye-in-the-sky__i-instructions)",
-      "Read(//Users/urielmaldonado/.claude/eye-in-the-sky/**)"
+      "Read(//Users/urielmaldonado/.claude/eye-in-the-sky/**)",
+      "mcp__eye-in-the-sky__i-start-session",
+      "Bash(task 25 info:*)",
+      "Bash(git checkout:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(task 26 start:*)",
+      "Bash(task list:*)",
+      "Bash(task 25 start:*)"
     ],
     "deny": [],
     "ask": [],

@@ -8,6 +8,7 @@ type RegisterAgentArgs struct {
 	WorktreePath     *string `json:"worktree_path,omitempty" jsonschema:"description:Path to the git repository (optional)"`
 	ProjectName      *string `json:"project_name,omitempty" jsonschema:"description:Name of the project being worked on (optional)"`
 	ParentAgentID    *string `json:"parent_agent_id,omitempty" jsonschema:"description:Parent agent ID for subagent registration (optional)"`
+	SessionID        *string `json:"session_id,omitempty" jsonschema:"description:Session ID to associate agent with (optional - creates new session if not provided)"`
 }
 
 type RegisterAgentResult struct {
@@ -23,6 +24,7 @@ type RegisterDesktopAgentArgs struct {
 	ProjectName      string  `json:"project_name" jsonschema:"description:Name of the project being worked on"`
 	WindowID         *string `json:"window_id,omitempty" jsonschema:"description:Claude Desktop window identifier for window management (optional)"`
 	ParentAgentID    *string `json:"parent_agent_id,omitempty" jsonschema:"description:Parent agent ID for subagent registration (optional)"`
+	SessionID        *string `json:"session_id,omitempty" jsonschema:"description:Session ID to associate agent with (optional - creates new session if not provided)"`
 }
 
 type RegisterDesktopAgentResult struct {

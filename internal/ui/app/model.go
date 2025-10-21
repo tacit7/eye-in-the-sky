@@ -172,7 +172,7 @@ type Agent struct {
 	TerminalApplication string
 	AgentDescription    string
 	ProjectName         string
-	CurrentSessionID    string
+	SessionID    string
 	ParentAgentID       string
 }
 
@@ -424,7 +424,7 @@ func (m *Model) loadAgents() error {
 	query := `
 		SELECT id, status, source, created_at, updated_at,
 		       git_worktree_path, feature_description, current_task,
-		       last_activity_at, window_id, terminal_application, description, project_name, current_session_id, parent_agent_id
+		       last_activity_at, window_id, terminal_application, description, project_name, session_id, parent_agent_id
 		FROM agents
 	`
 
@@ -491,7 +491,7 @@ func (m *Model) loadAgents() error {
 			a.ProjectName = projectName.String
 		}
 		if sessionID.Valid {
-			a.CurrentSessionID = sessionID.String
+			a.SessionID = sessionID.String
 		}
 		if parentAgentID.Valid {
 			a.ParentAgentID = parentAgentID.String
@@ -600,7 +600,7 @@ func (m *Model) loadAgentDetails() error {
 
 	// Load notes for current session
 	notes := []Note{}
-	if agent.CurrentSessionID != "" {
+	if agent.SessionID != "" {
 		notesQuery := `
 			SELECT id, session_id, content, created_at
 			FROM notes
@@ -609,7 +609,7 @@ func (m *Model) loadAgentDetails() error {
 			LIMIT 20
 		`
 
-		noteRows, err := m.db.Query(notesQuery, agent.CurrentSessionID)
+		noteRows, err := m.db.Query(notesQuery, agent.SessionID)
 		if err != nil {
 			return err
 		}
@@ -643,7 +643,7 @@ func (m *Model) loadAgentDetails() error {
 
 // loadLogs loads logs for the current agent session
 func (m *Model) loadLogs() error {
-	if m.selectedAgent == nil || m.selectedAgent.CurrentSessionID == "" {
+	if m.selectedAgent == nil || m.selectedAgent.SessionID == "" {
 		m.logs = []Log{}
 		return nil
 	}
@@ -656,7 +656,7 @@ func (m *Model) loadLogs() error {
 		LIMIT 100
 	`
 
-	rows, err := m.db.Query(logsQuery, m.selectedAgent.CurrentSessionID)
+	rows, err := m.db.Query(logsQuery, m.selectedAgent.SessionID)
 	if err != nil {
 		return err
 	}

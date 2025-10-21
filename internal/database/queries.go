@@ -26,13 +26,13 @@ func (db *DB) GetAgent(id string) (*Agent, error) {
 	}
 
 	query := `
-		SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, current_session_id, persona_id, parent_agent_id
+		SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, session_id, persona_id, parent_agent_id
 		FROM agents WHERE id = ?
 	`
 	var agent Agent
 	row := db.conn.QueryRow(query, id)
 	err := row.Scan(&agent.ID, &agent.Status, &agent.Source, &agent.Description, &agent.CreatedAt, &agent.UpdatedAt,
-		&agent.GitWorktreePath, &agent.FeatureDescription, &agent.CurrentTask, &agent.LastActivityAt, &agent.WindowID, &agent.ProjectName, &agent.CurrentSessionID, &agent.PersonaID, &agent.ParentAgentID)
+		&agent.GitWorktreePath, &agent.FeatureDescription, &agent.CurrentTask, &agent.LastActivityAt, &agent.WindowID, &agent.ProjectName, &agent.SessionID, &agent.PersonaID, &agent.ParentAgentID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, NewAgentError(id, "get", ErrAgentNotFound)
@@ -258,13 +258,13 @@ func (db *DB) ListAgents(status string) ([]*Agent, error) {
 		// Special handling for "active" filter - show all active sessions
 		if status == "active" {
 			query = `
-				SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, current_session_id, persona_id
+				SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, session_id, persona_id
 				FROM agents WHERE status IN ('active', 'working', 'idle')
 				ORDER BY updated_at DESC
 			`
 		} else {
 			query = `
-				SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, current_session_id, persona_id
+				SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, session_id, persona_id
 				FROM agents WHERE status = ?
 				ORDER BY updated_at DESC
 			`
@@ -272,7 +272,7 @@ func (db *DB) ListAgents(status string) ([]*Agent, error) {
 		}
 	} else {
 		query = `
-			SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, current_session_id, persona_id
+			SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, session_id, persona_id
 			FROM agents
 			ORDER BY updated_at DESC
 		`
@@ -300,7 +300,7 @@ func (db *DB) ListAgents(status string) ([]*Agent, error) {
 			&agent.LastActivityAt,
 			&agent.WindowID,
 			&agent.ProjectName,
-			&agent.CurrentSessionID,
+			&agent.SessionID,
 			&agent.PersonaID,
 		)
 		if err != nil {
@@ -499,7 +499,7 @@ func (db *DB) GetContext(sessionID string) (map[string]string, error) {
 
 // UpdateAgentCurrentSession sets the current session for an agent
 func (db *DB) UpdateAgentCurrentSession(agentID, sessionID string) error {
-	query := `UPDATE agents SET current_session_id = ? WHERE id = ?`
+	query := `UPDATE agents SET session_id = ? WHERE id = ?`
 	_, err := db.conn.Exec(query, sessionID, agentID)
 	if err != nil {
 		return fmt.Errorf("failed to update current session: %w", err)
@@ -514,11 +514,11 @@ func (db *DB) GetCurrentSessionForAgent(agentID string) (*Session, error) {
 		return nil, err
 	}
 
-	if agent.CurrentSessionID == nil || *agent.CurrentSessionID == "" {
+	if agent.SessionID == nil || *agent.SessionID == "" {
 		return nil, fmt.Errorf("no active session for agent %s", agentID)
 	}
 
-	return db.GetSession(*agent.CurrentSessionID)
+	return db.GetSession(*agent.SessionID)
 }
 
 // CreatePersona inserts a new persona

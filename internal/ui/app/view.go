@@ -509,7 +509,7 @@ func (m *Model) renderAgentLine(agent Agent, selected bool) string {
 
 	// Session ID or fallback (only first 8 chars)
 	var sessionIDDisplay string
-	fullSessionID := agent.CurrentSessionID
+	fullSessionID := agent.SessionID
 	if fullSessionID == "" {
 		sessionIDDisplay = "—"
 	} else {
@@ -586,9 +586,15 @@ func (m *Model) renderAgentDetails() string {
 		b.WriteString("\n")
 	}
 
-	if agent.CurrentSessionID != "" {
+	if agent.SessionID != "" {
 		b.WriteString(m.styles.Primary.Render("Session ID: "))
-		b.WriteString(m.styles.Text.Render(agent.CurrentSessionID))
+		b.WriteString(m.styles.Text.Render(agent.SessionID))
+		b.WriteString("\n")
+	}
+
+	if agent.ParentAgentID != "" {
+		b.WriteString(m.styles.Primary.Render("Parent Agent: "))
+		b.WriteString(m.styles.Text.Render(agent.ParentAgentID))
 		b.WriteString("\n")
 	}
 

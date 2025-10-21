@@ -62,8 +62,8 @@ func (m *Model) handleListClick(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	sessionIDColStart := contentRight - 15
 	if msg.X >= sessionIDColStart && msg.X < contentRight {
 		agent := m.agents[rowIndex]
-		if agent.CurrentSessionID != "" {
-			copyToClipboard(agent.CurrentSessionID)
+		if agent.SessionID != "" {
+			copyToClipboard(agent.SessionID)
 			m.statusMsg = "Session ID copied to clipboard"
 		}
 		return m, nil

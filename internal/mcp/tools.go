@@ -46,6 +46,22 @@ func (t *Tools) RegisterAgent(args RegisterAgentArgs) (RegisterAgentResult, erro
 		return RegisterAgentResult{Success: false, Message: fmt.Sprintf("Agent %s already exists", agentID)}, nil
 	}
 
+	// Determine session ID: explicit provided > parent's session > new session
+	var sessionID *string
+	if args.SessionID != nil && *args.SessionID != "" {
+		// Use provided session ID
+		sessionID = args.SessionID
+	} else if args.ParentAgentID != nil && *args.ParentAgentID != "" {
+		// Inherit parent's session
+		parentAgent, err := t.db.GetAgent(*args.ParentAgentID)
+		if err != nil || parentAgent == nil {
+			return RegisterAgentResult{Success: false, Message: fmt.Sprintf("Parent agent %s not found", *args.ParentAgentID)}, nil
+		}
+		if parentAgent.SessionID != nil && *parentAgent.SessionID != "" {
+			sessionID = parentAgent.SessionID
+		}
+	}
+
 	// Create new agent and log registration action atomically
 	agent := &database.Agent{
 		ID:                 agentID,
@@ -56,6 +72,7 @@ func (t *Tools) RegisterAgent(args RegisterAgentArgs) (RegisterAgentResult, erro
 		FeatureDescription: &args.Description,
 		ProjectName:        args.ProjectName,
 		ParentAgentID:      args.ParentAgentID,
+		SessionID:   sessionID,
 		LastActivityAt:     timePtr(time.Now()),
 	}
 
@@ -92,6 +109,22 @@ func (t *Tools) RegisterDesktopAgent(args RegisterDesktopAgentArgs) (RegisterDes
 		return RegisterDesktopAgentResult{Success: false, Message: fmt.Sprintf("Agent %s already exists", agentID)}, nil
 	}
 
+	// Determine session ID: explicit provided > parent's session > new session
+	var sessionID *string
+	if args.SessionID != nil && *args.SessionID != "" {
+		// Use provided session ID
+		sessionID = args.SessionID
+	} else if args.ParentAgentID != nil && *args.ParentAgentID != "" {
+		// Inherit parent's session
+		parentAgent, err := t.db.GetAgent(*args.ParentAgentID)
+		if err != nil || parentAgent == nil {
+			return RegisterDesktopAgentResult{Success: false, Message: fmt.Sprintf("Parent agent %s not found", *args.ParentAgentID)}, nil
+		}
+		if parentAgent.SessionID != nil && *parentAgent.SessionID != "" {
+			sessionID = parentAgent.SessionID
+		}
+	}
+
 	// Create new Claude Desktop agent and log registration action atomically
 	agent := &database.Agent{
 		ID:                 agentID,
@@ -102,6 +135,7 @@ func (t *Tools) RegisterDesktopAgent(args RegisterDesktopAgentArgs) (RegisterDes
 		FeatureDescription: &args.Description,
 		ProjectName:        &args.ProjectName,
 		ParentAgentID:      args.ParentAgentID,
+		SessionID:   sessionID,
 		LastActivityAt:     timePtr(time.Now()),
 		WindowID:           args.WindowID,
 	}
