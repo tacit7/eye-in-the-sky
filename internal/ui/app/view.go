@@ -462,20 +462,23 @@ func (m *Model) renderFooter() string {
 
 // renderAgentLine renders a single agent line in the list
 func (m *Model) renderAgentLine(agent Agent, selected bool) string {
+	// Calculate dynamic status from last activity time
+	calculatedStatus := calculateStatusFromActivity(agent.LastActivityAt)
+	statusStyle := m.getStatusStyle(agent.Status, agent.LastActivityAt)
+
 	// Subagent indicator - green fullwidth vertical for child agents
 	var prefix string
 	var status string
-	statusStyle := m.getStatusStyle(agent.Status, agent.LastActivityAt)
 
 	if agent.ParentAgentID != "" {
 		// Subagent: fullwidth vertical, no circle
 		prefix = m.styles.Active.Render("｜") + " "
-		status = strings.ToUpper(agent.Status)
+		status = strings.ToUpper(calculatedStatus)
 	} else {
 		// Parent agent: normal prefix, with circle
 		prefix = "  "
-		statusIndicator := m.getStatusIndicator(agent.Status)
-		status = statusIndicator + " " + strings.ToUpper(agent.Status)
+		statusIndicator := m.getStatusIndicator(calculatedStatus)
+		status = statusIndicator + " " + strings.ToUpper(calculatedStatus)
 	}
 
 	statusText := statusStyle.Render(status)
@@ -722,6 +725,24 @@ func (m *Model) renderAgentDetails() string {
 	return b.String()
 }
 
+// calculateStatusFromActivity calculates the status based on last activity time
+// Returns one of: active, idle, stale, unknown
+func calculateStatusFromActivity(lastActivity time.Time) string {
+	if lastActivity.IsZero() {
+		return "unknown"
+	}
+	inactiveDuration := time.Since(lastActivity)
+	if inactiveDuration < 30*time.Minute {
+		return "active"
+	} else if inactiveDuration < time.Hour {
+		return "idle"
+	} else if inactiveDuration < 2*time.Hour {
+		return "stale"
+	} else {
+		return "unknown"
+	}
+}
+
 // getStatusIndicator returns the status indicator symbol
 func (m *Model) getStatusIndicator(status string) string {
 	switch status {
@@ -737,23 +758,35 @@ func (m *Model) getStatusIndicator(status string) string {
 		return "✗"
 	case "stale":
 		return "●"
+	case "unknown":
+		return "?"
 	default:
 		return "?"
 	}
 }
 
-// getStatusStyle returns the style for a given status
+// getStatusStyle returns the style for a given status based on last activity time
+// Status is calculated from activity duration:
+// - active: < 30 minutes
+// - idle: 30 minutes - 1 hour
+// - stale: 1 hour - 2 hours
+// - unknown: > 2 hours
 func (m *Model) getStatusStyle(status string, lastActivity time.Time) lipgloss.Style {
-	// Check for stale status
+	// Calculate status from last activity time
 	if !lastActivity.IsZero() {
 		inactiveDuration := time.Since(lastActivity)
-		if inactiveDuration > time.Hour {
-			return m.styles.Unknown
-		} else if inactiveDuration > 30*time.Minute {
+		if inactiveDuration < 30*time.Minute {
+			return m.styles.Active
+		} else if inactiveDuration < time.Hour {
+			return m.styles.Idle
+		} else if inactiveDuration < 2*time.Hour {
 			return m.styles.Stale
+		} else {
+			return m.styles.Unknown
 		}
 	}
 
+	// Fallback to database status if no activity timestamp
 	switch status {
 	case "active":
 		return m.styles.Active
