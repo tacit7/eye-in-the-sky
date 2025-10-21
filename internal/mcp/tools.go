@@ -177,14 +177,14 @@ func (t *Tools) LogCommits(args LogCommitsArgs) (LogCommitsResult, error) {
 	var commitMessages []string
 	var err error
 
+	// Get agent first to obtain full UUID for database operations
+	agent, err := t.db.GetAgent(args.AgentID)
+	if err != nil {
+		return LogCommitsResult{Success: false, Message: fmt.Sprintf("Failed to get agent: %v", err)}, nil
+	}
+
 	// If no hashes provided, try to get latest commits automatically
 	if len(args.CommitHashes) == 0 {
-		// Get agent to find worktree path
-		agent, err := t.db.GetAgent(args.AgentID)
-		if err != nil {
-			return LogCommitsResult{Success: false, Message: fmt.Sprintf("Failed to get agent: %v", err)}, nil
-		}
-
 		workDir := "."
 		if agent.GitWorktreePath != nil {
 			workDir = *agent.GitWorktreePath
@@ -201,9 +201,9 @@ func (t *Tools) LogCommits(args LogCommitsArgs) (LogCommitsResult, error) {
 		commitMessages = args.CommitMessages
 	}
 
-	// Use transaction-safe method
+	// Use transaction-safe method with full agent UUID
 	err = t.db.WithTransaction(context.Background(), func(tx *database.Tx) error {
-		return tx.CreateCommitsTx(args.AgentID, commitHashes, commitMessages)
+		return tx.CreateCommitsTx(agent.ID, commitHashes, commitMessages)
 	})
 
 	if err != nil {
