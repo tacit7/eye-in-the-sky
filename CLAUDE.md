@@ -171,21 +171,23 @@ When finishing work:
 
 ## TUI Dashboard Features
 
-### Agent List View
+### Agent List View (Overview Page)
 - Real-time status of all active agents
 - Visual indicators for agent health (color-coded status)
 - Hierarchical display with green │ for subagents
 - Grouped by parent-child relationships
 - j/k navigation, enter to view details
+- This is the main overview page showing all agents
 
-### Agent Detail View (Tabbed Interface)
+### Agent Detail View (Individual Agent Page - Tabbed Interface)
 - **[O]verview**: Agent info, recent commits, and notes summary
 - **[C]ommits**: Split-pane view of commits with diff details
 - **[L]ogs**: Session logs with timestamp and type filtering
 - **[N]otes**: Session notes with creation timestamps
 - **[A]ctions**: All agent actions with descriptions
 - **[T]asks**: Agent tasks filtered by session, sorted by priority (H>M>L), deleted tasks at bottom
-- Keyboard navigation: o/c/l/n/a/t for tabs, j/k for items, h/l for scrolling
+- **[P]roject tickets**: Project-specific tasks (Note: Known issue - may not respond to keypress)
+- Keyboard navigation: o/c/l/n/a/t/p for tabs, j/k for items, h/l for scrolling
 
 ## Development Guidelines
 

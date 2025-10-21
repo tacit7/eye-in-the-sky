@@ -482,15 +482,20 @@ Web Dashboard: http://localhost:8080 (if web server running)
 TUI: Run 'bin/dashboard' for terminal interface
 
 TUI KEYBINDINGS:
-Agent List View:
+Agent List View (Overview Page):
   [q] Quit          [r] Refresh         [a] Toggle filter (active/all)
   [j/k] Navigate    [Enter] View details
   [n] New session   [c] Continue        [s] Start session   [w] Window
   [L] Logs          [D] Archive
 
-Agent Detail View:
+Agent Detail View (Individual Agent Page):
   [q] Back to list  [r] Refresh         [j/k] Scroll
   [s] Start session [w] Go to window    [L] View all logs
+
+  Tabs (navigate with letter keys):
+  [O] Overview      [C] Commits         [L] Logs
+  [N] Notes         [A] Actions         [T] Tasks
+  [P] Project tickets (Note: Known issue - may not work when pressed)
 
 STATUS INDICATORS:
   Active Sessions (shown by default):
