@@ -554,6 +554,12 @@ func (m *Model) renderAgentDetails() string {
 		b.WriteString("\n")
 	}
 
+	if agent.CurrentSessionID != "" {
+		b.WriteString(m.styles.Primary.Render("Session ID: "))
+		b.WriteString(m.styles.Text.Render(agent.CurrentSessionID))
+		b.WriteString("\n")
+	}
+
 	b.WriteString(m.styles.Primary.Render("Created: "))
 	b.WriteString(m.styles.Text.Render(agent.CreatedAt.Format("2006-01-02 15:04:05")))
 	b.WriteString("\n")

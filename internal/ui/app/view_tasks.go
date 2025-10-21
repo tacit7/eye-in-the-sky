@@ -135,9 +135,10 @@ func (m *Model) loadTasks() error {
 
 	// Build task filter for current agent
 	// Filter by agent tag: +agent:68F3F2EA
+	// Show all tasks (pending, completed, deleted, etc.)
 	agentTag := fmt.Sprintf("+agent:%s", m.selectedAgent.ID)
 
-	// Run task export
+	// Run task export - shows all statuses for this agent
 	cmd := exec.Command("task", agentTag, "export")
 	output, err := cmd.Output()
 	if err != nil {
