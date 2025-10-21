@@ -189,21 +189,26 @@ func (m *Model) loadTasks() error {
 		return fmt.Errorf("taskwarrior not installed")
 	}
 
-	// Build task filter for current session
-	// Filter by session tag with underscores: session:45045287_a68c_4ec5_833f_5c46535be414
-	// Show all tasks (pending, completed, deleted, etc.)
-	if m.selectedAgent.SessionID == "" {
-		// No session ID, return empty list
-		m.tasks = make([]Task, 0)
-		return nil
+	// Determine if this is a subagent or parent agent
+	isSubagent := m.selectedAgent.ParentAgentID != ""
+	var searchTag string
+
+	if isSubagent {
+		// For subagents: filter by +subagent:<agent_id> tag
+		searchTag = fmt.Sprintf("+subagent:%s", strings.ReplaceAll(m.selectedAgent.ID, "-", "_"))
+		log.Printf("[TASKS] Loading tasks for subagent: %s (tag: %s)", m.selectedAgent.ID, searchTag)
+	} else {
+		// For parent agents: filter by +session:<session_id> tag
+		if m.selectedAgent.SessionID == "" {
+			// No session ID, return empty list
+			m.tasks = make([]Task, 0)
+			return nil
+		}
+		searchTag = fmt.Sprintf("+session:%s", strings.ReplaceAll(m.selectedAgent.SessionID, "-", "_"))
+		log.Printf("[TASKS] Loading tasks for session: %s (tag: %s)", m.selectedAgent.SessionID, searchTag)
 	}
 
-	sessionID := strings.ReplaceAll(m.selectedAgent.SessionID, "-", "_")
-	// Search for session ID in task descriptions since tags with colons aren't parsed correctly
-	// This is a workaround for Taskwarrior not supporting colons in tag names
-	log.Printf("[TASKS] Loading tasks for session: %s (formatted: %s)", m.selectedAgent.SessionID, sessionID)
-
-	// Run task export and filter by session ID in description
+	// Run task export and filter by appropriate tag in description
 	cmd := exec.Command("task", "export")
 	output, err := cmd.Output()
 	if err != nil {
@@ -220,19 +225,18 @@ func (m *Model) loadTasks() error {
 		return fmt.Errorf("failed to parse tasks: %w", err)
 	}
 
-	// Convert to Task structs, filtering by session ID in description
+	// Convert to Task structs, filtering by appropriate tag in description
 	m.tasks = make([]Task, 0, len(tasks))
-	sessionSearchStr := fmt.Sprintf("+session:%s", sessionID)
 	agentSearchStr := fmt.Sprintf("+agent:%s", strings.ReplaceAll(m.selectedAgent.ID, "-", "_"))
 	for _, taskData := range tasks {
 		description := getString(taskData, "description")
-		// Filter tasks that contain the session ID (workaround for Taskwarrior tag parsing)
-		if !strings.Contains(description, sessionSearchStr) {
+		// Filter tasks that contain the appropriate tag (workaround for Taskwarrior tag parsing)
+		if !strings.Contains(description, searchTag) {
 			continue
 		}
-		// Clean up description by removing agent and session tags
+		// Clean up description by removing agent and session/subagent tags
 		cleanDescription := strings.TrimSpace(description)
-		cleanDescription = strings.ReplaceAll(cleanDescription, sessionSearchStr, "")
+		cleanDescription = strings.ReplaceAll(cleanDescription, searchTag, "")
 		cleanDescription = strings.ReplaceAll(cleanDescription, agentSearchStr, "")
 		cleanDescription = strings.TrimSpace(cleanDescription)
 
@@ -366,13 +370,22 @@ func (m *Model) loadTasksCmd() tea.Cmd {
 			return TasksErrorMsg{Error: err}
 		}
 
-		// Handle no session ID
-		if m.selectedAgent.SessionID == "" {
-			return TasksLoadedMsg{Tasks: make([]Task, 0)}
-		}
+		// Determine if this is a subagent or parent agent
+		isSubagent := m.selectedAgent.ParentAgentID != ""
+		var searchTag string
 
-		sessionID := strings.ReplaceAll(m.selectedAgent.SessionID, "-", "_")
-		log.Printf("[TASKS] Async loading tasks for session: %s", m.selectedAgent.SessionID)
+		if isSubagent {
+			// For subagents: filter by +subagent:<agent_id> tag
+			searchTag = fmt.Sprintf("+subagent:%s", strings.ReplaceAll(m.selectedAgent.ID, "-", "_"))
+			log.Printf("[TASKS] Async loading tasks for subagent: %s (tag: %s)", m.selectedAgent.ID, searchTag)
+		} else {
+			// For parent agents: filter by +session:<session_id> tag
+			if m.selectedAgent.SessionID == "" {
+				return TasksLoadedMsg{Tasks: make([]Task, 0)}
+			}
+			searchTag = fmt.Sprintf("+session:%s", strings.ReplaceAll(m.selectedAgent.SessionID, "-", "_"))
+			log.Printf("[TASKS] Async loading tasks for session: %s (tag: %s)", m.selectedAgent.SessionID, searchTag)
+		}
 
 		// Run task export
 		cmd := exec.Command("task", "export")
@@ -390,18 +403,17 @@ func (m *Model) loadTasksCmd() tea.Cmd {
 		}
 
 		// Convert to Task structs with filtering
-		sessionSearchStr := fmt.Sprintf("+session:%s", sessionID)
 		agentSearchStr := fmt.Sprintf("+agent:%s", strings.ReplaceAll(m.selectedAgent.ID, "-", "_"))
 		filteredTasks := make([]Task, 0, len(tasks))
 
 		for _, taskData := range tasks {
 			description := getString(taskData, "description")
-			if !strings.Contains(description, sessionSearchStr) {
+			if !strings.Contains(description, searchTag) {
 				continue
 			}
 
 			cleanDescription := strings.TrimSpace(description)
-			cleanDescription = strings.ReplaceAll(cleanDescription, sessionSearchStr, "")
+			cleanDescription = strings.ReplaceAll(cleanDescription, searchTag, "")
 			cleanDescription = strings.ReplaceAll(cleanDescription, agentSearchStr, "")
 			cleanDescription = strings.TrimSpace(cleanDescription)
 
