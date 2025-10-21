@@ -429,8 +429,6 @@ func (m *Model) loadAgents() error {
 	}
 
 	query += ` ORDER BY
-		CASE WHEN parent_agent_id IS NULL THEN id ELSE parent_agent_id END,
-		CASE WHEN parent_agent_id IS NULL THEN 0 ELSE 1 END,
 		CASE status
 			WHEN 'active' THEN 0
 			WHEN 'working' THEN 1
@@ -439,6 +437,8 @@ func (m *Model) loadAgents() error {
 			WHEN 'unknown' THEN 999
 			ELSE 4
 		END,
+		CASE WHEN parent_agent_id IS NULL THEN id ELSE parent_agent_id END,
+		CASE WHEN parent_agent_id IS NULL THEN 0 ELSE 1 END,
 		last_activity_at DESC`
 
 	rows, err := m.db.Query(query)
