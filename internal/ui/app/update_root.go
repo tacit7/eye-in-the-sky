@@ -89,6 +89,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case errMsg:
 		m.err = msg.err
 		return m, nil
+
+	case TasksLoadedMsg, TasksErrorMsg:
+		// Handle async task loading messages
+		return m.handleTasksMessages(msg)
 	}
 
 	return m, nil

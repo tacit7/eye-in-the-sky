@@ -68,10 +68,10 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "T":
 		m.tabs.Set(6) // Tasks tab
-		if err := m.loadTabData(); err != nil {
-			m.err = err
-		}
-		return m, nil
+		// Trigger async task loading
+		m.taskState = TaskLoading
+		m.statusMsg = "Loading tasks..."
+		return m, m.loadTasksCmd()
 	}
 
 	// View navigation keys (only from Detail view)

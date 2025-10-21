@@ -2,9 +2,34 @@ package app
 
 import (
 	"fmt"
+	"log"
+	"os/exec"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
+
+// handleTasksMessages handles messages specific to task loading
+func (m *Model) handleTasksMessages(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case TasksLoadedMsg:
+		m.tasks = msg.Tasks
+		m.taskState = TaskLoaded
+		m.tasksIndex = 0
+		m.tasksOffset = 0
+		m.taskError = nil
+		m.statusMsg = fmt.Sprintf("Loaded %d task(s)", len(msg.Tasks))
+		log.Printf("[TASKS] Successfully loaded %d tasks", len(msg.Tasks))
+		return m, nil
+
+	case TasksErrorMsg:
+		m.taskState = TaskError
+		m.taskError = msg.Error
+		m.statusMsg = fmt.Sprintf("Error loading tasks: %v", msg.Error)
+		log.Printf("[TASKS] Error loading tasks: %v", msg.Error)
+		return m, nil
+	}
+	return m, nil
+}
 
 // handleTasksKeys handles keys in tasks view
 func (m *Model) handleTasksKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -52,14 +77,10 @@ func (m *Model) handleTasksKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if Matches(msg, m.keys.Refresh) {
-		// Reload tasks
-		if err := m.loadTasks(); err != nil {
-			m.err = err
-			m.statusMsg = fmt.Sprintf("Failed to reload tasks: %v", err)
-		} else {
-			m.statusMsg = "Tasks refreshed"
-		}
-		return m, nil
+		// Reload tasks asynchronously
+		m.taskState = TaskLoading
+		m.statusMsg = "Loading tasks..."
+		return m, m.loadTasksCmd()
 	}
 
 	if Matches(msg, m.keys.PageDown) {
@@ -98,13 +119,18 @@ func (m *Model) handleTasksKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.adjustTasksScroll()
 		}
 	case "d":
-		// Mark task done
+		// Mark task done and reload asynchronously
 		if m.tasksIndex >= 0 && m.tasksIndex < len(m.tasks) {
-			if err := m.markTaskDone(); err != nil {
+			task := m.tasks[m.tasksIndex]
+			cmd := exec.Command("task", task.UUID, "done")
+			if err := cmd.Run(); err != nil {
 				m.err = err
 				m.statusMsg = fmt.Sprintf("Failed to mark task done: %v", err)
 			} else {
-				m.statusMsg = "Task marked done"
+				m.statusMsg = "Task marked done, reloading..."
+				// Trigger async reload
+				m.taskState = TaskLoading
+				return m, m.loadTasksCmd()
 			}
 		}
 	}

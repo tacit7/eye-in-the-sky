@@ -107,6 +107,10 @@ type Model struct {
 	// Right pane scroll state
 	rightPaneOffset int
 
+	// Task loading state
+	taskState TaskStateType
+	taskError error
+
 	// UI dimensions
 	width  int
 	height int

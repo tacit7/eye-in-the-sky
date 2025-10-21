@@ -8,13 +8,48 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
+
+// TaskStateType represents the async state of task loading
+type TaskStateType int
+
+const (
+	TaskIdle TaskStateType = iota
+	TaskLoading
+	TaskLoaded
+	TaskError
+)
+
+// TasksLoadedMsg contains the loaded tasks
+type TasksLoadedMsg struct {
+	Tasks []Task
+}
+
+// TasksErrorMsg contains task loading errors
+type TasksErrorMsg struct {
+	Error error
+}
 
 // renderAgentTasks renders the agent tasks tab in the agent detail view
 // Shows tasks filtered by the current session
 func (m *Model) renderAgentTasks() string {
 	if m.selectedAgent == nil {
 		return m.styles.Subtle.Render("No agent selected")
+	}
+
+	// Show loading state
+	if m.taskState == TaskLoading {
+		return m.styles.Subtle.Render("Loading tasks...")
+	}
+
+	// Show error state
+	if m.taskState == TaskError {
+		if m.taskError != nil {
+			return m.styles.Failed.Render(fmt.Sprintf("Error: %v", m.taskError))
+		}
+		return m.styles.Failed.Render("Error loading tasks")
 	}
 
 	// Build item list for left pane
@@ -298,4 +333,77 @@ func getAnnotations(data map[string]interface{}, key string) []TaskAnnotation {
 		return annotations
 	}
 	return nil
+}
+
+// loadTasksCmd returns an async tea.Cmd that loads tasks without blocking
+func (m *Model) loadTasksCmd() tea.Cmd {
+	return func() tea.Msg {
+		// Replicate loadTasks logic but return message instead of modifying model
+		if m.selectedAgent == nil {
+			return TasksErrorMsg{Error: fmt.Errorf("no agent selected")}
+		}
+
+		// Check if taskwarrior is installed
+		if _, err := exec.LookPath("task"); err != nil {
+			return TasksErrorMsg{Error: err}
+		}
+
+		// Handle no session ID
+		if m.selectedAgent.CurrentSessionID == "" {
+			return TasksLoadedMsg{Tasks: make([]Task, 0)}
+		}
+
+		sessionID := strings.ReplaceAll(m.selectedAgent.CurrentSessionID, "-", "_")
+		log.Printf("[TASKS] Async loading tasks for session: %s", m.selectedAgent.CurrentSessionID)
+
+		// Run task export
+		cmd := exec.Command("task", "export")
+		output, err := cmd.Output()
+		if err != nil {
+			log.Printf("[TASKS] Async task command failed: %v", err)
+			// Return empty list instead of error (consistent with sync version)
+			return TasksLoadedMsg{Tasks: make([]Task, 0)}
+		}
+
+		// Parse JSON
+		var tasks []map[string]interface{}
+		if err := json.Unmarshal(output, &tasks); err != nil {
+			return TasksErrorMsg{Error: err}
+		}
+
+		// Convert to Task structs with filtering
+		sessionSearchStr := fmt.Sprintf("+session:%s", sessionID)
+		agentSearchStr := fmt.Sprintf("+agent:%s", strings.ReplaceAll(m.selectedAgent.ID, "-", "_"))
+		filteredTasks := make([]Task, 0, len(tasks))
+
+		for _, taskData := range tasks {
+			description := getString(taskData, "description")
+			if !strings.Contains(description, sessionSearchStr) {
+				continue
+			}
+
+			cleanDescription := strings.TrimSpace(description)
+			cleanDescription = strings.ReplaceAll(cleanDescription, sessionSearchStr, "")
+			cleanDescription = strings.ReplaceAll(cleanDescription, agentSearchStr, "")
+			cleanDescription = strings.TrimSpace(cleanDescription)
+
+			task := Task{
+				UUID:        getString(taskData, "uuid"),
+				Description: cleanDescription,
+				Status:      getString(taskData, "status"),
+				Priority:    getString(taskData, "priority"),
+				Project:     getString(taskData, "project"),
+				Tags:        getTags(taskData, "tags"),
+				Due:         getTime(taskData, "due"),
+				Entry:       getTime(taskData, "entry"),
+				Annotations: getAnnotations(taskData, "annotations"),
+			}
+			filteredTasks = append(filteredTasks, task)
+		}
+
+		// Sort before returning
+		sortTasksByPriorityAndStatus(filteredTasks)
+
+		return TasksLoadedMsg{Tasks: filteredTasks}
+	}
 }
