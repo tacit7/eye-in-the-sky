@@ -10,11 +10,15 @@ const dbClickWindow = 250 * time.Millisecond
 
 // handleListClick handles mouse clicks on the list view
 func (m *Model) handleListClick(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
-	// Check if click is in tabs area
+	// Check if click is in tabs area (only vertical bounds - tabs fill entire width)
 	tabsTop := m.listLayout.HeaderH
 	tabsBottom := tabsTop + m.listLayout.TabsH
 	if msg.Y >= tabsTop && msg.Y < tabsBottom {
-		m.listTabs.Update(msg)
+		// Click is in tabs area - check horizontal bounds
+		// Tabs are rendered at X=0 and span the width
+		if msg.X >= 0 && msg.X < m.width {
+			m.listTabs.Update(msg)
+		}
 		return m, nil
 	}
 
