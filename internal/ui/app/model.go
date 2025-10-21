@@ -568,11 +568,17 @@ func (m *Model) loadAgentDetails() error {
 	}
 	m.actions = actions
 
-	// Load commits
+	// Load commits - includes commits from child agents (hierarchical visibility)
 	commitsQuery := `
+		WITH RECURSIVE agent_hierarchy AS (
+			SELECT id FROM agents WHERE id = ?
+			UNION ALL
+			SELECT a.id FROM agents a
+			INNER JOIN agent_hierarchy ah ON a.parent_agent_id = ah.id
+		)
 		SELECT id, agent_id, commit_hash, commit_message, timestamp
 		FROM commits
-		WHERE agent_id = ?
+		WHERE agent_id IN (SELECT id FROM agent_hierarchy)
 		ORDER BY timestamp DESC
 		LIMIT 20
 	`

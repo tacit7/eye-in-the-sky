@@ -3,7 +3,16 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 )
+
+// repeatPlaceholders creates a comma-separated string of ? placeholders
+func repeatPlaceholders(count int) string {
+	if count <= 0 {
+		return ""
+	}
+	return strings.Repeat("?,", count-1) + "?"
+}
 
 // CreateAgent inserts a new agent
 func (db *DB) CreateAgent(agent *Agent) error {
@@ -184,6 +193,94 @@ func (db *DB) GetActionsForAgent(agentID string, limit int) ([]*Action, error) {
 	}
 
 	return actions, nil
+}
+
+// GetChildAgentIDs recursively retrieves all descendant agent IDs for a given agent
+func (db *DB) GetChildAgentIDs(agentID string) ([]string, error) {
+	query := `
+		WITH RECURSIVE descendants AS (
+			SELECT id FROM agents WHERE parent_agent_id = ?
+			UNION ALL
+			SELECT a.id FROM agents a
+			INNER JOIN descendants d ON a.parent_agent_id = d.id
+		)
+		SELECT id FROM descendants
+	`
+
+	rows, err := db.conn.Query(query, agentID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get child agent IDs: %w", err)
+	}
+	defer rows.Close()
+
+	var childIDs []string
+	for rows.Next() {
+		var id string
+		err := rows.Scan(&id)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan child agent ID: %w", err)
+		}
+		childIDs = append(childIDs, id)
+	}
+
+	return childIDs, nil
+}
+
+// GetCommitsForAgentHierarchy retrieves commits for an agent and all its descendants
+func (db *DB) GetCommitsForAgentHierarchy(agentID string, limit int) ([]*Commit, error) {
+	// Get all child agent IDs
+	childIDs, err := db.GetChildAgentIDs(agentID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get child agents: %w", err)
+	}
+
+	// Build list of all agent IDs (parent + children)
+	allAgentIDs := []string{agentID}
+	allAgentIDs = append(allAgentIDs, childIDs...)
+
+	// Build the query with placeholders for all agent IDs
+	query := `
+		SELECT id, agent_id, commit_hash, commit_message, timestamp
+		FROM commits
+		WHERE agent_id IN (` + repeatPlaceholders(len(allAgentIDs)) + `)
+		ORDER BY timestamp DESC`
+
+	if limit > 0 {
+		query += ` LIMIT ?`
+	}
+
+	// Convert agent IDs to interface slice for variadic argument
+	args := make([]interface{}, len(allAgentIDs))
+	for i, id := range allAgentIDs {
+		args[i] = id
+	}
+	if limit > 0 {
+		args = append(args, limit)
+	}
+
+	rows, err := db.conn.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get commits for agent hierarchy: %w", err)
+	}
+	defer rows.Close()
+
+	var commits []*Commit
+	for rows.Next() {
+		var commit Commit
+		err := rows.Scan(
+			&commit.ID,
+			&commit.AgentID,
+			&commit.CommitHash,
+			&commit.CommitMessage,
+			&commit.Timestamp,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan commit: %w", err)
+		}
+		commits = append(commits, &commit)
+	}
+
+	return commits, nil
 }
 
 // GetCommitsForAgent retrieves all commits for a specific agent
