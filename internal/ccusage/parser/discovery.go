@@ -2,6 +2,7 @@ package parser
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,16 +19,21 @@ type FileInfo struct {
 func DiscoverFiles() ([]FileInfo, error) {
 	var files []FileInfo
 	paths := getClaudePaths()
+	log.Printf("[DISCOVER] Searching in %d paths", len(paths))
 
 	for _, path := range paths {
+		log.Printf("[DISCOVER] Searching path: %s", path)
 		discovered, err := walkClaudeDirectory(path)
 		if err != nil {
+			log.Printf("[DISCOVER] Error in %s: %v", path, err)
 			// Log but continue if one directory fails
 			continue
 		}
+		log.Printf("[DISCOVER] Found %d files in %s", len(discovered), path)
 		files = append(files, discovered...)
 	}
 
+	log.Printf("[DISCOVER] Total files discovered: %d", len(files))
 	if len(files) == 0 {
 		return nil, fmt.Errorf("no JSONL files found in Claude data directories")
 	}
@@ -46,19 +52,23 @@ func getClaudePaths() []string {
 				paths = append(paths, p)
 			}
 		}
+		log.Printf("[DISCOVER] Using CLAUDE_CONFIG_DIR: %v", paths)
 		return paths
 	}
 
 	// Default paths
 	home, err := os.UserHomeDir()
 	if err != nil {
+		log.Printf("[DISCOVER] Error getting home directory: %v", err)
 		return []string{}
 	}
 
-	return []string{
+	paths := []string{
 		filepath.Join(home, ".config", "claude", "projects"),
 		filepath.Join(home, ".claude", "projects"),
 	}
+	log.Printf("[DISCOVER] Using default paths: %v", paths)
+	return paths
 }
 
 // walkClaudeDirectory walks a Claude data directory and discovers JSONL files

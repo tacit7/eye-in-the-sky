@@ -280,3 +280,33 @@ func (c *CCUsageDB) GetEntryCount() (int, error) {
 
 	return count, nil
 }
+
+// GetDistinctMonths retrieves all distinct year-month combinations with data, ordered reverse chronologically
+func (c *CCUsageDB) GetDistinctMonths() ([]string, error) {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	query := `
+		SELECT DISTINCT strftime('%Y-%m', timestamp) as month
+		FROM usage_entries
+		ORDER BY month DESC
+	`
+
+	rows, err := c.db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query distinct months: %w", err)
+	}
+	defer rows.Close()
+
+	var months []string
+	for rows.Next() {
+		var month string
+		err := rows.Scan(&month)
+		if err != nil {
+			continue
+		}
+		months = append(months, month)
+	}
+
+	return months, rows.Err()
+}

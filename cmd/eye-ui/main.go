@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -11,23 +12,39 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 
 	ccdb "github.com/tacit7/eye-in-the-sky/internal/ccusage/db"
-	"github.com/tacit7/eye-in-the-sky/internal/ccusage/parser"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/app"
 )
 
+// SyncWriter wraps a file and ensures all writes are flushed immediately
+type SyncWriter struct {
+	file *os.File
+}
+
+func (sw *SyncWriter) Write(p []byte) (n int, err error) {
+	n, err = sw.file.Write(p)
+	if err == nil {
+		sw.file.Sync()
+	}
+	return
+}
+
 func main() {
-	// Setup logging to file
+	// Setup logging to file - ALL logs go to usage.log
 	home, _ := os.UserHomeDir()
 	logDir := filepath.Join(home, ".config", "eye-in-the-sky")
 	os.MkdirAll(logDir, 0755)
 
-	logFile := filepath.Join(logDir, "tui.log")
-	f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	logFile := filepath.Join(logDir, "usage.log")
+	// Truncate the file on startup to clear old logs
+	f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
-		log.Printf("Warning: Could not open log file: %v", err)
+		fmt.Fprintf(os.Stderr, "Warning: Could not open log file: %v\n", err)
 	} else {
+		defer f.Sync()
 		defer f.Close()
-		log.SetOutput(f)
+		// Use SyncWriter to ensure logs are flushed immediately
+		syncWriter := &SyncWriter{file: f}
+		log.SetOutput(io.MultiWriter(f, syncWriter))
 		log.SetFlags(log.LstdFlags | log.Lshortfile)
 	}
 
@@ -61,12 +78,7 @@ func main() {
 		ccusageDB = nil
 	} else {
 		defer ccusageDB.Close()
-
-		// Perform initial sync
-		syncMgr := parser.NewSyncManager(ccusageDB)
-		if err := syncMgr.Sync(); err != nil {
-			log.Printf("Warning: Initial CCUsage sync failed: %v", err)
-		}
+		// Note: CCUsage sync now happens on-demand when viewing Usage tab
 	}
 
 	// Create model

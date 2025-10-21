@@ -5,7 +5,9 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -101,18 +103,39 @@ func (p *Parser) parseWorker(wg *sync.WaitGroup, fileChan chan FileInfo, resultC
 func (p *Parser) parseFile(file FileInfo) ([]db.UsageEntryRow, error) {
 	f, err := os.Open(file.Path)
 	if err != nil {
+		log.Printf("[PARSE] Error opening file %s: %v", file.Path, err)
 		return nil, fmt.Errorf("failed to open file %s: %w", file.Path, err)
 	}
 	defer f.Close()
 
+	// Get file size
+	fileInfo, err := f.Stat()
+	if err != nil {
+		log.Printf("[PARSE] Error getting file info for %s: %v", file.Path, err)
+		return nil, fmt.Errorf("failed to stat file %s: %w", file.Path, err)
+	}
+	fileSize := fileInfo.Size()
+	log.Printf("[PARSE] Opening file: %s (size: %d bytes / %.2f MB)", filepath.Base(file.Path), fileSize, float64(fileSize)/(1024*1024))
+
 	var entries []db.UsageEntryRow
+	var totalLines, validEntries, duplicates int
+	var lineNum int = 0
 	scanner := bufio.NewScanner(f)
 
+	// Increase buffer size to handle long lines (some JSONL entries can be very large)
+	const bufferInitSize = 64 * 1024       // 64KB initial
+	const bufferMaxSize = 32 * 1024 * 1024 // 32MB max line size
+	buf := make([]byte, 0, bufferInitSize)
+	scanner.Buffer(buf, bufferMaxSize)
+	log.Printf("[PARSE] Buffer configured: init=%d bytes (64KB), max=%d bytes (32MB)", bufferInitSize, bufferMaxSize)
+
 	for scanner.Scan() {
+		lineNum++
 		line := scanner.Bytes()
 		if len(line) == 0 {
 			continue
 		}
+		totalLines++
 
 		// Parse JSON
 		var entry models.UsageEntry
@@ -129,15 +152,22 @@ func (p *Parser) parseFile(file FileInfo) ([]db.UsageEntryRow, error) {
 
 		// Check for duplicate
 		if p.isDuplicate(row.UniqueHash) {
+			duplicates++
 			continue
 		}
 
+		validEntries++
 		entries = append(entries, *row)
 	}
 
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("error scanning file %s: %w", file.Path, err)
+		log.Printf("[PARSE] ERROR scanning file %s at line %d (buffer: init=%d bytes, max=%d bytes / 32MB): %v",
+			file.Path, lineNum, bufferInitSize, bufferMaxSize, err)
+		return nil, fmt.Errorf("error scanning file %s at line %d: %w", file.Path, lineNum, err)
 	}
+
+	log.Printf("[PARSE] File: %s | Lines: %d | Valid: %d | Duplicates: %d | Final: %d",
+		filepath.Base(file.Path), totalLines, validEntries, duplicates, len(entries))
 
 	return entries, nil
 }
@@ -158,7 +188,13 @@ func (p *Parser) convertToDBRow(entry models.UsageEntry, project string) *db.Usa
 	// Calculate cost if not provided in JSONL
 	cost := entry.CostUSD
 	if cost == 0 {
-		cost = calculateCost(entry.Message.Model, entry.Message.Usage)
+		cost = calculateCostFromLiteLLM(
+			entry.Message.Model,
+			entry.Message.Usage.InputTokens,
+			entry.Message.Usage.OutputTokens,
+			entry.Message.Usage.CacheCreationInputTokens,
+			entry.Message.Usage.CacheReadInputTokens,
+		)
 	}
 
 	return &db.UsageEntryRow{
@@ -195,49 +231,3 @@ func createHash(input string) string {
 	return fmt.Sprintf("%x", hash)
 }
 
-// calculateCost calculates the cost based on model and token usage
-// Pricing based on Claude 3 models as of 2025
-func calculateCost(model string, usage models.UsageMetrics) float64 {
-	// Pricing per 1M tokens
-	var inputPrice, outputPrice, cacheWritePrice, cacheReadPrice float64
-
-	// Model pricing (in USD per 1M tokens)
-	switch model {
-	case "claude-opus-4-20250514", "claude-opus-4-1-20250805":
-		inputPrice = 15.0
-		outputPrice = 75.0
-		cacheWritePrice = 18.75 // 25% of output price
-		cacheReadPrice = 1.50   // 2% of output price
-	case "claude-sonnet-4-20250514", "claude-sonnet-4-1-20250805":
-		inputPrice = 3.0
-		outputPrice = 15.0
-		cacheWritePrice = 3.75   // 25% of output price
-		cacheReadPrice = 0.30    // 2% of output price
-	case "claude-haiku-4-5-20251001":
-		inputPrice = 0.80
-		outputPrice = 4.0
-		cacheWritePrice = 1.0    // 25% of output price
-		cacheReadPrice = 0.08    // 2% of output price
-	default:
-		// Fallback to Sonnet 4 pricing if model not recognized
-		inputPrice = 3.0
-		outputPrice = 15.0
-		cacheWritePrice = 3.75
-		cacheReadPrice = 0.30
-	}
-
-	// Calculate total cost
-	// Input tokens
-	inputCost := float64(usage.InputTokens) * inputPrice / 1_000_000
-
-	// Output tokens
-	outputCost := float64(usage.OutputTokens) * outputPrice / 1_000_000
-
-	// Cache creation (write) tokens
-	cacheWriteCost := float64(usage.CacheCreationInputTokens) * cacheWritePrice / 1_000_000
-
-	// Cache read tokens
-	cacheReadCost := float64(usage.CacheReadInputTokens) * cacheReadPrice / 1_000_000
-
-	return inputCost + outputCost + cacheWriteCost + cacheReadCost
-}

@@ -2,11 +2,30 @@ package app
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/tacit7/eye-in-the-sky/internal/ccusage/api"
 )
+
+// formatNumber formats an integer with comma separators
+func formatNumber(n int) string {
+	s := fmt.Sprintf("%d", n)
+	if len(s) <= 3 {
+		return s
+	}
+
+	var result strings.Builder
+	for i, c := range s {
+		if i > 0 && (len(s)-i)%3 == 0 {
+			result.WriteRune(',')
+		}
+		result.WriteRune(c)
+	}
+	return result.String()
+}
 
 // View renders the current view
 func (m *Model) View() string {
@@ -38,6 +57,15 @@ func (m *Model) renderListView() string {
 	visibleHeight := m.height - 8
 	if visibleHeight < 1 {
 		visibleHeight = 10
+	}
+
+	// Calculate and store layout for click hit testing
+	m.listLayout = ListLayout{
+		HeaderH: 3,                    // renderHeader uses ~3 lines
+		TabsH:   2,                    // tabs box uses ~2 lines
+		FooterH: 2,                    // renderFooter uses ~2 lines
+		Content: Bounds{X: 2, Y: 5, W: m.width - 4, H: visibleHeight + 2},
+		RowH:    1, // one line per agent
 	}
 
 	// Render content based on active tab
@@ -1036,79 +1064,133 @@ func (m *Model) renderUsageTab() string {
 func (m *Model) renderClaudeCodeMetrics() string {
 	var b strings.Builder
 
+	// If no data, try to sync on-demand
+	if m.ccusageEntryCount == 0 && m.ccusageDB != nil {
+		b.WriteString(m.styles.Subtle.Render("No data available\n\n"))
+		b.WriteString(m.styles.Text.Render("Press 'I' to sync and load Claude Code usage data from your local projects.\n"))
+		b.WriteString(m.styles.Subtle.Render("This will scan ~/.config/claude/projects/ and ~/.claude/projects/ for usage logs.\n"))
+		return b.String()
+	}
+
 	// Daily Usage Section
 	if len(m.ccusageDaily) > 0 {
-		b.WriteString(m.styles.Title.Render("Claude Code Daily Usage (Last 7 Days)"))
+		b.WriteString(m.styles.Title.Render("Claude Code Daily Usage"))
 		b.WriteString("\n\n")
 
-		headerLine := fmt.Sprintf("%-12s %-15s %-10s %-10s %-10s",
-			"Date", "Project", "Input", "Output", "Cost USD")
+		// Aggregate by date only
+		dailyTotals := make(map[string]*api.DailyReport)
+		for _, report := range m.ccusageDaily {
+			if daily, exists := dailyTotals[report.Date]; exists {
+				daily.InputTokens += report.InputTokens
+				daily.OutputTokens += report.OutputTokens
+				daily.CacheCreationTokens += report.CacheCreationTokens
+				daily.CacheReadTokens += report.CacheReadTokens
+				daily.TotalCost += report.TotalCost
+			} else {
+				newReport := report
+				dailyTotals[report.Date] = &newReport
+			}
+		}
+
+		// Sort dates in reverse order (most recent first)
+		dates := make([]string, 0, len(dailyTotals))
+		for date := range dailyTotals {
+			dates = append(dates, date)
+		}
+		sort.Strings(dates)
+		sort.Sort(sort.Reverse(sort.StringSlice(dates)))
+
+		// Table header with borders
+		tableWidth := 110
+		b.WriteString(m.styles.Border.Render(strings.Repeat("─", tableWidth)))
+		b.WriteString("\n")
+
+		headerLine := fmt.Sprintf("│ %-12s │ %-14s │ %-14s │ %-14s │ %-14s │ %-16s │ %-12s │",
+			"Date", "Input", "Output", "CacheWr", "CacheRd", "Total Tokens", "Cost USD")
 		b.WriteString(m.styles.Primary.Render(headerLine))
 		b.WriteString("\n")
-		b.WriteString(m.styles.Border.Render(strings.Repeat("─", 70)))
+		b.WriteString(m.styles.Border.Render(strings.Repeat("─", tableWidth)))
 		b.WriteString("\n")
 
 		totalCost := 0.0
-		for _, report := range m.ccusageDaily {
-			line := fmt.Sprintf("%-12s %-15s %-10d %-10d %-10s",
-				report.Date,
-				truncate(report.Project, 12),
-				report.InputTokens,
-				report.OutputTokens,
+		for i, date := range dates {
+			report := dailyTotals[date]
+			totalTokens := report.InputTokens + report.OutputTokens + report.CacheCreationTokens + report.CacheReadTokens
+			line := fmt.Sprintf("│ %-12s │ %-14s │ %-14s │ %-14s │ %-14s │ %-16s │ %-12s │",
+				date,
+				formatNumber(report.InputTokens),
+				formatNumber(report.OutputTokens),
+				formatNumber(report.CacheCreationTokens),
+				formatNumber(report.CacheReadTokens),
+				formatNumber(totalTokens),
 				fmt.Sprintf("$%.4f", report.TotalCost))
-			b.WriteString(m.styles.Text.Render(line))
+
+			// Alternate row colors for better readability (only within table width)
+			if i%2 == 0 {
+				b.WriteString(m.styles.Text.Render(line))
+			} else {
+				// Darker background for alternating rows - only applies to text width
+				altStyle := lipgloss.NewStyle().
+					Foreground(lipgloss.Color("250")).
+					Background(lipgloss.Color("233")).
+					Padding(0, 0)
+				b.WriteString(altStyle.Render(line))
+			}
 			b.WriteString("\n")
 			totalCost += report.TotalCost
 		}
 
-		b.WriteString(m.styles.Subtle.Render(fmt.Sprintf("Daily Total: $%.4f\n", totalCost)))
-	}
-
-	// Session Usage Section
-	if len(m.ccusageSessions) > 0 {
-		b.WriteString("\n\n")
-		b.WriteString(m.styles.Title.Render("Claude Code Sessions"))
-		b.WriteString("\n\n")
-
-		headerLine := fmt.Sprintf("%-20s %-15s %-12s %-10s %-10s",
-			"SessionId", "Project", "Duration", "Tokens", "Cost USD")
-		b.WriteString(m.styles.Primary.Render(headerLine))
+		// Table bottom border
+		b.WriteString(m.styles.Border.Render(strings.Repeat("─", tableWidth)))
 		b.WriteString("\n")
-		b.WriteString(m.styles.Border.Render(strings.Repeat("─", 70)))
-		b.WriteString("\n")
-
-		for _, report := range m.ccusageSessions {
-			tokens := report.InputTokens + report.OutputTokens
-			line := fmt.Sprintf("%-20s %-15s %-12s %-10d %-10s",
-				truncate(report.SessionID, 18),
-				truncate(report.Project, 13),
-				report.Duration,
-				tokens,
-				fmt.Sprintf("$%.4f", report.TotalCost))
-			b.WriteString(m.styles.Text.Render(line))
-			b.WriteString("\n")
-		}
+		b.WriteString(m.styles.Subtle.Render(fmt.Sprintf("Total Cost: $%.4f\n", totalCost)))
 	}
 
 	// Monthly Summary Section
-	if m.ccusageMonthly != nil {
+	if len(m.ccusageMonthly) > 0 {
 		b.WriteString("\n\n")
 		b.WriteString(m.styles.Title.Render("Claude Code Monthly Summary"))
 		b.WriteString("\n\n")
 
-		summary := fmt.Sprintf("Month: %s | Days: %d | Total Tokens: %d | Total Cost: $%.4f\n",
-			m.ccusageMonthly.Month,
-			m.ccusageMonthly.Days,
-			m.ccusageMonthly.TotalInputTokens+m.ccusageMonthly.TotalOutputTokens,
-			m.ccusageMonthly.TotalCost)
-		b.WriteString(m.styles.Text.Render(summary))
+		// Monthly stats table
+		monthlyTableWidth := 95
+		b.WriteString(m.styles.Border.Render(strings.Repeat("─", monthlyTableWidth)))
+		b.WriteString("\n")
 
-		if m.ccusageMonthly.AverageDailyCost > 0 {
-			summary2 := fmt.Sprintf("Avg Daily: $%.4f | Highest Day: $%.4f\n",
-				m.ccusageMonthly.AverageDailyCost,
-				m.ccusageMonthly.HighestDailyCost)
-			b.WriteString(m.styles.Subtle.Render(summary2))
+		monthHeader := fmt.Sprintf("│ %-12s │ %-12s │ %-16s │ %-16s │ %-16s │ %-12s │",
+			"Month", "Days", "Input Tokens", "Output Tokens", "Total Tokens", "Cost USD")
+		b.WriteString(m.styles.Primary.Render(monthHeader))
+		b.WriteString("\n")
+		b.WriteString(m.styles.Border.Render(strings.Repeat("─", monthlyTableWidth)))
+		b.WriteString("\n")
+
+		// Display each month's data
+		for i, monthly := range m.ccusageMonthly {
+			totalTokensMonth := monthly.TotalInputTokens + monthly.TotalOutputTokens + monthly.TotalCacheTokens
+
+			monthLine := fmt.Sprintf("│ %-12s │ %-12d │ %-16s │ %-16s │ %-16s │ %-12s │",
+				monthly.Month,
+				monthly.Days,
+				formatNumber(monthly.TotalInputTokens),
+				formatNumber(monthly.TotalOutputTokens),
+				formatNumber(totalTokensMonth),
+				fmt.Sprintf("$%.4f", monthly.TotalCost))
+
+			// Alternate row colors for better readability
+			if i%2 == 0 {
+				b.WriteString(m.styles.Text.Render(monthLine))
+			} else {
+				altStyle := lipgloss.NewStyle().
+					Foreground(lipgloss.Color("250")).
+					Background(lipgloss.Color("233")).
+					Padding(0, 0)
+				b.WriteString(altStyle.Render(monthLine))
+			}
+			b.WriteString("\n")
 		}
+
+		b.WriteString(m.styles.Border.Render(strings.Repeat("─", monthlyTableWidth)))
+		b.WriteString("\n")
 	}
 
 	// Active Block Section
@@ -1117,55 +1199,43 @@ func (m *Model) renderClaudeCodeMetrics() string {
 		b.WriteString(m.styles.Title.Render("Current Billing Block"))
 		b.WriteString("\n\n")
 
-		blockInfo := fmt.Sprintf("Block: %s to %s | Time Remaining: %s\n",
+		blockInfo := fmt.Sprintf("Block: %s to %s | Time Remaining: %s",
 			m.ccusageBlock.StartTime,
 			m.ccusageBlock.EndTime,
 			m.ccusageBlock.TimeRemaining)
 		b.WriteString(m.styles.Text.Render(blockInfo))
+		b.WriteString("\n")
 
-		blockUsage := fmt.Sprintf("Usage: %d input | %d output | $%.4f total\n",
-			m.ccusageBlock.InputTokens,
-			m.ccusageBlock.OutputTokens,
+		blockUsage := fmt.Sprintf("Usage: %s input | %s output | $%.4f total",
+			formatNumber(m.ccusageBlock.InputTokens),
+			formatNumber(m.ccusageBlock.OutputTokens),
 			m.ccusageBlock.TotalCost)
 		b.WriteString(m.styles.Text.Render(blockUsage))
+		b.WriteString("\n")
 	}
 
 	return b.String()
 }
 
-// renderCombinedSummary renders both data sources combined
+// renderCombinedSummary renders Claude Code usage summary
 func (m *Model) renderCombinedSummary() string {
 	var b strings.Builder
 
-	b.WriteString(m.styles.Title.Render("Combined Cost Summary"))
+	if len(m.ccusageMonthly) == 0 {
+		return ""
+	}
+
+	b.WriteString(m.styles.Title.Render("Total All-Time Cost"))
 	b.WriteString("\n\n")
 
-	eyeInTheSkyTotal := 0.0
-	for _, metric := range m.monthlyCosts {
-		eyeInTheSkyTotal += metric.EstimatedCostUSD
+	// Calculate totals across all months
+	totalCost := 0.0
+	for _, monthly := range m.ccusageMonthly {
+		totalCost += monthly.TotalCost
 	}
 
-	claudeCodeTotal := 0.0
-	if m.ccusageMonthly != nil {
-		claudeCodeTotal = m.ccusageMonthly.TotalCost
-	}
-
-	grandTotal := eyeInTheSkyTotal + claudeCodeTotal
-
-	line1 := fmt.Sprintf("Eye-in-the-Sky Sessions:  $%.4f", eyeInTheSkyTotal)
-	b.WriteString(m.styles.Text.Render(line1))
-	b.WriteString("\n")
-
-	line2 := fmt.Sprintf("Claude Code Usage:        $%.4f", claudeCodeTotal)
-	b.WriteString(m.styles.Text.Render(line2))
-	b.WriteString("\n")
-
-	line3 := "─────────────────────────────────"
-	b.WriteString(m.styles.Border.Render(line3))
-	b.WriteString("\n")
-
-	line4 := fmt.Sprintf("Total Monthly Cost:       $%.4f", grandTotal)
-	b.WriteString(m.styles.Primary.Render(line4))
+	line := fmt.Sprintf("Claude Code Usage: $%.4f", totalCost)
+	b.WriteString(m.styles.Primary.Render(line))
 	b.WriteString("\n")
 
 	return b.String()

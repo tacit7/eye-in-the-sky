@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/tacit7/eye-in-the-sky/internal/ccusage/api"
 	"github.com/tacit7/eye-in-the-sky/internal/ccusage/db"
+	"github.com/tacit7/eye-in-the-sky/internal/ccusage/parser"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/components"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/util"
 )
@@ -23,6 +24,20 @@ const (
 	ViewList ViewMode = iota
 	ViewDetail
 )
+
+// Bounds represents screen coordinates and dimensions
+type Bounds struct {
+	X, Y, W, H int
+}
+
+// ListLayout tracks the layout of the list view for click hit testing
+type ListLayout struct {
+	HeaderH int    // lines used by renderHeader
+	TabsH   int    // lines used by listTabs box
+	FooterH int    // lines used by renderFooter
+	Content Bounds // bordereded content box
+	RowH    int    // height per row; with your current render this is 1
+}
 
 // Model represents the application state
 type Model struct {
@@ -107,17 +122,22 @@ type Model struct {
 	ccusageDB *db.CCUsageDB
 
 	// Cached ccusage data
-	ccusageDaily    []api.DailyReport
-	ccusageSessions []api.SessionReport
-	ccusageMonthly  *api.MonthlyReport
-	ccusageBlock    *api.ActiveBlockReport
-	ccusageCosts    *api.CostSummary
+	ccusageDaily     []api.DailyReport
+	ccusageSessions  []api.SessionReport
+	ccusageMonthly   []api.MonthlyReport
+	ccusageBlock     *api.ActiveBlockReport
+	ccusageCosts     *api.CostSummary
 
 	// CCUsage sync state
 	ccusageSyncing    bool
 	ccusageSyncStatus string
 	ccusageEntryCount int
 	lastCCUsageSync   time.Time
+
+	// Layout tracking for click hit testing
+	listLayout    ListLayout
+	lastClickAt   time.Time
+	lastClickRow  int
 }
 
 // Agent represents an agent from the database
@@ -306,6 +326,7 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 		showAll:       config.ShowAllAgents,
 		agents:        []Agent{},
 		ccusageSyncing: false,
+		lastClickRow:  -1, // Initialize to -1 so first click doesn't trigger double-click
 	}
 
 	// Load initial agent list
@@ -820,6 +841,22 @@ func (m *Model) loadSessionMetrics() error {
 	return rows.Err()
 }
 
+// syncCCUsageData performs on-demand sync of ccusage data
+func (m *Model) syncCCUsageData() error {
+	if m.ccusageDB == nil {
+		return nil
+	}
+
+	log.Println("[MODEL] Starting on-demand CCUsage sync...")
+	syncMgr := parser.NewSyncManager(m.ccusageDB)
+	if err := syncMgr.Sync(); err != nil {
+		log.Printf("[MODEL] Warning: CCUsage sync failed: %v", err)
+		return fmt.Errorf("sync failed: %w", err)
+	}
+	log.Println("[MODEL] CCUsage sync completed")
+	return nil
+}
+
 // loadCCUsageData loads Claude Code usage data from ccusage database
 func (m *Model) loadCCUsageData() error {
 	if m.ccusageDB == nil {
@@ -838,14 +875,14 @@ func (m *Model) loadCCUsageData() error {
 	if m.ccusageEntryCount == 0 {
 		m.ccusageDaily = []api.DailyReport{}
 		m.ccusageSessions = []api.SessionReport{}
-		m.ccusageMonthly = nil
+		m.ccusageMonthly = []api.MonthlyReport{}
 		m.ccusageBlock = nil
 		m.ccusageCosts = nil
 		return nil
 	}
 
-	// Load daily usage (last 7 days)
-	daily, err := api.GetDailyUsageReport(m.ccusageDB, 7)
+	// Load daily usage (all days from start)
+	daily, err := api.GetDailyUsageReport(m.ccusageDB, 0)
 	if err != nil {
 		return fmt.Errorf("failed to load daily usage: %w", err)
 	}
@@ -858,11 +895,10 @@ func (m *Model) loadCCUsageData() error {
 	}
 	m.ccusageSessions = sessions
 
-	// Load monthly summary
-	now := time.Now()
-	monthly, err := api.GetMonthlyUsageReport(m.ccusageDB, now.Year(), int(now.Month()))
+	// Load monthly summaries for all months with data
+	monthly, err := api.GetAllMonthlyReports(m.ccusageDB)
 	if err != nil {
-		return fmt.Errorf("failed to load monthly: %w", err)
+		return fmt.Errorf("failed to load monthly reports: %w", err)
 	}
 	m.ccusageMonthly = monthly
 

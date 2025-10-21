@@ -9,14 +9,15 @@ import (
 
 // DailyReport represents daily usage data for display
 type DailyReport struct {
-	Date              string
-	Project           string
-	InputTokens       int
-	OutputTokens      int
-	CacheTokens       int
-	TotalCost         float64
-	CostPerInputToken  float64
-	CostPerOutputToken float64
+	Date                  string
+	Project               string
+	InputTokens           int
+	OutputTokens          int
+	CacheCreationTokens   int
+	CacheReadTokens       int
+	TotalCost             float64
+	CostPerInputToken     float64
+	CostPerOutputToken    float64
 }
 
 // SessionReport represents session usage data for display
@@ -92,12 +93,15 @@ type BlockProjectBreakdown struct {
 
 // GetDailyUsageReport returns daily usage data for the last N days
 func GetDailyUsageReport(ccdb *db.CCUsageDB, days int) ([]DailyReport, error) {
-	if days <= 0 {
-		days = 7
-	}
-
 	now := time.Now()
-	since := now.AddDate(0, 0, -days)
+	var since time.Time
+
+	if days <= 0 {
+		// days=0 means all time, use a very old date
+		since = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+	} else {
+		since = now.AddDate(0, 0, -days)
+	}
 
 	dailyUsage, err := ccdb.GetDailyUsage(since, now, "")
 	if err != nil {
@@ -107,12 +111,13 @@ func GetDailyUsageReport(ccdb *db.CCUsageDB, days int) ([]DailyReport, error) {
 	var reports []DailyReport
 	for _, d := range dailyUsage {
 		report := DailyReport{
-			Date:        d.Date,
-			Project:     d.Project,
-			InputTokens: d.InputTokens,
-			OutputTokens: d.OutputTokens,
-			CacheTokens: d.CacheCreationTokens + d.CacheReadTokens,
-			TotalCost:   d.TotalCost,
+			Date:                d.Date,
+			Project:             d.Project,
+			InputTokens:         d.InputTokens,
+			OutputTokens:        d.OutputTokens,
+			CacheCreationTokens: d.CacheCreationTokens,
+			CacheReadTokens:     d.CacheReadTokens,
+			TotalCost:           d.TotalCost,
 		}
 
 		// Calculate per-token costs
@@ -192,7 +197,8 @@ func GetMonthlyUsageReport(ccdb *db.CCUsageDB, year, month int) (*MonthlyReport,
 	totalCacheTokens := usage.CacheCreationTokens + usage.CacheReadTokens
 	totalCost := usage.TotalCost
 
-	dayCount := len(dailyUsage)
+	// Calculate actual calendar days in the period (month start to today or month end)
+	dayCount := int(endDate.Sub(startDate).Hours() / 24)
 	if dayCount == 0 {
 		dayCount = 1 // Avoid division by zero
 	}
@@ -342,4 +348,33 @@ func GetActiveBlockReport(ccdb *db.CCUsageDB) (*ActiveBlockReport, error) {
 	}
 
 	return report, nil
+}
+
+// GetAllMonthlyReports returns monthly reports for all months with data
+func GetAllMonthlyReports(ccdb *db.CCUsageDB) ([]MonthlyReport, error) {
+	months, err := ccdb.GetDistinctMonths()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get distinct months: %w", err)
+	}
+
+	var reports []MonthlyReport
+
+	for _, monthStr := range months {
+		// Parse month string "YYYY-MM"
+		parts := fmt.Sprintf("%s-01", monthStr) // Add day 01 for parsing
+		t, err := time.Parse("2006-01-02", parts)
+		if err != nil {
+			continue
+		}
+
+		// Get monthly report for this month
+		report, err := GetMonthlyUsageReport(ccdb, t.Year(), int(t.Month()))
+		if err != nil {
+			continue
+		}
+
+		reports = append(reports, *report)
+	}
+
+	return reports, nil
 }
