@@ -5,6 +5,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/tacit7/eye-in-the-sky/internal/ui/components"
 )
 
 func TestAdjustScroll(t *testing.T) {
@@ -150,11 +151,18 @@ func TestHandleListClickBounds(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m := &Model{
-				listLayout:  tt.layout,
-				agents:      tt.agents,
+				listLayout:    tt.layout,
+				agents:        tt.agents,
 				selectedIndex: -1,
-				lastClickRow: -1,
+				lastClickRow:  -1,
+				listTabs: components.NewTabsModel(
+					[]string{"[O]verview", "[P]roject", "[C]laude", "[T]oken Usage"},
+					"#ff0000", // Dummy color
+					"#ffffff",
+				),
 			}
+			// Set to Project tab to avoid loadAgentDetails call
+			m.listTabs.Set(1)
 
 			// Perform click
 			_, _ = m.handleListClick(tt.msg)
@@ -181,7 +189,14 @@ func TestHandleListClickDoubleClick(t *testing.T) {
 			selectedIndex: 0,
 			lastClickRow:  -1,
 			listOffset:    0,
+			listTabs: components.NewTabsModel(
+				[]string{"[O]verview", "[P]roject", "[C]laude", "[T]oken Usage"},
+				"#ff0000",
+				"#ffffff",
+			),
 		}
+		// Set to Project tab to avoid loadAgentDetails call
+		m.listTabs.Set(1)
 
 		msg := tea.MouseMsg{X: 10, Y: 6} // Row 0 (Y=6 -> contentTop=5 -> rowInView=0)
 		before := time.Now()
@@ -242,7 +257,13 @@ func TestHandleListClickRowCalculation(t *testing.T) {
 			selectedIndex: -1,
 			lastClickRow:  -1,
 			listOffset:    2, // Viewing agents from index 2 onwards
+			listTabs: components.NewTabsModel(
+				[]string{"[O]verview", "[P]roject", "[C]laude", "[T]oken Usage"},
+				"#ff0000",
+				"#ffffff",
+			),
 		}
+		m.listTabs.Set(1)
 
 		// Click on first visible row (Y=6 means row 0 in view -> index 2)
 		msg := tea.MouseMsg{X: 10, Y: 6}
@@ -265,7 +286,13 @@ func TestHandleListClickRowCalculation(t *testing.T) {
 			selectedIndex: -1,
 			lastClickRow:  -1,
 			listOffset:    3, // Viewing agents 3 and 4
+			listTabs: components.NewTabsModel(
+				[]string{"[O]verview", "[P]roject", "[C]laude", "[T]oken Usage"},
+				"#ff0000",
+				"#ffffff",
+			),
 		}
+		m.listTabs.Set(1)
 
 		// Click on row that doesn't exist (Y=10 would be agent index 8, but only 5 exist)
 		msg := tea.MouseMsg{X: 10, Y: 10}

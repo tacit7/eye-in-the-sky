@@ -44,8 +44,23 @@ func (m *Model) handleListClick(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Handle single vs double click
+	// Handle click based on active tab
 	now := time.Now()
+
+	// On Overview tab (index 0), single click opens detail view
+	if m.listTabs.ActiveIndex == 0 {
+		m.selectedIndex = rowIndex
+		if err := m.loadAgentDetails(); err != nil {
+			m.err = err
+			return m, nil
+		}
+		m.currentView = ViewDetail
+		m.detailOffset = 0
+		m.tabs.Set(1)
+		return m, nil
+	}
+
+	// On other tabs, use double-click to open detail view
 	if rowIndex == m.lastClickRow && now.Sub(m.lastClickAt) <= dbClickWindow {
 		// Double click - open detail view
 		m.selectedIndex = rowIndex
