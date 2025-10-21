@@ -79,6 +79,20 @@ func (m *Model) renderListView() string {
 			contentBuilder.WriteString(m.styles.Subtle.Render("  No agents found"))
 			contentBuilder.WriteString("\n")
 		} else {
+			// Add header row
+			headerLine := fmt.Sprintf("%-2s %-12s  %-40s  %-20s  %-40s  %s",
+				"",
+				"Status",
+				"Agent ID",
+				"Session ID",
+				"Task",
+				"Source",
+			)
+			contentBuilder.WriteString(m.styles.Primary.Render(headerLine))
+			contentBuilder.WriteString("\n")
+			contentBuilder.WriteString(m.styles.Border.Render(strings.Repeat("─", m.width-6)))
+			contentBuilder.WriteString("\n")
+
 			endIndex := m.listOffset + visibleHeight
 			if endIndex > len(m.agents) {
 				endIndex = len(m.agents)
@@ -490,11 +504,18 @@ func (m *Model) renderAgentLine(agent Agent, selected bool) string {
 		source = agent.Source
 	}
 
+	// Session ID or fallback
+	sessionID := agent.CurrentSessionID
+	if sessionID == "" {
+		sessionID = "—"
+	}
+
 	// Combine into line with prefix
-	line := fmt.Sprintf("%s%-12s  %-40s  %-40s  %s",
+	line := fmt.Sprintf("%s%-12s  %-40s  %-20s  %-40s  %s",
 		prefix,
 		statusText,
 		truncate(info, 40),
+		truncate(sessionID, 20),
 		truncate(task, 40),
 		truncate(source, 30),
 	)
