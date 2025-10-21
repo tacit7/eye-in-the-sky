@@ -381,6 +381,53 @@ You MUST extract and use this returned agent_id for all subsequent MCP calls.
 The agent_id is auto-generated as a UUID and uniquely identifies your agent instance.
 
 ═══════════════════════════════════════════════════════════════
+SUBAGENTS - Creating and Managing Child Agents
+═══════════════════════════════════════════════════════════════
+
+Subagents are child agents spawned by a parent agent to handle specific tasks.
+They maintain a hierarchical relationship with their parent for tracking.
+
+Creating a Subagent:
+  When your main agent needs to spawn a subagent (e.g., using Task tool), the subagent should:
+
+  1. Generate its own new session_id (UUID)
+  2. Call i-start-session with parent tracking:
+
+  i-start-session({
+    "session_id": "new-uuid-for-subagent-session",
+    "description": "Specific task for subagent",
+    "parent_agent_id": "your-current-agent-uuid",      // Links to parent agent
+    "parent_session_id": "your-current-session-uuid"   // Links to parent session
+  })
+
+  3. The subagent receives its own agent_id in response
+  4. Subagent operates independently but is tracked as child of parent
+
+Parent-Child Relationships:
+  - parent_agent_id: Links this agent to its parent agent (UUID)
+  - parent_session_id: Links this session to parent session (UUID)
+  - Both help maintain hierarchy for multi-agent workflows
+  - Dashboard/TUI shows subagents indented under parents
+
+Example Workflow:
+  Main Agent (agent: abc-123, session: def-456) needs to analyze code
+  └─> Spawns Subagent for analysis:
+      i-start-session({
+        "session_id": "ghi-789",  // New session ID
+        "description": "Analyze authentication module",
+        "parent_agent_id": "abc-123",
+        "parent_session_id": "def-456"
+      })
+      └─> Subagent (agent: jkl-012, session: ghi-789) works independently
+          but is tracked as child of Main Agent
+
+When to Use Subagents:
+  - Delegating specific subtasks to specialized agents
+  - Parallel processing of independent tasks
+  - Isolating complex operations
+  - When using Task tool with subagent_type parameter
+
+═══════════════════════════════════════════════════════════════
 WORKFLOW - During your session
 ═══════════════════════════════════════════════════════════════
 
