@@ -9,8 +9,9 @@ import (
 	"time"
 )
 
-// renderTasksView renders the tasks view with split panes
-func (m *Model) renderTasksView() string {
+// renderAgentTasks renders the agent tasks tab in the agent detail view
+// Shows tasks filtered by the current session
+func (m *Model) renderAgentTasks() string {
 	if m.selectedAgent == nil {
 		return m.styles.Subtle.Render("No agent selected")
 	}

@@ -166,7 +166,7 @@ func (m *Model) renderDetailView() string {
 	case 5: // Actions
 		detailContent = m.renderActionsTab()
 	case 6: // Tasks
-		detailContent = m.renderTasksTab()
+		detailContent = m.renderAgentTasks()
 	default:
 		detailContent = m.renderAgentDetails()
 	}
@@ -1010,31 +1010,6 @@ func (m *Model) renderActionDetails(action Action) string {
 	}
 
 	return b.String()
-}
-
-// renderTasksTab renders the tasks tab content with split-pane view
-func (m *Model) renderTasksTab() string {
-	if len(m.tasks) == 0 {
-		return m.styles.Subtle.Render("No tasks available for this agent")
-	}
-
-	// Build item list for left pane
-	items := make([]string, len(m.tasks))
-	for i, task := range m.tasks {
-		status := task.Status
-		if len(status) > 10 {
-			status = status[:10]
-		}
-		items[i] = fmt.Sprintf("[%-10s] %s", status, truncate(task.Description, 50))
-	}
-
-	// Build detail content for right pane
-	var detailContent string
-	if m.tasksIndex >= 0 && m.tasksIndex < len(m.tasks) {
-		detailContent = m.renderTaskDetails(m.tasks[m.tasksIndex])
-	}
-
-	return m.renderSplitPaneContent(items, m.tasksIndex, detailContent)
 }
 
 // renderProjectTab renders the detected project information with sections
