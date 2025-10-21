@@ -70,9 +70,11 @@ func (m *Model) renderListView() string {
 
 	// Render content based on active tab
 	switch m.listTabs.ActiveIndex {
+	case 1: // Project tab
+		contentBuilder.WriteString(m.renderProjectTab())
 	case 3: // Usage tab
 		contentBuilder.WriteString(m.renderUsageTab())
-	default: // Overview, Project, Claude tabs
+	default: // Overview, Claude tabs
 		if len(m.agents) == 0 {
 			contentBuilder.WriteString(m.styles.Subtle.Render("  No agents found"))
 			contentBuilder.WriteString("\n")
@@ -934,6 +936,61 @@ func (m *Model) renderActionDetails(action Action) string {
 		b.WriteString(m.styles.Title.Render("Details"))
 		b.WriteString("\n")
 		b.WriteString(m.styles.Text.Render(action.Details))
+		b.WriteString("\n")
+	}
+
+	return b.String()
+}
+
+// renderProjectTab renders the detected project information
+func (m *Model) renderProjectTab() string {
+	var b strings.Builder
+
+	b.WriteString(m.styles.Title.Render("Project Information"))
+	b.WriteString("\n\n")
+
+	if m.projectInfo == nil {
+		b.WriteString(m.styles.Subtle.Render("  Not in a git repository"))
+		b.WriteString("\n")
+		return b.String()
+	}
+
+	// Repository name
+	if m.projectInfo.RepoName != "" {
+		b.WriteString(m.styles.Primary.Render("  Repository: "))
+		if m.projectInfo.Owner != "" {
+			b.WriteString(m.styles.Text.Render(fmt.Sprintf("%s/%s", m.projectInfo.Owner, m.projectInfo.RepoName)))
+		} else {
+			b.WriteString(m.styles.Text.Render(m.projectInfo.RepoName))
+		}
+		b.WriteString("\n")
+	}
+
+	// Remote URL
+	if m.projectInfo.RemoteURL != "" {
+		b.WriteString(m.styles.Primary.Render("  Remote: "))
+		b.WriteString(m.styles.Subtle.Render(truncate(m.projectInfo.RemoteURL, 60)))
+		b.WriteString("\n")
+	}
+
+	// Branch
+	if m.projectInfo.Branch != "" {
+		b.WriteString(m.styles.Primary.Render("  Branch: "))
+		b.WriteString(m.styles.Text.Render(m.projectInfo.Branch))
+		b.WriteString("\n")
+	}
+
+	// Commit
+	if m.projectInfo.Commit != "" {
+		b.WriteString(m.styles.Primary.Render("  Commit: "))
+		b.WriteString(m.styles.Text.Render(m.projectInfo.Commit))
+		b.WriteString("\n")
+	}
+
+	// Git root path
+	if m.projectInfo.GitRootPath != "" {
+		b.WriteString(m.styles.Primary.Render("  Git Root: "))
+		b.WriteString(m.styles.Subtle.Render(truncate(m.projectInfo.GitRootPath, 60)))
 		b.WriteString("\n")
 	}
 

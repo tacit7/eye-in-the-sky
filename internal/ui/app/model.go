@@ -138,6 +138,9 @@ type Model struct {
 	listLayout    ListLayout
 	lastClickAt   time.Time
 	lastClickRow  int
+
+	// Project information
+	projectInfo *ProjectInfo
 }
 
 // Agent represents an agent from the database
@@ -328,6 +331,9 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 		ccusageSyncing: false,
 		lastClickRow:  -1, // Initialize to -1 so first click doesn't trigger double-click
 	}
+
+	// Detect project information at startup
+	m.projectInfo = DetectProject()
 
 	// Load initial agent list
 	if err := m.loadAgents(); err != nil {
