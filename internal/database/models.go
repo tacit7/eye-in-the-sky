@@ -54,7 +54,7 @@ const (
 // Valid agent sources
 const (
 	SourceWorktree = "worktree"
-	SourceDesktop  = "desktop"
+	// Removed SourceDesktop - only supporting worktree agents now
 )
 
 // Valid action types

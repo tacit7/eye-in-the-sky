@@ -132,31 +132,7 @@ func (s *Server) registerTools() {
 }
 
 // Tool handlers using the generic AddTool pattern
-func (s *Server) handleRegisterAgent(ctx context.Context, req *mcp.CallToolRequest, args RegisterAgentArgs) (*mcp.CallToolResult, any, error) {
-	result, err := s.tools.RegisterAgent(args)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: "Agent registered successfully"},
-		},
-	}, result, nil
-}
-
-func (s *Server) handleRegisterDesktopAgent(ctx context.Context, req *mcp.CallToolRequest, args RegisterDesktopAgentArgs) (*mcp.CallToolResult, any, error) {
-	result, err := s.tools.RegisterDesktopAgent(args)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: "Claude Desktop agent registered successfully"},
-		},
-	}, result, nil
-}
+// Removed handleRegisterAgent and handleRegisterDesktopAgent - now using only handleStartSession
 
 func (s *Server) handleUpdateStatus(ctx context.Context, req *mcp.CallToolRequest, args UpdateStatusArgs) (*mcp.CallToolResult, any, error) {
 	result, err := s.tools.UpdateStatus(args)
@@ -273,19 +249,7 @@ func (s *Server) HandleTool(toolName string, argsJSON []byte) (interface{}, erro
 	// It routes tool calls to the appropriate handlers
 	// Support both old names (for dashboard) and new shortened names
 	switch toolName {
-	case "register_agent", "i-register-agent", "i-register":
-		var args RegisterAgentArgs
-		if err := json.Unmarshal(argsJSON, &args); err != nil {
-			return nil, err
-		}
-		return s.tools.RegisterAgent(args)
-
-	case "register_claude_desktop_agent", "i-register-claude-desktop-agent", "i-register-claude-desktop":
-		var args RegisterDesktopAgentArgs
-		if err := json.Unmarshal(argsJSON, &args); err != nil {
-			return nil, err
-		}
-		return s.tools.RegisterDesktopAgent(args)
+	// Removed register_agent and register_claude_desktop_agent - now using only i-start-session
 
 	case "update_status", "i-update-status", "i-status":
 		var args UpdateStatusArgs

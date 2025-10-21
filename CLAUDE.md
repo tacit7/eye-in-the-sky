@@ -41,16 +41,16 @@ SQLite database: `~/.config/eye-in-the-sky/agents.db` (created at runtime)
 ## Key Concepts
 
 ### Agent Management
-- Each Claude Code instance gets a unique 8-character hash ID (git-style like "a3f7d2e1")
-- Agent IDs are auto-generated if not provided using SHA1-based git-style hashes
-- Two agent types: "worktree" (git-based) and "desktop" (Claude Desktop)
+- Each Claude Code instance gets a unique UUID (e.g., "a1b2c3d4-e5f6-7890-abcd-ef1234567890")
+- Agent IDs are auto-generated as UUIDs when you call i-start-session
+- All agents are worktree-based (git repository tracking)
 - Agent states and lifecycle:
   - `active`: Session is ongoing, ready for work
   - `idle`: Session paused, waiting for next task
   - `working`: Currently executing a task
   - `completed`: Session is FULLY OVER (use only when ending entire session, not for completing individual features)
   - `failed`: Session ended with error
-- Metadata tracking: creation time, git worktree path, feature description, current task, window ID (for desktop agents)
+- Metadata tracking: creation time, git worktree path, feature description, current task, session ID
 
 ### Action Logging
 - All major Claude Code activities are logged with timestamps
@@ -59,13 +59,12 @@ SQLite database: `~/.config/eye-in-the-sky/agents.db` (created at runtime)
 
 ### MCP Integration
 The system exposes these MCP tools for Claude Code integration:
-- `register_agent(agent_id?, description, worktree_path?)` - Register new worktree agent
-- `register_claude_desktop_agent(agent_id?, description, project_name, window_id?)` - Register new desktop agent
-- `update_status(agent_id, status, current_task?)` - Update agent status
-- `log_action(agent_id, action_type, description, details?)` - Log agent activity
-- `log_commits(agent_id, commit_hashes[], commit_messages?)` - Track git commits
-- `end_session(agent_id, summary?, final_status?)` - Complete agent session
-- `help(tool?)` - Get detailed help and usage instructions
+- `i-start-session(session_id, description, worktree_path?, parent_agent_id?, parent_session_id?)` - Start new session and receive UUID agent_id
+- `i-update-status(agent_id, status, current_task?)` - Update agent status
+- `i-action(agent_id, action_type, description, details?)` - Log agent activity
+- `i-commits(agent_id, commit_hashes[], commit_messages?)` - Track git commits
+- `i-end(agent_id, summary?, final_status?)` - Complete agent session
+- `i-instructions()` - Get detailed help and usage instructions
 
 ## Development Commands
 
@@ -122,20 +121,15 @@ Log files are written to `~/.config/eye-in-the-sky/`:
 
 ### Agent Registration
 
-#### For Git Worktree Agents (Claude Code):
+Start a new session with your Claude Code session ID:
 ```
-"Register yourself for working on user authentication in /path/to/worktree"
+i-start-session({
+  "session_id": "your-claude-code-session-id",
+  "description": "Working on user authentication",
+  "worktree_path": "/path/to/worktree" // optional
+})
 ```
-The system will auto-generate a git-style hash ID like `a3f7d2e1`.
-
-#### For Claude Desktop Agents:
-```
-"Register as Claude Desktop agent working on MyApp project"
-```
-Optionally include window ID for window management:
-```
-"Register as Claude Desktop agent for MyApp project with window ID win_12345"
-```
+The system will return a UUID agent ID for you to use in subsequent calls.
 
 ### Status Updates
 Claude instances should periodically update their status:
@@ -153,15 +147,16 @@ When finishing work:
 ## Database Schema
 
 ### Agents Table
-- `id`: 8-character hash identifier (auto-generated if not provided)
+- `id`: UUID identifier (auto-generated)
 - `status`: Current agent status
-- `source`: Agent type ("worktree" or "desktop")
+- `source`: Always "worktree"
 - `created_at/updated_at`: Timestamps
-- `git_worktree_path`: Path to git worktree (worktree agents only)
+- `git_worktree_path`: Path to git worktree
 - `feature_description`: High-level feature being worked on
 - `current_task`: Specific current task
 - `last_activity_at`: When agent last reported activity
-- `window_id`: Claude Desktop window identifier (desktop agents only)
+- `session_id`: Associated session identifier
+- `parent_agent_id`: Parent agent if this is a subagent
 
 ### Actions Table
 - Links to agents via `agent_id`

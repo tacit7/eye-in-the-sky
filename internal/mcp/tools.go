@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/tacit7/eye-in-the-sky/internal/database"
 	"github.com/tacit7/eye-in-the-sky/internal/utils"
 	"github.com/tacit7/eye-in-the-sky/internal/window"
@@ -26,132 +25,7 @@ func NewTools(db *database.DB) *Tools {
 	return &Tools{db: db}
 }
 
-// RegisterAgent implements the register_agent MCP tool
-func (t *Tools) RegisterAgent(args RegisterAgentArgs) (RegisterAgentResult, error) {
-	// Generate git-style agent ID if not provided
-	var agentID string
-	if args.AgentID == nil || *args.AgentID == "" {
-		agentID = utils.GenerateGitStyleAgentID()
-	} else {
-		agentID = *args.AgentID
-		// Validate provided ID
-		if !utils.ValidateAgentID(agentID) {
-			return RegisterAgentResult{Success: false, Message: "Agent ID must be exactly 8 hex characters"}, nil
-		}
-	}
-
-	// Check if agent already exists
-	existing, err := t.db.GetAgent(agentID)
-	if err == nil && existing != nil {
-		return RegisterAgentResult{Success: false, Message: fmt.Sprintf("Agent %s already exists", agentID)}, nil
-	}
-
-	// Determine session ID: explicit provided > parent's session > new session
-	var sessionID *string
-	if args.SessionID != nil && *args.SessionID != "" {
-		// Use provided session ID
-		sessionID = args.SessionID
-	} else if args.ParentAgentID != nil && *args.ParentAgentID != "" {
-		// Inherit parent's session
-		parentAgent, err := t.db.GetAgent(*args.ParentAgentID)
-		if err != nil || parentAgent == nil {
-			return RegisterAgentResult{Success: false, Message: fmt.Sprintf("Parent agent %s not found", *args.ParentAgentID)}, nil
-		}
-		if parentAgent.SessionID != nil && *parentAgent.SessionID != "" {
-			sessionID = parentAgent.SessionID
-		}
-	}
-
-	// Create new agent and log registration action atomically
-	agent := &database.Agent{
-		ID:                 agentID,
-		Status:             database.StatusActive,
-		Source:             database.SourceWorktree,
-		Description:        args.AgentDescription,
-		GitWorktreePath:    args.WorktreePath,
-		FeatureDescription: &args.Description,
-		ProjectName:        args.ProjectName,
-		ParentAgentID:      args.ParentAgentID,
-		SessionID:   sessionID,
-		LastActivityAt:     timePtr(time.Now()),
-	}
-
-	action := &database.Action{
-		AgentID:     agentID,
-		ActionType:  database.ActionStatusUpdate,
-		Description: fmt.Sprintf("Agent registered: %s", args.Description),
-	}
-
-	if err := t.db.RegisterAgentWithAction(context.Background(), agent, action); err != nil {
-		return RegisterAgentResult{Success: false, Message: fmt.Sprintf("Failed to register agent: %v", err)}, fmt.Errorf("database error: %w", err)
-	}
-
-	return RegisterAgentResult{Success: true, Message: fmt.Sprintf("Agent %s registered successfully", agentID)}, nil
-}
-
-// RegisterDesktopAgent implements the register_claude_desktop_agent MCP tool
-func (t *Tools) RegisterDesktopAgent(args RegisterDesktopAgentArgs) (RegisterDesktopAgentResult, error) {
-	// Generate git-style agent ID if not provided
-	var agentID string
-	if args.AgentID == nil || *args.AgentID == "" {
-		agentID = utils.GenerateGitStyleAgentID()
-	} else {
-		agentID = *args.AgentID
-		// Validate provided ID
-		if !utils.ValidateAgentID(agentID) {
-			return RegisterDesktopAgentResult{Success: false, Message: "Agent ID must be exactly 8 hex characters"}, nil
-		}
-	}
-
-	// Check if agent already exists
-	existing, err := t.db.GetAgent(agentID)
-	if err == nil && existing != nil {
-		return RegisterDesktopAgentResult{Success: false, Message: fmt.Sprintf("Agent %s already exists", agentID)}, nil
-	}
-
-	// Determine session ID: explicit provided > parent's session > new session
-	var sessionID *string
-	if args.SessionID != nil && *args.SessionID != "" {
-		// Use provided session ID
-		sessionID = args.SessionID
-	} else if args.ParentAgentID != nil && *args.ParentAgentID != "" {
-		// Inherit parent's session
-		parentAgent, err := t.db.GetAgent(*args.ParentAgentID)
-		if err != nil || parentAgent == nil {
-			return RegisterDesktopAgentResult{Success: false, Message: fmt.Sprintf("Parent agent %s not found", *args.ParentAgentID)}, nil
-		}
-		if parentAgent.SessionID != nil && *parentAgent.SessionID != "" {
-			sessionID = parentAgent.SessionID
-		}
-	}
-
-	// Create new Claude Desktop agent and log registration action atomically
-	agent := &database.Agent{
-		ID:                 agentID,
-		Status:             database.StatusActive,
-		Source:             database.SourceDesktop,
-		Description:        args.AgentDescription,
-		GitWorktreePath:    nil, // Desktop agents don't have worktree paths
-		FeatureDescription: &args.Description,
-		ProjectName:        &args.ProjectName,
-		ParentAgentID:      args.ParentAgentID,
-		SessionID:   sessionID,
-		LastActivityAt:     timePtr(time.Now()),
-		WindowID:           args.WindowID,
-	}
-
-	action := &database.Action{
-		AgentID:     agentID,
-		ActionType:  database.ActionStatusUpdate,
-		Description: fmt.Sprintf("Claude Desktop agent registered: %s (Project: %s)", args.Description, args.ProjectName),
-	}
-
-	if err := t.db.RegisterAgentWithAction(context.Background(), agent, action); err != nil {
-		return RegisterDesktopAgentResult{Success: false, Message: fmt.Sprintf("Failed to register agent: %v", err)}, fmt.Errorf("database error: %w", err)
-	}
-
-	return RegisterDesktopAgentResult{Success: true, Message: fmt.Sprintf("Claude Desktop agent %s registered successfully", agentID)}, nil
-}
+// Removed RegisterAgent and RegisterDesktopAgent - now using only StartSession
 
 // UpdateStatus implements the update_status MCP tool
 func (t *Tools) UpdateStatus(args UpdateStatusArgs) (UpdateStatusResult, error) {
@@ -433,8 +307,8 @@ func (t *Tools) BringWindowFront(args BringWindowFrontArgs) (BringWindowFrontRes
 		return BringWindowFrontResult{Success: false, Message: fmt.Sprintf("Agent not found: %v", err)}, nil
 	}
 
-	// For desktop agents, we can use the window ID if available
-	if agent.Source == database.SourceDesktop && agent.WindowID != nil {
+	// Use the window ID if available
+	if agent.WindowID != nil {
 		// Parse window ID to get application name
 		windowID := *agent.WindowID
 		parts := strings.Split(windowID, "_")
@@ -455,16 +329,21 @@ func (t *Tools) BringWindowFront(args BringWindowFrontArgs) (BringWindowFrontRes
 		}
 	}
 
-	// Fallback: try to bring ghostty to front (since that's what you're using)
-	bringCmd := exec.Command("osascript", "-e", `tell application "ghostty" to activate`)
-	err = bringCmd.Run()
-	if err != nil {
-		return BringWindowFrontResult{Success: false, Message: fmt.Sprintf("Failed to bring terminal to front: %v", err)}, nil
+	// Fallback: try to bring terminal to front
+	if agent.TerminalApplication != nil {
+		bringCmd := exec.Command("osascript", "-e", fmt.Sprintf(`tell application "%s" to activate`, *agent.TerminalApplication))
+		err = bringCmd.Run()
+		if err == nil {
+			return BringWindowFrontResult{
+				Success: true,
+				Message: fmt.Sprintf("Brought %s window to front", *agent.TerminalApplication),
+			}, nil
+		}
 	}
 
 	return BringWindowFrontResult{
-		Success: true,
-		Message: "Brought terminal window to front",
+		Success: false,
+		Message: "No window information available for this agent",
 	}, nil
 }
 
@@ -476,68 +355,50 @@ func (t *Tools) Instructions(args InstructionsArgs) (InstructionsResult, error) 
 INITIALIZATION - CRITICAL: Do this FIRST on EVERY new session
 ═══════════════════════════════════════════════════════════════
 
-BACKGROUND:
-An external launcher script creates a marker file BEFORE you start:
-  .claude/eye-in-the-sky/session-{agentId}-{claudeCodeSessionId}
+At the start of the session, your session_id will be provided to you.
+Use this ID when starting your session.
 
-This file contains the IDs you need. You DON'T generate them - you READ them.
+To register yourself, call i-start-session with your session ID:
 
-STEP 1: Check for marker file
-Run: ls .claude/eye-in-the-sky/session-* 2>/dev/null
-
-STEP 2a: If marker file EXISTS, parse the filename
-Format: session-{agentId}-{claudeCodeSessionId}
-Example: session-a728dc53-a4ebc315-5577-4c81-b12e-1a7ae3fa907f
-
-Extract BOTH IDs from the filename:
-  → agent_id: "a728dc53" (first 8 chars after 'session-')
-  → session_id: "a4ebc315-5577-4c81-b12e-1a7ae3fa907f" (Claude Code session UUID)
-
-STEP 2b: If NO marker file exists, prompt the user
-ASK: "Please run /status to get your Claude Code session ID and provide it"
-Wait for the user to provide the session ID before proceeding.
-
-STEP 3: Call i-start-session with the session ID
   i-start-session({
-    "agent_id": "a728dc53",                                    # From marker file or omit for auto-gen
-    "session_id": "a4ebc315-5577-4c81-b12e-1a7ae3fa907f",     # From marker/user or omit for auto-gen
-    "agent_description": "Optional agent name/label",
+    "session_id": "your_provided_session_id",
     "description": "What you'll be working on",
-    "project_name": "optional",
     "worktree_path": "optional",
-    "window_id": "optional (auto-detected on macOS)"
+    "project_name": "optional",
+    "parent_agent_id": "optional",
+    "parent_session_id": "optional"
   })
 
-  This uses the Claude Code session_id directly for tracking continuity.
-  On macOS, window_id is automatically detected if not provided.
+IMPORTANT: The system will return a response containing:
+  {
+    "agent_id": "generated-uuid-for-your-agent",
+    "session_id": "your-session-id",
+    "success": true,
+    "message": "Session started for agent UUID"
+  }
 
-STEP 4: Delete marker file after successful registration (if it existed)
-Run: rm .claude/eye-in-the-sky/session-* 2>/dev/null
-
-CRITICAL NOTES:
-- YOU DON'T GENERATE session IDs - get them from marker file or user
-- If no marker file, ALWAYS ask user to run /status and provide session ID
-- The external launcher creates the marker file with pre-determined IDs before Claude starts
-- Pass session_id to i-start-session for full tracking continuity
-- Only omit session_id if user cannot provide it (fallback to auto-generation)
+You MUST extract and use this returned agent_id for all subsequent MCP calls.
+The agent_id is auto-generated as a UUID and uniquely identifies your agent instance.
 
 ═══════════════════════════════════════════════════════════════
 WORKFLOW - During your session
 ═══════════════════════════════════════════════════════════════
 
+After receiving your agent_id from i-start-session, use it in all subsequent calls:
+
 i-status - Update your current status
   Statuses: active, working, idle, completed, failed
-  Example: i-status({"agent_id": "a728dc53", "status": "working", "current_task": "Building TUI"})
+  Example: i-status({"agent_id": "your-uuid-from-start-session", "status": "working", "current_task": "Building TUI"})
 
 i-action - Log significant activities
   Types: task_start, file_operation, git_commit, status_update
-  Example: i-action({"agent_id": "a728dc53", "action_type": "file_operation", "description": "Created dashboard component"})
+  Example: i-action({"agent_id": "your-uuid-from-start-session", "action_type": "file_operation", "description": "Created dashboard component"})
 
 i-commits - Track git commits
-  Example: i-commits({"agent_id": "a728dc53", "commit_hashes": ["abc123f"], "commit_messages": ["Add feature"]})
+  Example: i-commits({"agent_id": "your-uuid-from-start-session", "commit_hashes": ["abc123f"], "commit_messages": ["Add feature"]})
 
 i-end - End session with summary
-  Example: i-end({"agent_id": "a728dc53", "summary": "Completed TUI implementation", "final_status": "completed"})
+  Example: i-end({"agent_id": "your-uuid-from-start-session", "summary": "Completed TUI implementation", "final_status": "completed"})
 
 ═══════════════════════════════════════════════════════════════
 COMPACTION TRACKING
@@ -661,13 +522,8 @@ func getLatestCommits(count int, workDir string) ([]string, []string, error) {
 
 // StartSession implements the i-start-session tool
 func (t *Tools) StartSession(args StartSessionArgs) (StartSessionResult, error) {
-	// Generate agent ID if not provided
-	var agentID string
-	if args.AgentID == nil || *args.AgentID == "" {
-		agentID = utils.GenerateGitStyleAgentID()
-	} else {
-		agentID = *args.AgentID
-	}
+	// Always generate a new UUID agent ID
+	agentID := utils.GenerateGitStyleAgentID()
 
 	// Load persona if provided
 	var initialContext string
@@ -681,12 +537,10 @@ func (t *Tools) StartSession(args StartSessionArgs) (StartSessionResult, error) 
 		personaID = args.PersonaID
 	}
 
-	// Detect window ID on macOS if not provided
+	// Detect window ID on macOS
 	var windowID *string
 	var terminalApp *string
-	if args.WindowID != nil && *args.WindowID != "" {
-		windowID = args.WindowID
-	} else if runtime.GOOS == "darwin" {
+	if runtime.GOOS == "darwin" {
 		// Auto-detect current window on macOS
 		wm := window.NewManager()
 		winInfo, err := wm.GetCurrentWindowID("current", "")
@@ -700,11 +554,11 @@ func (t *Tools) StartSession(args StartSessionArgs) (StartSessionResult, error) 
 		// If detection fails, just continue without window ID
 	}
 
-	// Create agent
+	// Create agent with window tracking
 	agent := &database.Agent{
 		ID:                  agentID,
 		Status:              database.StatusActive,
-		Source:              database.SourceWorktree,
+		Source:              database.SourceWorktree, // Always worktree now
 		Description:         args.AgentDescription,
 		GitWorktreePath:     args.WorktreePath,
 		FeatureDescription:  &args.Description,
@@ -720,13 +574,8 @@ func (t *Tools) StartSession(args StartSessionArgs) (StartSessionResult, error) 
 		return StartSessionResult{}, fmt.Errorf("failed to create agent: %w", err)
 	}
 
-	// Create session - use provided session_id or generate one
-	var sessionID string
-	if args.SessionID != nil && *args.SessionID != "" {
-		sessionID = *args.SessionID
-	} else {
-		sessionID = uuid.New().String()
-	}
+	// Use the mandatory session_id provided
+	sessionID := args.SessionID
 
 	session := &database.Session{
 		ID:        sessionID,

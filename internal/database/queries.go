@@ -21,9 +21,7 @@ func (db *DB) CreateAgent(agent *Agent) error {
 
 // GetAgent retrieves an agent by ID
 func (db *DB) GetAgent(id string) (*Agent, error) {
-	if len(id) != 8 {
-		return nil, NewValidationError("agent_id", id, ErrInvalidAgentID)
-	}
+	// No longer validating agent ID format - accepting UUIDs now
 
 	query := `
 		SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, session_id, persona_id, parent_agent_id

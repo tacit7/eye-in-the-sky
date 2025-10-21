@@ -1,40 +1,10 @@
 package mcp
 
-// RegisterAgentArgs represents the arguments for register_agent tool
-type RegisterAgentArgs struct {
-	AgentID          *string `json:"agent_id,omitempty" jsonschema:"description:Unique 8-character hex identifier (optional - auto-generated if not provided)"`
-	AgentDescription *string `json:"agent_description,omitempty" jsonschema:"description:Agent name/label (e.g., 'Frontend Dev Agent') (optional)"`
-	Description      string  `json:"description" jsonschema:"description:Brief description of what the agent will work on"`
-	WorktreePath     *string `json:"worktree_path,omitempty" jsonschema:"description:Path to the git repository (optional)"`
-	ProjectName      *string `json:"project_name,omitempty" jsonschema:"description:Name of the project being worked on (optional)"`
-	ParentAgentID    *string `json:"parent_agent_id,omitempty" jsonschema:"description:Parent agent ID for subagent registration (optional)"`
-	SessionID        *string `json:"session_id,omitempty" jsonschema:"description:Session ID to associate agent with (optional - creates new session if not provided)"`
-}
-
-type RegisterAgentResult struct {
-	Success bool   `json:"success"`
-	Message string `json:"message"`
-}
-
-// RegisterDesktopAgentArgs represents the arguments for register_claude_desktop_agent tool
-type RegisterDesktopAgentArgs struct {
-	AgentID          *string `json:"agent_id,omitempty" jsonschema:"description:Unique 8-character hex identifier (optional - auto-generated if not provided)"`
-	AgentDescription *string `json:"agent_description,omitempty" jsonschema:"description:Agent name/label (e.g., 'Frontend Dev Agent') (optional)"`
-	Description      string  `json:"description" jsonschema:"description:Brief description of what the agent will work on"`
-	ProjectName      string  `json:"project_name" jsonschema:"description:Name of the project being worked on"`
-	WindowID         *string `json:"window_id,omitempty" jsonschema:"description:Claude Desktop window identifier for window management (optional)"`
-	ParentAgentID    *string `json:"parent_agent_id,omitempty" jsonschema:"description:Parent agent ID for subagent registration (optional)"`
-	SessionID        *string `json:"session_id,omitempty" jsonschema:"description:Session ID to associate agent with (optional - creates new session if not provided)"`
-}
-
-type RegisterDesktopAgentResult struct {
-	Success bool   `json:"success"`
-	Message string `json:"message"`
-}
+// Removed RegisterAgentArgs and RegisterDesktopAgentArgs - using only StartSession now
 
 // UpdateStatusArgs represents the arguments for update_status tool
 type UpdateStatusArgs struct {
-	AgentID     string  `json:"agent_id" jsonschema:"description:8-character agent identifier"`
+	AgentID     string  `json:"agent_id" jsonschema:"description:Agent UUID identifier"`
 	Status      string  `json:"status" jsonschema:"description:One of: active, working, idle, completed, failed"`
 	CurrentTask *string `json:"current_task,omitempty" jsonschema:"description:Description of current task (optional)"`
 }
@@ -46,7 +16,7 @@ type UpdateStatusResult struct {
 
 // LogActionArgs represents the arguments for log_action tool
 type LogActionArgs struct {
-	AgentID     string  `json:"agent_id" jsonschema:"description:8-character agent identifier"`
+	AgentID     string  `json:"agent_id" jsonschema:"description:Agent UUID identifier"`
 	ActionType  string  `json:"action_type" jsonschema:"description:One of: task_start, file_operation, git_commit, status_update"`
 	Description string  `json:"description" jsonschema:"description:Human-readable description of the action"`
 	Details     *string `json:"details,omitempty" jsonschema:"description:Additional structured information as JSON string (optional)"`
@@ -71,7 +41,7 @@ type LogCommitsResult struct {
 
 // EndSessionArgs represents the arguments for end_session tool
 type EndSessionArgs struct {
-	AgentID     string  `json:"agent_id" jsonschema:"description:8-character agent identifier"`
+	AgentID     string  `json:"agent_id" jsonschema:"description:Agent UUID identifier"`
 	Summary     *string `json:"summary,omitempty" jsonschema:"description:Summary of work completed (optional but recommended)"`
 	FinalStatus *string `json:"final_status,omitempty" jsonschema:"description:Either 'completed' or 'failed' (optional, defaults to 'completed')"`
 }
@@ -120,7 +90,7 @@ type GetCurrentWindowResult struct {
 
 // BringWindowFrontArgs represents the arguments for bring_window_front tool
 type BringWindowFrontArgs struct {
-	AgentID string `json:"agent_id"`
+	AgentID string `json:"agent_id" jsonschema:"description:Agent UUID identifier"`
 }
 
 type BringWindowFrontResult struct {
@@ -130,16 +100,15 @@ type BringWindowFrontResult struct {
 
 // StartSessionArgs represents the arguments for i-start-session tool
 type StartSessionArgs struct {
-	AgentID          *string `json:"agent_id,omitempty" jsonschema:"description:8-character agent identifier (optional - auto-generated if not provided)"`
-	SessionID        *string `json:"session_id,omitempty" jsonschema:"description:Claude Code session ID from marker file (optional - auto-generated if not provided)"`
+	SessionID        string  `json:"session_id" jsonschema:"description:Claude Code session ID (mandatory)"`
 	AgentDescription *string `json:"agent_description,omitempty" jsonschema:"description:Agent name/label (e.g., 'Frontend Dev Agent') (optional)"`
 	Name             *string `json:"name,omitempty" jsonschema:"description:Human-readable session name (optional)"`
 	Description      string  `json:"description" jsonschema:"description:What you'll be working on"`
 	ProjectName      *string `json:"project_name,omitempty" jsonschema:"description:Project name (optional)"`
 	WorktreePath     *string `json:"worktree_path,omitempty" jsonschema:"description:Path to git repository (optional)"`
 	PersonaID        *string `json:"persona_id,omitempty" jsonschema:"description:Persona ID to load initial context from (optional)"`
-	WindowID         *string `json:"window_id,omitempty" jsonschema:"description:Claude Desktop window identifier for window management (optional)"`
 	ParentAgentID    *string `json:"parent_agent_id,omitempty" jsonschema:"description:Parent agent ID if this is a subagent (optional)"`
+	ParentSessionID  *string `json:"parent_session_id,omitempty" jsonschema:"description:Parent session ID if this is a subsession (optional)"`
 }
 
 type StartSessionResult struct {
@@ -318,7 +287,7 @@ type SessionSummary struct {
 
 // LogCompactionArgs represents the arguments for i-log-compaction tool
 type LogCompactionArgs struct {
-	AgentID   string  `json:"agent_id" jsonschema:"description:8-character agent identifier"`
+	AgentID   string  `json:"agent_id" jsonschema:"description:Agent UUID identifier"`
 	SessionID string  `json:"session_id" jsonschema:"description:Session ID that was compacted"`
 	Summary   *string `json:"summary,omitempty" jsonschema:"description:Compaction summary text (optional)"`
 }
@@ -332,7 +301,7 @@ type LogCompactionResult struct {
 
 // LogSessionCostArgs represents the arguments for i-log-session-cost tool
 type LogSessionCostArgs struct {
-	AgentID          string   `json:"agent_id" jsonschema:"description:8-character agent identifier"`
+	AgentID          string   `json:"agent_id" jsonschema:"description:Agent UUID identifier"`
 	SessionID        *string  `json:"session_id,omitempty" jsonschema:"description:Session ID (optional)"`
 	TokensUsed       int      `json:"tokens_used" jsonschema:"description:Total tokens used in session"`
 	TokensBudget     int      `json:"tokens_budget" jsonschema:"description:Total token budget for session"`

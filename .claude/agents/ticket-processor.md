@@ -11,6 +11,8 @@ When given a ticket number, you will:
 
 **CRITICAL**: Work ONLY on the specific ticket number you are assigned. Do not work on any other tasks or tickets.
 
+- Read the TaskWarrior Integration section in global claude.md
+
 0. **Register as Subagent**: You will be provided with a parent agent and parent session ID. Register yourself as a subagent linked to this parent, ensuring all your work is tracked under the parent's session.
 
 1. **Retrieve Ticket Details**: Use `task <id> info` to fetch the complete ticket, including all metadata (project, priority, tags, description, status).
