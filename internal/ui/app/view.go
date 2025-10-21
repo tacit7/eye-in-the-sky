@@ -80,13 +80,13 @@ func (m *Model) renderListView() string {
 			contentBuilder.WriteString("\n")
 		} else {
 			// Add header row
-			headerLine := fmt.Sprintf("%-2s %-12s  %-12s  %-40s  %-40s  %s",
+			headerLine := fmt.Sprintf("%-2s %-12s  %-40s  %-40s  %-30s  %s",
 				"",
 				"Status",
-				"Session",
 				"Agent ID",
 				"Task",
 				"Source",
+				"Session",
 			)
 			contentBuilder.WriteString(m.styles.Primary.Render(headerLine))
 			contentBuilder.WriteString("\n")
@@ -504,28 +504,28 @@ func (m *Model) renderAgentLine(agent Agent, selected bool) string {
 		source = agent.Source
 	}
 
-	// Session ID or fallback (only first 9 chars)
+	// Session ID or fallback (only first 8 chars)
 	var sessionIDDisplay string
 	fullSessionID := agent.CurrentSessionID
 	if fullSessionID == "" {
 		sessionIDDisplay = "—"
 	} else {
-		if len(fullSessionID) > 9 {
-			sessionIDDisplay = fullSessionID[:9]
+		if len(fullSessionID) > 8 {
+			sessionIDDisplay = fullSessionID[:8]
 		} else {
 			sessionIDDisplay = fullSessionID
 		}
 		sessionIDDisplay = "📋 " + sessionIDDisplay
 	}
 
-	// Combine into line with prefix
-	line := fmt.Sprintf("%s%-12s  %-12s  %-40s  %-40s  %s",
+	// Combine into line with prefix - session ID on the right
+	line := fmt.Sprintf("%s%-12s  %-40s  %-40s  %-30s  %s",
 		prefix,
 		statusText,
-		sessionIDDisplay,
 		truncate(info, 40),
 		truncate(task, 40),
 		truncate(source, 30),
+		sessionIDDisplay,
 	)
 
 	if selected {

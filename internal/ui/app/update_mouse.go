@@ -57,12 +57,10 @@ func (m *Model) handleListClick(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Check if click is on session ID column (roughly X position 16-28 within content)
-	// Content starts at contentLeft + 1 (padding)
-	// Prefix: 2, Status: 12, Spacing: 2 = position 16 within the content
-	sessionIDColStart := contentLeft + 1 + 2 + 12 + 2
-	sessionIDColEnd := sessionIDColStart + 12
-	if msg.X >= sessionIDColStart && msg.X < sessionIDColEnd {
+	// Check if click is on session ID column (right side)
+	// Session ID is positioned on the far right, roughly the last 15 chars
+	sessionIDColStart := contentRight - 15
+	if msg.X >= sessionIDColStart && msg.X < contentRight {
 		agent := m.agents[rowIndex]
 		if agent.CurrentSessionID != "" {
 			copyToClipboard(agent.CurrentSessionID)
