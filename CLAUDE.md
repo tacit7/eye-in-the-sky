@@ -106,6 +106,18 @@ rm ~/.config/eye-in-the-sky/agents.db
 # Database schema is initialized on first run
 ```
 
+### Logging
+
+Log files are written to `~/.config/eye-in-the-sky/`:
+
+- **`tui.log`**: TUI Dashboard debug output
+  - Contains all debug messages from the TUI application
+  - Truncated on startup to clear old logs
+  - Configured with timestamps and source file names
+
+- **`cc_usage.log`**: Claude Code usage data (for future use)
+  - Reserved for CloudCode usage tracking and metrics
+
 ## Multi-Agent Workflow
 
 ### Agent Registration
@@ -177,7 +189,8 @@ When finishing work:
 - **[L]ogs**: Session logs with timestamp and type filtering
 - **[N]otes**: Session notes with creation timestamps
 - **[A]ctions**: All agent actions with descriptions
-- Keyboard navigation: o/c/l/n/a for tabs, j/k for items, h/l for scrolling
+- **[T]asks**: Agent tasks filtered by session, sorted by priority (H>M>L), deleted tasks at bottom
+- Keyboard navigation: o/c/l/n/a/t for tabs, j/k for items, h/l for scrolling
 
 ## Development Guidelines
 

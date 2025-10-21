@@ -29,12 +29,12 @@ func (sw *SyncWriter) Write(p []byte) (n int, err error) {
 }
 
 func main() {
-	// Setup logging to file - ALL logs go to usage.log
+	// Setup logging to file - ALL logs go to tui.log
 	home, _ := os.UserHomeDir()
 	logDir := filepath.Join(home, ".config", "eye-in-the-sky")
 	os.MkdirAll(logDir, 0755)
 
-	logFile := filepath.Join(logDir, "usage.log")
+	logFile := filepath.Join(logDir, "tui.log")
 	// Truncate the file on startup to clear old logs
 	f, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
