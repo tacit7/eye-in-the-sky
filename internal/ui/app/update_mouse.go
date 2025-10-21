@@ -1,6 +1,8 @@
 package app
 
 import (
+	"log"
+	"os/exec"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -37,14 +39,35 @@ func (m *Model) handleListClick(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Calculate row index within visible window
+	// Account for header row (2 lines: header + separator)
 	rowInView := msg.Y - (contentTop + 1) // +1 for top border
-	if rowInView < 0 || rowInView >= m.listLayout.Content.H-2 { // -2 for top and bottom borders
+	headerRows := 2 // header + separator line
+	if rowInView < headerRows {
+		return m, nil // Click on header
+	}
+
+	dataRowIndex := rowInView - headerRows
+	if dataRowIndex < 0 || dataRowIndex >= m.listLayout.Content.H-2-headerRows { // -2 for borders
 		return m, nil
 	}
 
 	// Map to actual row index
-	rowIndex := m.listOffset + rowInView
+	rowIndex := m.listOffset + dataRowIndex
 	if rowIndex >= len(m.agents) {
+		return m, nil
+	}
+
+	// Check if click is on session ID column (roughly X position 16-28 within content)
+	// Content starts at contentLeft + 1 (padding)
+	// Prefix: 2, Status: 12, Spacing: 2 = position 16 within the content
+	sessionIDColStart := contentLeft + 1 + 2 + 12 + 2
+	sessionIDColEnd := sessionIDColStart + 12
+	if msg.X >= sessionIDColStart && msg.X < sessionIDColEnd {
+		agent := m.agents[rowIndex]
+		if agent.CurrentSessionID != "" {
+			copyToClipboard(agent.CurrentSessionID)
+			m.statusMsg = "Session ID copied to clipboard"
+		}
 		return m, nil
 	}
 
@@ -104,4 +127,23 @@ func (m *Model) handleDetailClick(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+// copyToClipboard copies text to the system clipboard
+func copyToClipboard(text string) {
+	cmd := exec.Command("pbcopy")
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		log.Printf("Error copying to clipboard: %v", err)
+		return
+	}
+
+	go func() {
+		defer stdin.Close()
+		stdin.Write([]byte(text))
+	}()
+
+	if err := cmd.Run(); err != nil {
+		log.Printf("Error running pbcopy: %v", err)
+	}
 }
