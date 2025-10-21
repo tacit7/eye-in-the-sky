@@ -141,7 +141,7 @@ func (m *Model) renderDetailView() string {
 	switch m.tabs.ActiveIndex {
 	case 0: // Back arrow - should not be shown, handled by update logic
 		detailContent = m.renderAgentDetails()
-	case 1: // Overview
+	case 1: // Agent View
 		detailContent = m.renderAgentDetails()
 	case 2: // Commits
 		detailContent = m.renderCommitsTab()
@@ -151,6 +151,8 @@ func (m *Model) renderDetailView() string {
 		detailContent = m.renderNotesTab()
 	case 5: // Actions
 		detailContent = m.renderActionsTab()
+	case 6: // Tasks
+		detailContent = m.renderTasksTab()
 	default:
 		detailContent = m.renderAgentDetails()
 	}
@@ -940,6 +942,31 @@ func (m *Model) renderActionDetails(action Action) string {
 	}
 
 	return b.String()
+}
+
+// renderTasksTab renders the tasks tab content with split-pane view
+func (m *Model) renderTasksTab() string {
+	if len(m.tasks) == 0 {
+		return m.styles.Subtle.Render("No tasks available for this agent")
+	}
+
+	// Build item list for left pane
+	items := make([]string, len(m.tasks))
+	for i, task := range m.tasks {
+		status := task.Status
+		if len(status) > 10 {
+			status = status[:10]
+		}
+		items[i] = fmt.Sprintf("[%-10s] %s", status, truncate(task.Description, 50))
+	}
+
+	// Build detail content for right pane
+	var detailContent string
+	if m.tasksIndex >= 0 && m.tasksIndex < len(m.tasks) {
+		detailContent = m.renderTaskDetails(m.tasks[m.tasksIndex])
+	}
+
+	return m.renderSplitPaneContent(items, m.tasksIndex, detailContent)
 }
 
 // renderProjectTab renders the detected project information with sections

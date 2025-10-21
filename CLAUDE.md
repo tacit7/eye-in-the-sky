@@ -44,7 +44,12 @@ SQLite database: `~/.config/eye-in-the-sky/agents.db` (created at runtime)
 - Each Claude Code instance gets a unique 8-character hash ID (git-style like "a3f7d2e1")
 - Agent IDs are auto-generated if not provided using SHA1-based git-style hashes
 - Two agent types: "worktree" (git-based) and "desktop" (Claude Desktop)
-- Agent states: "active", "idle", "working", "completed", "failed"
+- Agent states and lifecycle:
+  - `active`: Session is ongoing, ready for work
+  - `idle`: Session paused, waiting for next task
+  - `working`: Currently executing a task
+  - `completed`: Session is FULLY OVER (use only when ending entire session, not for completing individual features)
+  - `failed`: Session ended with error
 - Metadata tracking: creation time, git worktree path, feature description, current task, window ID (for desktop agents)
 
 ### Action Logging

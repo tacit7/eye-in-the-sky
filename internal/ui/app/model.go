@@ -314,7 +314,7 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 
 	// Create tabs for agent detail view (← is back arrow, unicode 8678)
 	tabs := components.NewTabsModel(
-		[]string{"← Back", "[A]gent View", "[C]ommits", "[L]ogs", "[N]otes", "[A]ctions"},
+		[]string{"← Back", "[A]gent View", "[C]ommits", "[L]ogs", "[N]otes", "[A]ctions", "[T]asks"},
 		theme.Colors.Active,
 		theme.Colors.Text,
 	)
@@ -966,10 +966,12 @@ func (m *Model) loadTabData() error {
 	}
 
 	switch m.tabs.ActiveIndex {
-	case 2: // Logs tab
+	case 3: // Logs tab
 		return m.loadLogs()
+	case 6: // Tasks tab
+		return m.loadTasks()
 	default:
-		// Other tabs (Overview, Commits, Notes, Actions) already loaded by loadAgentDetails
+		// Other tabs (Agent View, Commits, Notes, Actions) already loaded by loadAgentDetails
 		return nil
 	}
 }

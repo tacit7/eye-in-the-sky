@@ -42,32 +42,32 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.err = err
 		}
 		return m, nil
-	case "o":
-		m.tabs.Set(1) // Overview tab (index 1 now, 0 is back arrow)
+	case "A":
+		m.tabs.Set(1) // Agent View tab (index 1 now, 0 is back arrow)
 		if err := m.loadTabData(); err != nil {
 			m.err = err
 		}
 		return m, nil
-	case "c":
+	case "C":
 		m.tabs.Set(2) // Commits tab
 		if err := m.loadTabData(); err != nil {
 			m.err = err
 		}
 		return m, nil
-	case "l":
+	case "L":
 		m.tabs.Set(3) // Logs tab
 		if err := m.loadTabData(); err != nil {
 			m.err = err
 		}
 		return m, nil
-	case "n":
+	case "N":
 		m.tabs.Set(4) // Notes tab
 		if err := m.loadTabData(); err != nil {
 			m.err = err
 		}
 		return m, nil
-	case "a":
-		m.tabs.Set(5) // Actions tab
+	case "T":
+		m.tabs.Set(6) // Tasks tab
 		if err := m.loadTabData(); err != nil {
 			m.err = err
 		}
@@ -103,6 +103,11 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.actionsIndex++
 				m.rightPaneOffset = 0
 			}
+		case 6: // Tasks
+			if m.tasksIndex < len(m.tasks)-1 {
+				m.tasksIndex++
+				m.rightPaneOffset = 0
+			}
 		default:
 			// Overview tab - use default scrolling
 			m.detailOffset++
@@ -132,6 +137,11 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.actionsIndex--
 				m.rightPaneOffset = 0
 			}
+		case 6: // Tasks
+			if m.tasksIndex > 0 {
+				m.tasksIndex--
+				m.rightPaneOffset = 0
+			}
 		default:
 			// Overview tab - use default scrolling
 			if m.detailOffset > 0 {
@@ -142,7 +152,7 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "h":
 		// Scroll right pane up (only for split-pane tabs)
-		if m.tabs.ActiveIndex >= 2 && m.tabs.ActiveIndex <= 5 {
+		if m.tabs.ActiveIndex >= 2 && m.tabs.ActiveIndex <= 6 {
 			if m.rightPaneOffset > 0 {
 				m.rightPaneOffset--
 			}
@@ -151,14 +161,14 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "l":
 		// Scroll right pane down (only for split-pane tabs)
-		if m.tabs.ActiveIndex >= 2 && m.tabs.ActiveIndex <= 5 {
+		if m.tabs.ActiveIndex >= 2 && m.tabs.ActiveIndex <= 6 {
 			m.rightPaneOffset++
 			return m, nil
 		}
 
 	case "ctrl+u":
 		// Page up in right pane (or overview)
-		if m.tabs.ActiveIndex >= 2 && m.tabs.ActiveIndex <= 5 {
+		if m.tabs.ActiveIndex >= 2 && m.tabs.ActiveIndex <= 6 {
 			// Split-pane tabs: page up right pane
 			m.rightPaneOffset -= 10
 			if m.rightPaneOffset < 0 {
@@ -175,7 +185,7 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "ctrl+d":
 		// Page down in right pane (or overview)
-		if m.tabs.ActiveIndex >= 2 && m.tabs.ActiveIndex <= 5 {
+		if m.tabs.ActiveIndex >= 2 && m.tabs.ActiveIndex <= 6 {
 			// Split-pane tabs: page down right pane
 			m.rightPaneOffset += 10
 		} else {
