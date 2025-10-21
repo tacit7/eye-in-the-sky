@@ -19,7 +19,10 @@
       "Bash(task add \"Generate implementation status report comparing PRD to actual implementation\" project:eye-in-the-sky priority:M +docs +session:AEA05FF3-BED0-41CE-9FE2-DE48F6B57D2F +agent:68F3F2EA)",
       "Bash(task 19 annotate \"Starting implementation: Step 1 - Add view states to Model\")",
       "Bash(git log -5 --format=\"%H %s %ai\" --no-decorate)",
-      "mcp__eye-in-the-sky__i-commits"
+      "mcp__eye-in-the-sky__i-commits",
+      "Bash(task 22 info:*)",
+      "Bash(mcp__eye-in-the-sky__i-instructions)",
+      "Read(//Users/urielmaldonado/.claude/eye-in-the-sky/**)"
     ],
     "deny": [],
     "ask": [],

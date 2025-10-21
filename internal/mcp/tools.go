@@ -55,6 +55,7 @@ func (t *Tools) RegisterAgent(args RegisterAgentArgs) (RegisterAgentResult, erro
 		GitWorktreePath:    args.WorktreePath,
 		FeatureDescription: &args.Description,
 		ProjectName:        args.ProjectName,
+		ParentAgentID:      args.ParentAgentID,
 		LastActivityAt:     timePtr(time.Now()),
 	}
 
@@ -100,6 +101,7 @@ func (t *Tools) RegisterDesktopAgent(args RegisterDesktopAgentArgs) (RegisterDes
 		GitWorktreePath:    nil, // Desktop agents don't have worktree paths
 		FeatureDescription: &args.Description,
 		ProjectName:        &args.ProjectName,
+		ParentAgentID:      args.ParentAgentID,
 		LastActivityAt:     timePtr(time.Now()),
 		WindowID:           args.WindowID,
 	}
