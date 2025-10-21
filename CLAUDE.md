@@ -222,3 +222,36 @@ When finishing work:
 - Database operations should be atomic to prevent corruption
 - System should maintain 99% uptime during development sessions
 - Gracefully handle agent disconnections and database lock contention
+
+## Development Workflow
+
+### Task Management
+- **Taskwarrior** is the primary persistent task tracking system
+- **TodoWrite** mirrors Taskwarrior tasks for current session visibility
+- Annotate Taskwarrior with progress as work happens: `task <id> annotate "message"`
+- Keep both systems in sync throughout the session
+- Tasks remain `pending` until explicitly marked done by the user
+- Only the user decides when work is complete
+
+### Information Tracking
+- Use **logs** (via `i-log` MCP) for tracking session information by default
+- Only add notes when the user explicitly requests them
+- Logs are persistent and searchable across sessions
+
+### Eye-in-the-Sky MCP Integration
+- Use `i-start-session`, `i-update-status`, `i-log-commits` for agent/session lifecycle
+- Handles agent tracking, commit logging, and session management
+- Separate from Taskwarrior; complements task management
+
+### Work Flow Pattern
+1. Work on code changes
+2. Annotate Taskwarrior with progress: `task <id> annotate "progress notes"`
+3. Update TodoWrite to mirror Taskwarrior state
+4. Commit code with meaningful messages
+5. Log session information as needed
+6. Wait for user confirmation to mark tasks done
+
+### Sync Pattern
+- Work happens → annotate Taskwarrior → update TodoWrite
+- Both systems stay in sync throughout session
+- User controls completion state across both systems
