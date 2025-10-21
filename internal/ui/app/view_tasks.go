@@ -3,6 +3,7 @@ package app
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os/exec"
 	"sort"
 	"strings"
@@ -138,17 +139,26 @@ func (m *Model) loadTasks() error {
 	// Build task filter for current session
 	// Filter by session tag with underscores: session:45045287_a68c_4ec5_833f_5c46535be414
 	// Show all tasks (pending, completed, deleted, etc.)
+	if m.selectedAgent.CurrentSessionID == "" {
+		// No session ID, return empty list
+		m.tasks = make([]Task, 0)
+		return nil
+	}
+
 	sessionID := strings.ReplaceAll(m.selectedAgent.CurrentSessionID, "-", "_")
 	sessionTag := fmt.Sprintf("+session:%s", sessionID)
+	log.Printf("[TASKS] Loading tasks for session: %s (formatted: %s)", m.selectedAgent.CurrentSessionID, sessionID)
 
 	// Run task export - shows all statuses for this session
 	cmd := exec.Command("task", sessionTag, "export")
 	output, err := cmd.Output()
 	if err != nil {
+		log.Printf("[TASKS] Task command failed: %v", err)
 		// Return empty list if no tasks found (not an error)
 		m.tasks = make([]Task, 0)
 		return nil
 	}
+	log.Printf("[TASKS] Found %d bytes of task output", len(output))
 
 	// Parse JSON output
 	var tasks []map[string]interface{}
