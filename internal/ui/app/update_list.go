@@ -21,7 +21,7 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "o":
 		m.listTabs.Set(0) // Overview
 		return m, nil
-	case "p":
+	case "p", "P":
 		m.listTabs.Set(1) // Project
 		return m, nil
 	case "c":
