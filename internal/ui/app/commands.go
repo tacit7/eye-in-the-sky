@@ -10,8 +10,8 @@ import (
 // archiveAgentCmd creates a command to archive an agent
 func (m *Model) archiveAgentCmd(agentID string) tea.Cmd {
 	return func() tea.Msg {
-		// Update agent status to archived in database
-		query := `UPDATE agents SET status = 'archived', updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+		// Update agent status to completed in database
+		query := `UPDATE agents SET status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = ?`
 		if _, err := m.db.Exec(query, agentID); err != nil {
 			return cmdResult{
 				success: false,
@@ -22,7 +22,7 @@ func (m *Model) archiveAgentCmd(agentID string) tea.Cmd {
 
 		return cmdResult{
 			success: true,
-			message: fmt.Sprintf("Archived agent %s", truncateID(agentID, 8)),
+			message: fmt.Sprintf("Completed agent %s", truncateID(agentID, 8)),
 		}
 	}
 }

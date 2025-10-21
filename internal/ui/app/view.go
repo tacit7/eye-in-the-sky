@@ -440,6 +440,7 @@ func (m *Model) renderFooter() string {
 			"[c] Continue",
 			"[s] Start",
 			"[n] New",
+			"[Shift+D] Archive",
 		}
 	case ViewDetail:
 		keys = []string{
