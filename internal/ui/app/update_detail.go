@@ -72,6 +72,11 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.taskState = TaskLoading
 		m.statusMsg = "Loading tasks..."
 		return m, m.loadTasksCmd()
+	case "P":
+		m.tabs.Set(7) // Projects tab
+		// Trigger async project tickets loading
+		m.statusMsg = "Loading project tickets..."
+		return m, m.loadProjectTicketsCmd()
 	}
 
 	// View navigation keys (only from Detail view)
@@ -108,6 +113,11 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.tasksIndex++
 				m.rightPaneOffset = 0
 			}
+		case 7: // Projects
+			if m.projectTicketsIndex < len(m.projectTickets)-1 {
+				m.projectTicketsIndex++
+				m.rightPaneOffset = 0
+			}
 		default:
 			// Overview tab - use default scrolling
 			m.detailOffset++
@@ -142,6 +152,11 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.tasksIndex--
 				m.rightPaneOffset = 0
 			}
+		case 7: // Projects
+			if m.projectTicketsIndex > 0 {
+				m.projectTicketsIndex--
+				m.rightPaneOffset = 0
+			}
 		default:
 			// Overview tab - use default scrolling
 			if m.detailOffset > 0 {
@@ -152,7 +167,7 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "h":
 		// Scroll right pane up (only for split-pane tabs)
-		if m.tabs.ActiveIndex >= 2 && m.tabs.ActiveIndex <= 6 {
+		if m.tabs.ActiveIndex >= 2 && m.tabs.ActiveIndex <= 7 {
 			if m.rightPaneOffset > 0 {
 				m.rightPaneOffset--
 			}
@@ -161,14 +176,14 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "l":
 		// Scroll right pane down (only for split-pane tabs)
-		if m.tabs.ActiveIndex >= 2 && m.tabs.ActiveIndex <= 6 {
+		if m.tabs.ActiveIndex >= 2 && m.tabs.ActiveIndex <= 7 {
 			m.rightPaneOffset++
 			return m, nil
 		}
 
 	case "ctrl+u":
 		// Page up in right pane (or overview)
-		if m.tabs.ActiveIndex >= 2 && m.tabs.ActiveIndex <= 6 {
+		if m.tabs.ActiveIndex >= 2 && m.tabs.ActiveIndex <= 7 {
 			// Split-pane tabs: page up right pane
 			m.rightPaneOffset -= 10
 			if m.rightPaneOffset < 0 {
@@ -185,7 +200,7 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "ctrl+d":
 		// Page down in right pane (or overview)
-		if m.tabs.ActiveIndex >= 2 && m.tabs.ActiveIndex <= 6 {
+		if m.tabs.ActiveIndex >= 2 && m.tabs.ActiveIndex <= 7 {
 			// Split-pane tabs: page down right pane
 			m.rightPaneOffset += 10
 		} else {

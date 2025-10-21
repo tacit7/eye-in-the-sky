@@ -167,6 +167,8 @@ func (m *Model) renderDetailView() string {
 		detailContent = m.renderActionsTab()
 	case 6: // Tasks
 		detailContent = m.renderAgentTasks()
+	case 7: // Projects
+		detailContent = m.renderProjectTickets()
 	default:
 		detailContent = m.renderAgentDetails()
 	}

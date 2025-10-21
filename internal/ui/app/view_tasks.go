@@ -99,6 +99,62 @@ func (m *Model) renderAgentTasks() string {
 	return fmt.Sprintf("%s\n%s", statusHeader, splitView)
 }
 
+// renderProjectTickets renders all tickets for the current agent's project
+func (m *Model) renderProjectTickets() string {
+	if m.selectedAgent == nil {
+		return m.styles.Subtle.Render("No agent selected")
+	}
+
+	// Check if agent has a project assigned
+	if m.selectedAgent.ProjectName == "" {
+		return m.styles.Subtle.Render("No project assigned to this agent")
+	}
+
+	// Build status header showing ticket count
+	var statusHeader string
+	if len(m.projectTickets) == 0 {
+		statusHeader = m.styles.Subtle.Render("No tickets found for project")
+	} else {
+		statusHeader = m.styles.Primary.Render(fmt.Sprintf("%d ticket(s) in project '%s'", len(m.projectTickets), m.selectedAgent.ProjectName))
+	}
+
+	// Build item list for left pane
+	items := make([]string, len(m.projectTickets))
+	for i, task := range m.projectTickets {
+		status := task.Status
+		if len(status) > 10 {
+			status = status[:10]
+		}
+		// Extract short UUID (first 8 chars) for ticket number display
+		shortUUID := task.UUID
+		if len(shortUUID) > 8 {
+			shortUUID = shortUUID[:8]
+		}
+		items[i] = fmt.Sprintf("[%s] [%-10s] %s", shortUUID, status, truncate(task.Description, 40))
+	}
+
+	// Build detail content for right pane
+	var detailContent string
+	if m.projectTicketsIndex >= 0 && m.projectTicketsIndex < len(m.projectTickets) {
+		detailContent = m.renderTaskDetails(m.projectTickets[m.projectTicketsIndex])
+	}
+
+	// Footer
+	footer := m.renderFooterWithKeys("[j/k] Move  [r] Refresh  [q/esc] Back")
+
+	splitView := m.renderSplitPaneView(
+		"Project Tickets",
+		items,
+		m.projectTicketsIndex,
+		len(m.projectTickets),
+		detailContent,
+		footer,
+	)
+
+	// Prepend status header
+	return fmt.Sprintf("%s\n%s", statusHeader, splitView)
+}
+
 // renderTaskDetails renders the details of a single task
 func (m *Model) renderTaskDetails(task Task) string {
 	var b strings.Builder
@@ -432,6 +488,121 @@ func (m *Model) loadTasksCmd() tea.Cmd {
 		}
 
 		// Sort before returning
+		sortTasksByPriorityAndStatus(filteredTasks)
+
+		return TasksLoadedMsg{Tasks: filteredTasks}
+	}
+}
+
+// loadProjectTickets loads all tickets for the current agent's project
+func (m *Model) loadProjectTickets() error {
+	if m.selectedAgent == nil {
+		return fmt.Errorf("no agent selected")
+	}
+
+	if m.selectedAgent.ProjectName == "" {
+		m.projectTickets = make([]Task, 0)
+		return nil
+	}
+
+	// Check if taskwarrior is installed
+	if _, err := exec.LookPath("task"); err != nil {
+		return fmt.Errorf("taskwarrior not installed")
+	}
+
+	// Run task export with project filter
+	projectFilter := fmt.Sprintf("project:%s", m.selectedAgent.ProjectName)
+	cmd := exec.Command("task", projectFilter, "export")
+	output, err := cmd.Output()
+	if err != nil {
+		log.Printf("[PROJECT TICKETS] Task command failed: %v", err)
+		// Return empty list if no tasks found (not an error)
+		m.projectTickets = make([]Task, 0)
+		return nil
+	}
+	log.Printf("[PROJECT TICKETS] Found %d bytes of task output for project '%s'", len(output), m.selectedAgent.ProjectName)
+
+	// Parse JSON output
+	var tasks []map[string]interface{}
+	if err := json.Unmarshal(output, &tasks); err != nil {
+		return fmt.Errorf("failed to parse tasks: %w", err)
+	}
+
+	// Convert to Task structs
+	m.projectTickets = make([]Task, 0, len(tasks))
+	for _, taskData := range tasks {
+		task := Task{
+			UUID:        getString(taskData, "uuid"),
+			Description: getString(taskData, "description"),
+			Status:      getString(taskData, "status"),
+			Priority:    getString(taskData, "priority"),
+			Project:     getString(taskData, "project"),
+			Tags:        getTags(taskData, "tags"),
+			Due:         getTime(taskData, "due"),
+			Entry:       getTime(taskData, "entry"),
+			Annotations: getAnnotations(taskData, "annotations"),
+		}
+		m.projectTickets = append(m.projectTickets, task)
+	}
+
+	// Sort by priority and status
+	sortTasksByPriorityAndStatus(m.projectTickets)
+	log.Printf("[PROJECT TICKETS] Loaded %d tickets for project '%s'", len(m.projectTickets), m.selectedAgent.ProjectName)
+
+	return nil
+}
+
+// loadProjectTicketsCmd returns an async tea.Cmd that loads project tickets without blocking
+func (m *Model) loadProjectTicketsCmd() tea.Cmd {
+	return func() tea.Msg {
+		if m.selectedAgent == nil {
+			return TasksErrorMsg{Error: fmt.Errorf("no agent selected")}
+		}
+
+		if m.selectedAgent.ProjectName == "" {
+			// Return success message with empty list
+			return TasksLoadedMsg{Tasks: make([]Task, 0)}
+		}
+
+		// Check if taskwarrior is installed
+		if _, err := exec.LookPath("task"); err != nil {
+			return TasksErrorMsg{Error: err}
+		}
+
+		// Run task export with project filter
+		projectFilter := fmt.Sprintf("project:%s", m.selectedAgent.ProjectName)
+		cmd := exec.Command("task", projectFilter, "export")
+		output, err := cmd.Output()
+		if err != nil {
+			log.Printf("[PROJECT TICKETS] Async task command failed: %v", err)
+			// Return empty list instead of error
+			return TasksLoadedMsg{Tasks: make([]Task, 0)}
+		}
+
+		// Parse JSON
+		var tasks []map[string]interface{}
+		if err := json.Unmarshal(output, &tasks); err != nil {
+			return TasksErrorMsg{Error: err}
+		}
+
+		// Convert to Task structs
+		filteredTasks := make([]Task, 0, len(tasks))
+		for _, taskData := range tasks {
+			task := Task{
+				UUID:        getString(taskData, "uuid"),
+				Description: getString(taskData, "description"),
+				Status:      getString(taskData, "status"),
+				Priority:    getString(taskData, "priority"),
+				Project:     getString(taskData, "project"),
+				Tags:        getTags(taskData, "tags"),
+				Due:         getTime(taskData, "due"),
+				Entry:       getTime(taskData, "entry"),
+				Annotations: getAnnotations(taskData, "annotations"),
+			}
+			filteredTasks = append(filteredTasks, task)
+		}
+
+		// Sort by priority and status
 		sortTasksByPriorityAndStatus(filteredTasks)
 
 		return TasksLoadedMsg{Tasks: filteredTasks}
