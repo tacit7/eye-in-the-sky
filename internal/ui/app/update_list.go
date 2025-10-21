@@ -79,6 +79,49 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Project tab navigation and scrolling (only when Project tab is active)
+	if m.listTabs.ActiveIndex == 1 {
+		switch msg.String() {
+		case "1":
+			m.projectSelectedSection = 0 // Tasks
+			m.projectTasksIndex = 0
+			return m, nil
+		case "2":
+			m.projectSelectedSection = 1 // CLAUDE.md
+			return m, nil
+		case "3":
+			m.projectSelectedSection = 2 // Markdown files
+			m.projectMDFilesIndex = 0
+			return m, nil
+		case "j", "down":
+			// Navigate within section
+			switch m.projectSelectedSection {
+			case 0: // Tasks
+				if m.projectTasksIndex < len(m.projectTasks)-1 {
+					m.projectTasksIndex++
+				}
+			case 2: // Markdown files
+				if m.projectMDFilesIndex < len(m.projectMDFiles)-1 {
+					m.projectMDFilesIndex++
+				}
+			}
+			return m, nil
+		case "k", "up":
+			// Navigate within section
+			switch m.projectSelectedSection {
+			case 0: // Tasks
+				if m.projectTasksIndex > 0 {
+					m.projectTasksIndex--
+				}
+			case 2: // Markdown files
+				if m.projectMDFilesIndex > 0 {
+					m.projectMDFilesIndex--
+				}
+			}
+			return m, nil
+		}
+	}
+
 	if Matches(msg, m.keys.ToggleFilter) {
 		// Toggle show all agents
 		m.showAll = !m.showAll

@@ -141,6 +141,16 @@ type Model struct {
 
 	// Project information
 	projectInfo *ProjectInfo
+
+	// Project view data
+	projectTasks      []ProjectTask
+	projectMDFiles    []ProjectFile
+	claudeMDContent   string
+	projectTasksIndex int
+	projectMDFilesIndex int
+	projectSelectedSection int // 0: tasks, 1: CLAUDE.md, 2: .md files
+	projectTasksOffset    int
+	projectMDFilesOffset  int
 }
 
 // Agent represents an agent from the database
@@ -187,6 +197,22 @@ type Note struct {
 	SessionID string
 	Content   string
 	Timestamp time.Time
+}
+
+// ProjectTask represents a TaskWarrior task
+type ProjectTask struct {
+	UUID        string
+	Description string
+	Status      string
+	Priority    string
+	DueDate     time.Time
+}
+
+// ProjectFile represents a markdown file in the project
+type ProjectFile struct {
+	Name    string // Just the filename
+	Path    string // Full path relative to project root
+	Content string // File contents
 }
 
 // Task represents a Taskwarrior task
@@ -334,6 +360,13 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 
 	// Detect project information at startup
 	m.projectInfo = DetectProject()
+
+	// Load project data if detected
+	if m.projectInfo != nil {
+		// Load markdown files and CLAUDE.md
+		m.projectMDFiles = LoadProjectMarkdownFiles(m.projectInfo.GitRootPath)
+		m.claudeMDContent = LoadClaudeMDFile(m.projectInfo.GitRootPath)
+	}
 
 	// Load initial agent list
 	if err := m.loadAgents(); err != nil {

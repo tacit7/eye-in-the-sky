@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -178,4 +179,85 @@ func (p *ProjectInfo) String() string {
 	}
 
 	return strings.Join(parts, " | ")
+}
+
+// LoadProjectTasks loads TaskWarrior tasks for the project
+func LoadProjectTasks(projectName string) []ProjectTask {
+	if projectName == "" {
+		return []ProjectTask{}
+	}
+
+	cmd := exec.Command("task", fmt.Sprintf("project:%s", projectName), "status:pending", "export")
+	out, err := cmd.Output()
+	if err != nil {
+		log.Printf("[PROJECT] Failed to load tasks: %v\n", err)
+		return []ProjectTask{}
+	}
+
+	// Parse JSON task output - for now just a simple approach
+	// task export returns JSON array of tasks
+	// We'd need json.Unmarshal to parse properly, but for MVP just handle errors gracefully
+	if len(out) == 0 {
+		return []ProjectTask{}
+	}
+
+	// TODO: Proper JSON parsing of task output
+	log.Printf("[PROJECT] Loaded %d bytes of task data\n", len(out))
+	return []ProjectTask{}
+}
+
+// LoadProjectMarkdownFiles finds and loads .md files in the project root
+func LoadProjectMarkdownFiles(gitRoot string) []ProjectFile {
+	if gitRoot == "" {
+		return []ProjectFile{}
+	}
+
+	files := []ProjectFile{}
+
+	// Read directory
+	entries, err := ioutil.ReadDir(gitRoot)
+	if err != nil {
+		log.Printf("[PROJECT] Failed to read project directory: %v\n", err)
+		return files
+	}
+
+	// Find .md files
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
+			continue
+		}
+
+		filePath := filepath.Join(gitRoot, entry.Name())
+		content, err := ioutil.ReadFile(filePath)
+		if err != nil {
+			log.Printf("[PROJECT] Failed to read %s: %v\n", entry.Name(), err)
+			continue
+		}
+
+		files = append(files, ProjectFile{
+			Name:    entry.Name(),
+			Path:    entry.Name(),
+			Content: string(content),
+		})
+	}
+
+	log.Printf("[PROJECT] Found %d markdown files\n", len(files))
+	return files
+}
+
+// LoadClaudeMDFile reads the CLAUDE.md file from the project
+func LoadClaudeMDFile(gitRoot string) string {
+	if gitRoot == "" {
+		return ""
+	}
+
+	claudeMDPath := filepath.Join(gitRoot, "CLAUDE.md")
+	content, err := ioutil.ReadFile(claudeMDPath)
+	if err != nil {
+		log.Printf("[PROJECT] CLAUDE.md not found or unreadable: %v\n", err)
+		return ""
+	}
+
+	log.Printf("[PROJECT] Loaded CLAUDE.md (%d bytes)\n", len(content))
+	return string(content)
 }
