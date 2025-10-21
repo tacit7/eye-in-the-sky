@@ -52,6 +52,16 @@ func (m *Model) renderAgentTasks() string {
 		return m.styles.Failed.Render("Error loading tasks")
 	}
 
+	// Build status header showing task count
+	var statusHeader string
+	if m.taskState == TaskLoaded {
+		statusHeader = m.styles.Completed.Render(fmt.Sprintf("✓ Loaded %d task(s)", len(m.tasks)))
+	} else if len(m.tasks) == 0 {
+		statusHeader = m.styles.Subtle.Render("No tasks")
+	} else {
+		statusHeader = m.styles.Primary.Render(fmt.Sprintf("%d task(s)", len(m.tasks)))
+	}
+
 	// Build item list for left pane
 	items := make([]string, len(m.tasks))
 	for i, task := range m.tasks {
@@ -71,7 +81,7 @@ func (m *Model) renderAgentTasks() string {
 	// Footer
 	footer := m.renderFooterWithKeys("[j/k] Move  [d] Mark Done  [r] Refresh  [q/esc] Back")
 
-	return m.renderSplitPaneView(
+	splitView := m.renderSplitPaneView(
 		"Tasks",
 		items,
 		m.tasksIndex,
@@ -79,6 +89,9 @@ func (m *Model) renderAgentTasks() string {
 		detailContent,
 		footer,
 	)
+
+	// Prepend status header
+	return fmt.Sprintf("%s\n%s", statusHeader, splitView)
 }
 
 // renderTaskDetails renders the details of a single task
