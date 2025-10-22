@@ -250,8 +250,8 @@ func (m *Model) loadTasks() error {
 	var searchTag string
 
 	if isSubagent {
-		// For subagents: filter by +subagent:<agent_id> tag
-		searchTag = fmt.Sprintf("+subagent:%s", strings.ReplaceAll(m.selectedAgent.ID, "-", "_"))
+		// For subagents: filter by +subagent_<agent_id> tag (replace hyphens with underscores for TaskWarrior compatibility)
+		searchTag = fmt.Sprintf("+subagent_%s", strings.ReplaceAll(m.selectedAgent.ID, "-", "_"))
 		log.Printf("[TASKS] Loading tasks for subagent: %s (tag: %s)", m.selectedAgent.ID, searchTag)
 	} else {
 		// For parent agents: filter by +session:<session_id> tag
@@ -260,7 +260,7 @@ func (m *Model) loadTasks() error {
 			m.tasks = make([]Task, 0)
 			return nil
 		}
-		searchTag = fmt.Sprintf("+session:%s", strings.ReplaceAll(m.selectedAgent.SessionID, "-", "_"))
+		searchTag = fmt.Sprintf("+session_%s", strings.ReplaceAll(m.selectedAgent.SessionID, "-", "_"))
 		log.Printf("[TASKS] Loading tasks for session: %s (tag: %s)", m.selectedAgent.SessionID, searchTag)
 	}
 
@@ -283,7 +283,7 @@ func (m *Model) loadTasks() error {
 
 	// Convert to Task structs, filtering by appropriate tag in description
 	m.tasks = make([]Task, 0, len(tasks))
-	agentSearchStr := fmt.Sprintf("+agent:%s", strings.ReplaceAll(m.selectedAgent.ID, "-", "_"))
+	agentSearchStr := fmt.Sprintf("+agent_%s", strings.ReplaceAll(m.selectedAgent.ID, "-", "_"))
 	for _, taskData := range tasks {
 		description := getString(taskData, "description")
 		// Filter tasks that contain the appropriate tag (workaround for Taskwarrior tag parsing)
@@ -439,7 +439,7 @@ func (m *Model) loadTasksCmd() tea.Cmd {
 			if m.selectedAgent.SessionID == "" {
 				return TasksLoadedMsg{Tasks: make([]Task, 0)}
 			}
-			searchTag = fmt.Sprintf("+session:%s", strings.ReplaceAll(m.selectedAgent.SessionID, "-", "_"))
+			searchTag = fmt.Sprintf("+session_%s", strings.ReplaceAll(m.selectedAgent.SessionID, "-", "_"))
 			log.Printf("[TASKS] Async loading tasks for session: %s (tag: %s)", m.selectedAgent.SessionID, searchTag)
 		}
 

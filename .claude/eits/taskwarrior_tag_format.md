@@ -1,33 +1,35 @@
 # TaskWarrior Tag Format Requirements
 
-## Critical Issue: Hyphens in Tags
+## Critical Issues: Hyphens and Colons in Tags
 
-TaskWarrior does not properly handle hyphens (`-`) in tag names. This causes filtering and search operations to fail silently.
+TaskWarrior does not properly handle:
+1. **Hyphens (`-`)** in tag names - causes filtering to fail silently
+2. **Colons (`:`)** in tag queries - accepts them when creating but can't query them
 
 ## Required Format Conversion
 
 All UUID-based identifiers must be converted from hyphen format to underscore format when used as TaskWarrior tags:
 
 ### Session IDs
-- **Incorrect**: `+session:da0df968-a580-45fc-9ed8-3f06740beb53`
-- **Correct**: `+session:da0df968_a580_45fc_9ed8_3f06740beb53`
+- **Wrong**: `+session:da0df968-a580-45fc-9ed8-3f06740beb53` (has hyphens and colon)
+- **Correct**: `+session_da0df968_a580_45fc_9ed8_3f06740beb53` (all underscores)
 
 ### Agent IDs
-- **Incorrect**: `+agent:cd9e1db3-c7aa-43d7-b67c-3e76e5b2c4b3`
-- **Correct**: `+agent:cd9e1db3_c7aa_43d7_b67c_3e76e5b2c4b3`
+- **Wrong**: `+agent:cd9e1db3-c7aa-43d7-b67c-3e76e5b2c4b3` (has hyphens and colon)
+- **Correct**: `+agent_cd9e1db3_c7aa_43d7_b67c_3e76e5b2c4b3` (all underscores)
 
 ### Subagent IDs
-- **Incorrect**: `+subagent:489fb01c-6860-40f1-8f37-b29cfcad2590`
-- **Correct**: `+subagent:489fb01c_6860_40f1_8f37_b29cfcad2590`
+- **Wrong**: `+subagent:489fb01c-6860-40f1-8f37-b29cfcad2590` (has hyphens and colon)
+- **Correct**: `+subagent_489fb01c_6860_40f1_8f37_b29cfcad2590` (all underscores)
 
 ## Implementation Details
 
 ### TUI Code (view_tasks.go)
-The TUI correctly converts UUIDs to underscore format:
+The TUI converts UUIDs to underscore format AND removes colons:
 ```go
-searchTag = fmt.Sprintf("+subagent:%s", strings.ReplaceAll(m.selectedAgent.ID, "-", "_"))
-searchTag = fmt.Sprintf("+session:%s", strings.ReplaceAll(m.selectedAgent.SessionID, "-", "_"))
-agentSearchStr = fmt.Sprintf("+agent:%s", strings.ReplaceAll(m.selectedAgent.ID, "-", "_"))
+searchTag = fmt.Sprintf("+subagent_%s", strings.ReplaceAll(m.selectedAgent.ID, "-", "_"))
+searchTag = fmt.Sprintf("+session_%s", strings.ReplaceAll(m.selectedAgent.SessionID, "-", "_"))
+agentSearchStr = fmt.Sprintf("+agent_%s", strings.ReplaceAll(m.selectedAgent.ID, "-", "_"))
 ```
 
 ### Creating Tasks

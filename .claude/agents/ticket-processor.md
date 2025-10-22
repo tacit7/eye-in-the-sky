@@ -32,9 +32,9 @@ When given a ticket number, you will:
    - Associated git commits mentioned
 
 4. **Tag Ticket with Subagent ID**: Add your subagent ID to the ticket for tracking:
-   - Use `task <id> modify +subagent:<your_agent_id>` to tag yourself as the subagent handling this ticket
-   - IMPORTANT: Replace hyphens with underscores in the agent ID for TaskWarrior compatibility
-   - Example: If your agent ID is `489fb01c-6860-40f1-8f37-b29cfcad2590`, use `+subagent:489fb01c_6860_40f1_8f37_b29cfcad2590`
+   - Use `task <id> modify +subagent_<your_agent_id>` to tag yourself as the subagent handling this ticket
+   - IMPORTANT: Replace hyphens with underscores AND colon with underscore for TaskWarrior compatibility
+   - Example: If your agent ID is `489fb01c-6860-40f1-8f37-b29cfcad2590`, use `+subagent_489fb01c_6860_40f1_8f37_b29cfcad2590`
    - This links the ticket to your Eye in the Sky agent registration
 
 5. **Log Work Using Eye in the Sky**: Register or update the agent in the Eye in the Sky system:
