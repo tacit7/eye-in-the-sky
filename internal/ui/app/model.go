@@ -1020,6 +1020,7 @@ func (m *Model) loadAgentTaskCounts() {
 	// Check if taskwarrior is installed
 	if _, err := exec.LookPath("task"); err != nil {
 		// TaskWarrior not installed, skip
+		debugf("TaskWarrior not found in PATH")
 		return
 	}
 
@@ -1028,14 +1029,18 @@ func (m *Model) loadAgentTaskCounts() {
 	output, err := cmd.Output()
 	if err != nil {
 		// Failed to get tasks, skip
+		debugf("Failed to export tasks: %v", err)
 		return
 	}
 
 	// Parse JSON output
 	var tasks []map[string]interface{}
 	if err := json.Unmarshal(output, &tasks); err != nil {
+		debugf("Failed to parse task JSON: %v", err)
 		return
 	}
+
+	debugf("Found %d total tasks from TaskWarrior", len(tasks))
 
 	// Count tasks for each agent
 	for i := range m.agents {
@@ -1046,26 +1051,40 @@ func (m *Model) loadAgentTaskCounts() {
 		if m.agents[i].ParentAgentID != "" {
 			// Subagent: search for +subagent_<agent_id>
 			searchTag = fmt.Sprintf("+subagent_%s", strings.ReplaceAll(m.agents[i].ID, "-", "_"))
+			debugf("Agent %s (subagent): searching for tag %s", m.agents[i].ID, searchTag)
 		} else if m.agents[i].SessionID != "" {
 			// Parent agent: search for +session_<session_id>
 			searchTag = fmt.Sprintf("+session_%s", strings.ReplaceAll(m.agents[i].SessionID, "-", "_"))
+			debugf("Agent %s (parent): searching for tag %s", m.agents[i].ID, searchTag)
 		} else {
 			// No session or parent, skip
+			debugf("Agent %s: no session or parent, skipping", m.agents[i].ID)
 			continue
 		}
 
 		// Count tasks with matching tag
 		for _, task := range tasks {
-			if desc, ok := task["description"].(string); ok {
-				if strings.Contains(desc, searchTag) {
-					// Check if task is pending
-					if status, ok := task["status"].(string); ok && status == "pending" {
-						count++
+			// Check if task is pending first
+			if status, ok := task["status"].(string); ok && status == "pending" {
+				// Check tags array for matching tag
+				if tags, ok := task["tags"].([]interface{}); ok {
+					for _, tag := range tags {
+						if tagStr, ok := tag.(string); ok {
+							// Remove the + prefix from searchTag for comparison
+							cleanSearchTag := strings.TrimPrefix(searchTag, "+")
+							if tagStr == cleanSearchTag {
+								count++
+								break // Found matching tag, count this task
+							}
+						}
 					}
 				}
 			}
 		}
 
 		m.agents[i].TaskCount = count
+		if count > 0 {
+			debugf("Agent %s: found %d tasks", m.agents[i].ID, count)
+		}
 	}
 }
