@@ -75,13 +75,13 @@ func (m *Model) handleListClick(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	// On Overview tab (index 0), single click opens detail view
 	if m.listTabs.ActiveIndex == 0 {
 		m.selectedIndex = rowIndex
-		if err := m.loadAgentDetails(); err != nil {
-			m.err = err
-			return m, nil
+		if m.selectedIndex >= 0 && m.selectedIndex < len(m.agents) {
+			m.selectedAgent = &m.agents[m.selectedIndex]
+			m.currentView = ViewDetail
+			m.detailOffset = 0
+			m.tabs.Set(1)
+			return m, loadAgentDetailsCmd(m.data, m.selectedAgent.ID)
 		}
-		m.currentView = ViewDetail
-		m.detailOffset = 0
-		m.tabs.Set(1)
 		return m, nil
 	}
 
@@ -89,15 +89,14 @@ func (m *Model) handleListClick(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	if rowIndex == m.lastClickRow && now.Sub(m.lastClickAt) <= dbClickWindow {
 		// Double click - open detail view
 		m.selectedIndex = rowIndex
-		if err := m.loadAgentDetails(); err != nil {
-			m.err = err
-			return m, nil
+		if m.selectedIndex >= 0 && m.selectedIndex < len(m.agents) {
+			m.selectedAgent = &m.agents[m.selectedIndex]
+			m.currentView = ViewDetail
+			m.detailOffset = 0
+			m.tabs.Set(1)
+			m.lastClickRow = -1 // Reset
+			return m, loadAgentDetailsCmd(m.data, m.selectedAgent.ID)
 		}
-		m.currentView = ViewDetail
-		m.detailOffset = 0
-		m.tabs.Set(1)
-		m.lastClickRow = -1 // Reset
-		return m, nil
 	}
 
 	// Single click - select row

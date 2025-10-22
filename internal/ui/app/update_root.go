@@ -44,10 +44,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tickMsg:
-		// Refresh data
-		if err := m.loadAgents(); err != nil {
-			m.err = err
+		// Refresh data using command
+		cmds := []tea.Cmd{
+			loadAgentsCmd(m.data.Agents),
+			m.tickCmd(), // Schedule next tick
 		}
+
 		// Refresh CCUsage data if needed (every 30 seconds)
 		if m.ccusageDB != nil && time.Since(m.lastCCUsageSync) > 30*time.Second {
 			if err := m.loadCCUsageData(); err != nil {
@@ -55,8 +57,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				log.Printf("Warning: Failed to reload ccusage data: %v\n", err)
 			}
 		}
-		// Schedule next tick
-		return m, m.tickCmd()
+
+		return m, tea.Batch(cmds...)
 
 	case initCCUsageMsg:
 		// Sync complete, data reloaded
@@ -70,11 +72,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = msg.err
 			m.statusMsg = msg.message
 		}
-		// Refresh agent list after command
-		if err := m.loadAgents(); err != nil {
-			m.err = err
-		}
-		return m, nil
+		// Refresh agent list after command using command pattern
+		return m, loadAgentsCmd(m.data.Agents)
 
 	case util.FocusResult:
 		// Handle window focus results
@@ -88,6 +87,41 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case errMsg:
 		m.err = msg.err
+		return m, nil
+
+	case AgentsLoadedMsg:
+		// Update agents from command
+		m.agents = msg.Agents
+		// Load task counts after agents are loaded
+		return m, loadTaskCountsCmd(m.data.Tasks, m.agents)
+
+	case TaskCountsLoadedMsg:
+		// Update task counts for each agent
+		for i := range m.agents {
+			for _, count := range msg.Counts {
+				if m.agents[i].ID == count.AgentID {
+					m.agents[i].TaskCount = count.Count
+					break
+				}
+			}
+		}
+		return m, nil
+
+	case AgentDetailsLoadedMsg:
+		// Update agent details from command
+		m.selectedAgent = msg.Agent
+		m.actions = msg.Actions
+		m.commits = msg.Commits
+		m.notes = msg.Notes
+		// Load metrics for the agent
+		if m.selectedAgent != nil {
+			return m, loadMetricsCmd(m.data.Metrics, m.selectedAgent.ID)
+		}
+		return m, nil
+
+	case MetricsLoadedMsg:
+		// Update metrics from command
+		m.sessionMetrics = msg.Metrics
 		return m, nil
 
 	case TasksLoadedMsg, TasksErrorMsg:
@@ -125,11 +159,8 @@ func (m *Model) handleGlobalKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if Matches(msg, m.keys.Refresh) {
-		if err := m.loadAgents(); err != nil {
-			m.err = err
-		}
-		m.statusMsg = "Refreshed"
-		return m, nil
+		m.statusMsg = "Refreshing..."
+		return m, loadAgentsCmd(m.data.Agents)
 	}
 
 	if Matches(msg, m.keys.HelpToggle) {

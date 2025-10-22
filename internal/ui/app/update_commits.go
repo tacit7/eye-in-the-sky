@@ -1,8 +1,6 @@
 package app
 
 import (
-	"fmt"
-
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -52,12 +50,10 @@ func (m *Model) handleCommitsKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if Matches(msg, m.keys.Refresh) {
-		// Reload commits
-		if err := m.loadAgentDetails(); err != nil {
-			m.err = err
-			m.statusMsg = fmt.Sprintf("Failed to reload commits: %v", err)
-		} else {
-			m.statusMsg = "Commits refreshed"
+		// Reload commits using command
+		if m.selectedAgent != nil {
+			m.statusMsg = "Refreshing commits..."
+			return m, loadAgentDetailsCmd(m.data, m.selectedAgent.ID)
 		}
 		return m, nil
 	}

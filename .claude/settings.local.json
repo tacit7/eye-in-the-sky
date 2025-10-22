@@ -32,7 +32,11 @@
       "Bash(task list:*)",
       "Bash(task 25 start:*)",
       "Bash(task 27 info:*)",
-      "mcp__eye-in-the-sky__i-instructions"
+      "mcp__eye-in-the-sky__i-instructions",
+      "Bash(task 33 annotate:*)",
+      "Bash(task add:*)",
+      "Bash(task 34 annotate:*)",
+      "Bash(task 39 annotate:*)"
     ],
     "deny": [],
     "ask": [],

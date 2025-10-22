@@ -33,6 +33,20 @@ type MetricsLoadedMsg struct {
 	Metrics []domain.SessionMetric
 }
 
+// loadMetricsCmd loads metrics for a specific agent
+func loadMetricsCmd(store MetricsStore, agentID domain.AgentID) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := withTimeout()
+		defer cancel()
+
+		metrics, err := store.LoadByAgent(ctx, agentID, 10)
+		if err != nil {
+			return ErrMsg{Error: err}
+		}
+		return MetricsLoadedMsg{Metrics: metrics}
+	}
+}
+
 // NotesLoadedMsg is sent when notes are loaded
 type NotesLoadedMsg struct {
 	Notes []domain.Note
@@ -69,6 +83,60 @@ func loadAgentsCmd(store AgentStore) tea.Cmd {
 			return ErrMsg{Error: err}
 		}
 		return AgentsLoadedMsg{Agents: agents}
+	}
+}
+
+// AgentDetailsLoadedMsg is sent when agent details are loaded
+type AgentDetailsLoadedMsg struct {
+	Agent   *domain.Agent
+	Actions []domain.Action
+	Commits []domain.Commit
+	Notes   []domain.Note
+}
+
+// loadAgentDetailsCmd loads details for a specific agent
+func loadAgentDetailsCmd(client *DataClient, agentID domain.AgentID) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := withTimeout()
+		defer cancel()
+
+		// Load agent
+		agent, err := client.Agents.LoadAgent(ctx, agentID)
+		if err != nil {
+			return ErrMsg{Error: err}
+		}
+
+		// Load related data in parallel
+		actionsCh := make(chan []domain.Action, 1)
+		commitsCh := make(chan []domain.Commit, 1)
+		notesCh := make(chan []domain.Note, 1)
+
+		go func() {
+			actions, _ := client.Actions.LoadByAgent(ctx, agentID, 50)
+			actionsCh <- actions
+		}()
+
+		go func() {
+			commits, _ := client.Commits.LoadByAgentHierarchy(ctx, agentID, 20)
+			commitsCh <- commits
+		}()
+
+		go func() {
+			notes, _ := client.Notes.LoadByAgent(ctx, agentID)
+			notesCh <- notes
+		}()
+
+		// Collect results
+		actions := <-actionsCh
+		commits := <-commitsCh
+		notes := <-notesCh
+
+		return AgentDetailsLoadedMsg{
+			Agent:   agent,
+			Actions: actions,
+			Commits: commits,
+			Notes:   notes,
+		}
 	}
 }
 
@@ -116,8 +184,8 @@ func markTaskDoneCmd(store TaskStore, taskID domain.TaskID) tea.Cmd {
 	}
 }
 
-// loadMetricsCmd loads all metrics
-func loadMetricsCmd(store MetricsStore) tea.Cmd {
+// loadAllMetricsCmd loads all metrics
+func loadAllMetricsCmd(store MetricsStore) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := withTimeout()
 		defer cancel()

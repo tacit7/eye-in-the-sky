@@ -301,11 +301,7 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 		m.claudeMDContent = LoadClaudeMDFile(m.projectInfo.GitRootPath)
 	}
 
-	// Load initial agent list
-	if err := m.loadAgents(); err != nil {
-		m.err = err
-	}
-
+	// Initial load will happen in Init()
 	return m, nil
 }
 
@@ -331,7 +327,8 @@ func createStyles(theme Theme) Styles {
 // Init initializes the model
 func (m *Model) Init() tea.Cmd {
 	return tea.Batch(
-		m.tickCmd(),
+		loadAgentsCmd(m.data.Agents), // Load initial agents
+		m.tickCmd(),                   // Start ticker
 	)
 }
 

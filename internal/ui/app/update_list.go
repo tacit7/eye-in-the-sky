@@ -67,15 +67,15 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if Matches(msg, m.keys.Select) {
-		// Switch to detail view
-		if err := m.loadAgentDetails(); err != nil {
-			m.err = err
-			return m, nil
+		// Switch to detail view - load details with command
+		if m.selectedIndex >= 0 && m.selectedIndex < len(m.agents) {
+			m.selectedAgent = &m.agents[m.selectedIndex]
+			m.currentView = ViewDetail
+			m.detailOffset = 0
+			// Set active tab to Overview (index 1, since 0 is back arrow)
+			m.tabs.Set(1)
+			return m, loadAgentDetailsCmd(m.data, m.selectedAgent.ID)
 		}
-		m.currentView = ViewDetail
-		m.detailOffset = 0
-		// Set active tab to Overview (index 1, since 0 is back arrow)
-		m.tabs.Set(1)
 		return m, nil
 	}
 
@@ -125,10 +125,7 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if Matches(msg, m.keys.ToggleFilter) {
 		// Toggle show all agents
 		m.showAll = !m.showAll
-		if err := m.loadAgents(); err != nil {
-			m.err = err
-		}
-		return m, nil
+		return m, loadAgentsCmd(m.data.Agents)
 	}
 
 	if Matches(msg, m.keys.NewSession) {
