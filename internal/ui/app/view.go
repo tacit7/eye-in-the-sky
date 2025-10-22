@@ -486,10 +486,19 @@ func (m *Model) renderAgentLine(agent Agent, selected bool) string {
 
 	statusText := statusStyle.Render(status)
 
-	// Agent info
+	// Agent info with task count
 	info := fmt.Sprintf("%s", agent.ID)
 	if agent.AgentDescription != "" {
 		info = fmt.Sprintf("%s - %s", agent.ID, agent.AgentDescription)
+	}
+	// Add task count if any
+	if agent.TaskCount > 0 {
+		taskCountBadge := fmt.Sprintf("[%d task", agent.TaskCount)
+		if agent.TaskCount > 1 {
+			taskCountBadge += "s"
+		}
+		taskCountBadge += "]"
+		info = fmt.Sprintf("%s %s", info, m.styles.Active.Render(taskCountBadge))
 	}
 
 	// Current task

@@ -2,8 +2,11 @@ package app
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
+	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/help"
@@ -177,6 +180,7 @@ type Agent struct {
 	ProjectName         string
 	SessionID    string
 	ParentAgentID       string
+	TaskCount           int // Number of TaskWarrior tasks for this agent
 }
 
 // Action represents an agent action from the database
@@ -506,6 +510,9 @@ func (m *Model) loadAgents() error {
 
 	m.agents = agents
 	m.lastRefresh = time.Now()
+
+	// Load task counts for each agent from TaskWarrior
+	m.loadAgentTaskCounts()
 
 	// Adjust selected index if needed
 	if m.selectedIndex >= len(m.agents) && len(m.agents) > 0 {
@@ -1006,4 +1013,59 @@ func (m *Model) SelectedAgent() *Agent {
 		return nil
 	}
 	return &m.agents[m.selectedIndex]
+}
+
+// loadAgentTaskCounts queries TaskWarrior for task counts for each agent
+func (m *Model) loadAgentTaskCounts() {
+	// Check if taskwarrior is installed
+	if _, err := exec.LookPath("task"); err != nil {
+		// TaskWarrior not installed, skip
+		return
+	}
+
+	// Get all tasks in one export
+	cmd := exec.Command("task", "export")
+	output, err := cmd.Output()
+	if err != nil {
+		// Failed to get tasks, skip
+		return
+	}
+
+	// Parse JSON output
+	var tasks []map[string]interface{}
+	if err := json.Unmarshal(output, &tasks); err != nil {
+		return
+	}
+
+	// Count tasks for each agent
+	for i := range m.agents {
+		count := 0
+		var searchTag string
+
+		// Determine the tag to search for
+		if m.agents[i].ParentAgentID != "" {
+			// Subagent: search for +subagent_<agent_id>
+			searchTag = fmt.Sprintf("+subagent_%s", strings.ReplaceAll(m.agents[i].ID, "-", "_"))
+		} else if m.agents[i].SessionID != "" {
+			// Parent agent: search for +session_<session_id>
+			searchTag = fmt.Sprintf("+session_%s", strings.ReplaceAll(m.agents[i].SessionID, "-", "_"))
+		} else {
+			// No session or parent, skip
+			continue
+		}
+
+		// Count tasks with matching tag
+		for _, task := range tasks {
+			if desc, ok := task["description"].(string); ok {
+				if strings.Contains(desc, searchTag) {
+					// Check if task is pending
+					if status, ok := task["status"].(string); ok && status == "pending" {
+						count++
+					}
+				}
+			}
+		}
+
+		m.agents[i].TaskCount = count
+	}
 }
