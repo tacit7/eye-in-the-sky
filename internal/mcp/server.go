@@ -76,6 +76,16 @@ func (s *Server) registerTools() {
 	}, s.handleUpdateStatus)
 
 	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "i-action",
+		Description: "Log agent actions (task_start, file_operation, git_commit, status_update)",
+	}, s.handleLogAction)
+
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "i-log",
+		Description: "Add log entry to session",
+	}, s.handleAddLog)
+
+	mcp.AddTool(s.mcp, &mcp.Tool{
 		Name:        "i-commits",
 		Description: "Track git commits",
 	}, s.handleLogCommits)
@@ -102,13 +112,13 @@ func (s *Server) registerTools() {
 
 	mcp.AddTool(s.mcp, &mcp.Tool{
 		Name:        "i-instructions",
-		Description: "Get complete Eye in the Sky workflow and initialization instructions. Call this FIRST before starting a session to learn how to parse marker files and use the system.",
+		Description: "Get complete Eye in the Sky workflow and initialization instructions. Call this FIRST before starting a session to learn how to use the system.",
 	}, s.handleInstructions)
 
 	// POA Spec Tools - Session Management
 	mcp.AddTool(s.mcp, &mcp.Tool{
 		Name:        "i-start-session",
-		Description: "Start a new session with agent registration. IMPORTANT: Before calling this, check for .claude/eye-in-the-sky/session-* marker file and extract BOTH agent_id (first 8 chars) and session_id (UUID) from filename. Pass BOTH IDs to maintain full continuity. If no marker file exists, omit both and they will be auto-generated. Call i-instructions for complete initialization workflow.",
+		Description: "Start a new session with agent registration. Pass your session_id (provided at start of conversation) and a description of what you'll be working on. The system will return an auto-generated agent_id to use for all subsequent calls. Call i-instructions for complete initialization workflow.",
 	}, s.handleStartSession)
 
 	mcp.AddTool(s.mcp, &mcp.Tool{
@@ -243,6 +253,32 @@ func (s *Server) handleInstructions(ctx context.Context, req *mcp.CallToolReques
 	}, result, nil
 }
 
+func (s *Server) handleLogAction(ctx context.Context, req *mcp.CallToolRequest, args LogActionArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.LogAction(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: result.Message},
+		},
+	}, result, nil
+}
+
+func (s *Server) handleAddLog(ctx context.Context, req *mcp.CallToolRequest, args AddLogArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.AddLog(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: result.Message},
+		},
+	}, result, nil
+}
+
 // HandleTool provides compatibility for dashboard server to call tools directly
 func (s *Server) HandleTool(toolName string, argsJSON []byte) (interface{}, error) {
 	// This method provides backward compatibility for the dashboard server
@@ -257,6 +293,20 @@ func (s *Server) HandleTool(toolName string, argsJSON []byte) (interface{}, erro
 			return nil, err
 		}
 		return s.tools.UpdateStatus(args)
+
+	case "log_action", "i-log-action", "i-action":
+		var args LogActionArgs
+		if err := json.Unmarshal(argsJSON, &args); err != nil {
+			return nil, err
+		}
+		return s.tools.LogAction(args)
+
+	case "add_log", "i-add-log", "i-log":
+		var args AddLogArgs
+		if err := json.Unmarshal(argsJSON, &args); err != nil {
+			return nil, err
+		}
+		return s.tools.AddLog(args)
 
 	case "log_commits", "i-log-commits", "i-commits":
 		var args LogCommitsArgs
