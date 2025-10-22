@@ -20,8 +20,8 @@ func (m *Model) renderCommitsView() string {
 	items := make([]string, len(m.commits))
 	for i, commit := range m.commits {
 		date := commit.Timestamp.Format("2006-01-02")
-		hash := truncateCommitHash(commit.CommitHash, 8)
-		subject := truncate(commit.CommitMessage, 40)
+		hash := truncateCommitHash(string(commit.Hash), 8)
+		subject := truncate(commit.Message, 40)
 		items[i] = fmt.Sprintf("%s  %s  %s", date, hash, subject)
 	}
 
@@ -52,7 +52,7 @@ func (m *Model) renderCommitDetails(commit Commit) string {
 
 	// Commit info
 	b.WriteString(m.styles.Primary.Render("Commit: "))
-	b.WriteString(m.styles.Text.Render(commit.CommitHash))
+	b.WriteString(m.styles.Text.Render(string(commit.Hash)))
 	b.WriteString("\n")
 
 	b.WriteString(m.styles.Primary.Render("Date: "))
@@ -62,12 +62,12 @@ func (m *Model) renderCommitDetails(commit Commit) string {
 	// Commit message
 	b.WriteString(m.styles.Title.Render("Message"))
 	b.WriteString("\n")
-	b.WriteString(m.styles.Text.Render(commit.CommitMessage))
+	b.WriteString(m.styles.Text.Render(commit.Message))
 	b.WriteString("\n\n")
 
 	// Get diff from git
 	if m.selectedAgent != nil && m.selectedAgent.GitWorktreePath != "" {
-		diff, err := getCommitDiff(commit.CommitHash, m.selectedAgent.GitWorktreePath)
+		diff, err := getCommitDiff(string(commit.Hash), m.selectedAgent.GitWorktreePath)
 		if err == nil && diff != "" {
 			b.WriteString(m.styles.Title.Render("Diff"))
 			b.WriteString("\n")

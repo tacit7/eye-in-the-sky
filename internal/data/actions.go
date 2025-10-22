@@ -18,16 +18,17 @@ func NewActionsStore(db *sql.DB) *actionsStore {
 	return &actionsStore{db: db}
 }
 
-// LoadByAgent loads actions for a specific agent
-func (s *actionsStore) LoadByAgent(ctx context.Context, agentID domain.AgentID) ([]domain.Action, error) {
+// LoadByAgent loads actions for a specific agent with limit
+func (s *actionsStore) LoadByAgent(ctx context.Context, agentID domain.AgentID, limit int) ([]domain.Action, error) {
 	query := `
 		SELECT id, agent_id, action_type, description, details, timestamp
 		FROM actions
 		WHERE agent_id = ?
 		ORDER BY timestamp DESC
+		LIMIT ?
 	`
 
-	rows, err := s.db.QueryContext(ctx, query, string(agentID))
+	rows, err := s.db.QueryContext(ctx, query, string(agentID), limit)
 	if err != nil {
 		return nil, fmt.Errorf("query actions: %w", err)
 	}

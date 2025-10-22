@@ -14,6 +14,7 @@ type DataClient struct {
 	Notes    NotesStore
 	Commits  CommitsStore
 	Actions  ActionsStore
+	Logs     LogsStore
 }
 
 // NewDataClient creates a new data client with all stores initialized
@@ -25,5 +26,6 @@ func NewDataClient(db *sql.DB) *DataClient {
 		Notes:    data.NewNotesStore(db),
 		Commits:  data.NewCommitsStore(db),
 		Actions:  data.NewActionsStore(db),
+		Logs:     data.NewLogsStore(db),
 	}
 }

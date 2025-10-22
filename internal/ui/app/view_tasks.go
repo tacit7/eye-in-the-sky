@@ -23,10 +23,7 @@ const (
 	TaskError
 )
 
-// TasksLoadedMsg contains the loaded tasks
-type TasksLoadedMsg struct {
-	Tasks []Task
-}
+// TasksLoadedMsg is defined in cmd_patterns.go
 
 // TasksErrorMsg contains task loading errors
 type TasksErrorMsg struct {
@@ -261,7 +258,7 @@ func (m *Model) loadTasks() error {
 
 	if isSubagent {
 		// For subagents: filter by +subagent_<agent_id> tag (replace hyphens with underscores for TaskWarrior compatibility)
-		searchTag = fmt.Sprintf("+subagent_%s", strings.ReplaceAll(m.selectedAgent.ID, "-", "_"))
+		searchTag = fmt.Sprintf("+subagent_%s", strings.ReplaceAll(string(m.selectedAgent.ID), "-", "_"))
 		log.Printf("[TASKS] Loading tasks for subagent: %s (tag: %s)", m.selectedAgent.ID, searchTag)
 	} else {
 		// For parent agents: filter by +session:<session_id> tag
@@ -453,7 +450,7 @@ func (m *Model) loadTasksCmd() tea.Cmd {
 
 		if isSubagent {
 			// For subagents: filter by +subagent_<agent_id> tag (no colon, TaskWarrior can't query colons)
-			searchTag = fmt.Sprintf("+subagent_%s", strings.ReplaceAll(m.selectedAgent.ID, "-", "_"))
+			searchTag = fmt.Sprintf("+subagent_%s", strings.ReplaceAll(string(m.selectedAgent.ID), "-", "_"))
 			log.Printf("[TASKS] Async loading tasks for subagent: %s (tag: %s)", m.selectedAgent.ID, searchTag)
 		} else {
 			// For parent agents: filter by +session:<session_id> tag
@@ -480,7 +477,7 @@ func (m *Model) loadTasksCmd() tea.Cmd {
 		}
 
 		// Convert to Task structs with filtering
-		agentSearchStr := fmt.Sprintf("+agent_%s", strings.ReplaceAll(m.selectedAgent.ID, "-", "_"))
+		agentSearchStr := fmt.Sprintf("+agent_%s", strings.ReplaceAll(string(m.selectedAgent.ID), "-", "_"))
 		filteredTasks := make([]Task, 0, len(tasks))
 
 		for _, taskData := range tasks {

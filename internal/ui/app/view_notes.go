@@ -14,7 +14,7 @@ func (m *Model) renderNotesView() string {
 	// Build item list for left pane
 	items := make([]string, len(m.notes))
 	for i, note := range m.notes {
-		date := note.Timestamp.Format("2006-01-02 15:04")
+		date := note.CreatedAt.Format("2006-01-02 15:04")
 		firstLine := getFirstLine(note.Content)
 		firstLine = truncate(firstLine, 50)
 		items[i] = fmt.Sprintf("%s  %s", date, firstLine)
@@ -45,7 +45,7 @@ func (m *Model) renderNoteDetails(note Note) string {
 
 	// Timestamp
 	b.WriteString(m.styles.Primary.Render("Date: "))
-	b.WriteString(m.styles.Text.Render(note.Timestamp.Format("2006-01-02 15:04:05")))
+	b.WriteString(m.styles.Text.Render(note.CreatedAt.Format("2006-01-02 15:04:05")))
 	b.WriteString("\n\n")
 
 	// Full content with markdown rendering

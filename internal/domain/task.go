@@ -8,6 +8,7 @@ type TaskID string
 // Task represents a TaskWarrior task
 type Task struct {
 	ID              TaskID
+	UUID            string // TaskWarrior UUID
 	Description     string
 	Status          string // pending, completed, deleted
 	Priority        string // H, M, L

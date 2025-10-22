@@ -207,7 +207,7 @@ func loadActionsCmd(store ActionsStore, agentID domain.AgentID) tea.Cmd {
 		ctx, cancel := withTimeout()
 		defer cancel()
 
-		actions, err := store.LoadByAgent(ctx, agentID)
+		actions, err := store.LoadByAgent(ctx, agentID, 50) // Default limit of 50
 		if err != nil {
 			return ErrMsg{Error: err}
 		}

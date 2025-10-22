@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -17,7 +16,6 @@ import (
 	"github.com/tacit7/eye-in-the-sky/internal/ccusage/api"
 	"github.com/tacit7/eye-in-the-sky/internal/ccusage/db"
 	"github.com/tacit7/eye-in-the-sky/internal/ccusage/parser"
-	"github.com/tacit7/eye-in-the-sky/internal/domain"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/components"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/util"
 )
@@ -46,8 +44,8 @@ type ListLayout struct {
 
 // Model represents the application state
 type Model struct {
-	// Data access layer
-	data *DataClient
+	// Database connection
+	db *sql.DB
 
 	// Configuration
 	config      Config
@@ -79,24 +77,24 @@ type Model struct {
 	showAll     bool // Show all agents or only active ones
 
 	// Agent list state
-	agents        []domain.Agent
+	agents        []Agent
 	selectedIndex int
 	listOffset    int
 
 	// Agent detail state
-	selectedAgent  *domain.Agent
+	selectedAgent  *Agent
 	detailOffset   int
-	actions        []domain.Action
-	commits        []domain.Commit
-	notes          []domain.Note
-	tasks          []domain.Task
-	logs           []Log // Keep Log as local type for now
-	sessionMetrics []domain.SessionMetric
-	projectTickets []domain.Task // Tickets for current agent's project
+	actions        []Action
+	commits        []Commit
+	notes          []Note
+	tasks          []Task
+	logs           []Log
+	sessionMetrics []SessionMetric
+	projectTickets []Task // Tickets for current agent's project
 
 	// Overview state
-	allSessionMetrics  []domain.SessionMetric // All metrics from all agents
-	monthlyCosts       []*domain.SessionMetric // Monthly costs with timestamps
+	allSessionMetrics  []SessionMetric // All metrics from all agents
+	monthlyCosts       []*SessionMetric // Monthly costs with timestamps
 
 	// Per-view scroll state
 	tasksIndex    int
@@ -165,14 +163,53 @@ type Model struct {
 	projectMDFilesOffset  int
 }
 
-// Type aliases for backward compatibility during migration
-type Agent = domain.Agent
-type Action = domain.Action
-type Commit = domain.Commit
-type Note = domain.Note
-type Task = domain.Task
-type SessionMetric = domain.SessionMetric
-type Log = domain.Log
+// Agent represents an agent from the database
+type Agent struct {
+	ID                  string
+	Status              string
+	Source              string
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+	GitWorktreePath     string
+	FeatureDesc         string
+	CurrentTask         string
+	LastActivityAt      time.Time
+	WindowID            string
+	TerminalApplication string
+	AgentDescription    string
+	ProjectName         string
+	SessionID    string
+	ParentAgentID       string
+	TaskCount           int // Number of TaskWarrior tasks for this agent
+	RecentTasks         []Task // Last 5 tasks for this agent
+}
+
+// Action represents an agent action from the database
+type Action struct {
+	ID          int
+	AgentID     string
+	ActionType  string
+	Description string
+	Details     string
+	Timestamp   time.Time
+}
+
+// Commit represents a git commit from the database
+type Commit struct {
+	ID            int
+	AgentID       string
+	CommitHash    string
+	CommitMessage string
+	Timestamp     time.Time
+}
+
+// Note represents a session note from the database
+type Note struct {
+	ID        int
+	SessionID string
+	Content   string
+	Timestamp time.Time
+}
 
 // ProjectTask represents a TaskWarrior task
 type ProjectTask struct {
@@ -190,8 +227,51 @@ type ProjectFile struct {
 	Content string // File contents
 }
 
-// TaskAnnotation is kept local as it's referenced by domain.Task
-type TaskAnnotation = domain.TaskAnnotation
+// Task represents a Taskwarrior task
+type Task struct {
+	UUID           string
+	Description    string
+	Status         string
+	Priority       string
+	Project        string
+	Tags           []string
+	Due            time.Time
+	Entry          time.Time
+	Annotations    []TaskAnnotation
+	WorkflowStatus string // Extracted from tags: ready, working, testing, debugging, review, revision, qa, blocked, waiting, hold, merged, deployed, verified
+}
+
+// TaskAnnotation represents a task annotation with timestamp
+type TaskAnnotation struct {
+	Entry       time.Time
+	Description string
+}
+
+// Log represents a session log entry
+type Log struct {
+	ID        int
+	SessionID string
+	Type      string
+	Message   string
+	Timestamp time.Time
+}
+
+// SessionMetric represents token usage and cost tracking
+type SessionMetric struct {
+	ID               int
+	AgentID          string
+	SessionID        string
+	TokensUsed       int
+	TokensBudget     int
+	TokensRemaining  int
+	InputTokens      int
+	OutputTokens     int
+	EstimatedCostUSD float64
+	ModelName        string
+	Timestamp        time.Time
+	CreatedAt        time.Time
+	Notes            string
+}
 
 // Styles holds all lipgloss styles
 type Styles struct {
@@ -271,7 +351,7 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 	}
 
 	m := &Model{
-		data:          NewDataClient(db),
+		db:            db,
 		ccusageDB:     ccusageDB,
 		config:        config,
 		keys:          keys,
@@ -350,13 +430,83 @@ type initCCUsageMsg struct{}
 
 // loadAgents loads agents from database
 func (m *Model) loadAgents() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	query := `
+		SELECT id, status, source, created_at, updated_at,
+		       git_worktree_path, feature_description, current_task,
+		       last_activity_at, window_id, terminal_application, description, project_name, session_id, parent_agent_id
+		FROM agents
+	`
 
-	// Use the data store to load agents
-	agents, err := m.data.Agents.LoadAgents(ctx)
+	if !m.showAll {
+		query += ` WHERE status IN ('active', 'working', 'idle', 'stale', 'unknown')`
+	}
+
+	query += ` ORDER BY
+		CASE status
+			WHEN 'active' THEN 0
+			WHEN 'working' THEN 1
+			WHEN 'idle' THEN 2
+			WHEN 'stale' THEN 3
+			WHEN 'unknown' THEN 999
+			ELSE 4
+		END,
+		CASE WHEN parent_agent_id IS NULL THEN id ELSE parent_agent_id END,
+		CASE WHEN parent_agent_id IS NULL THEN 0 ELSE 1 END,
+		last_activity_at DESC`
+
+	rows, err := m.db.Query(query)
 	if err != nil {
 		return err
+	}
+	defer rows.Close()
+
+	agents := []Agent{}
+	for rows.Next() {
+		var a Agent
+		var gitPath, featureDesc, currentTask, windowID, terminalApp, desc, projectName, sessionID, parentAgentID sql.NullString
+		var lastActivity sql.NullTime
+
+		err := rows.Scan(
+			&a.ID, &a.Status, &a.Source, &a.CreatedAt, &a.UpdatedAt,
+			&gitPath, &featureDesc, &currentTask, &lastActivity,
+			&windowID, &terminalApp, &desc, &projectName, &sessionID, &parentAgentID,
+		)
+		if err != nil {
+			return err
+		}
+
+		if gitPath.Valid {
+			a.GitWorktreePath = gitPath.String
+		}
+		if featureDesc.Valid {
+			a.FeatureDesc = featureDesc.String
+		}
+		if currentTask.Valid {
+			a.CurrentTask = currentTask.String
+		}
+		if lastActivity.Valid {
+			a.LastActivityAt = lastActivity.Time
+		}
+		if windowID.Valid {
+			a.WindowID = windowID.String
+		}
+		if terminalApp.Valid {
+			a.TerminalApplication = terminalApp.String
+		}
+		if desc.Valid {
+			a.AgentDescription = desc.String
+		}
+		if projectName.Valid {
+			a.ProjectName = projectName.String
+		}
+		if sessionID.Valid {
+			a.SessionID = sessionID.String
+		}
+		if parentAgentID.Valid {
+			a.ParentAgentID = parentAgentID.String
+		}
+
+		agents = append(agents, a)
 	}
 
 	m.agents = agents
@@ -382,7 +532,7 @@ func (m *Model) loadAgents() error {
 		return nil
 	}
 
-	return nil
+	return rows.Err()
 }
 
 // loadAgentDetails loads details for the currently selected agent
@@ -395,31 +545,108 @@ func (m *Model) loadAgentDetails() error {
 	m.selectedAgent = &agent
 
 	// Load actions
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	actions, err := m.data.Actions.LoadByAgent(ctx, domain.AgentID(agent.ID), 50)
-	cancel()
+	actionsQuery := `
+		SELECT id, agent_id, action_type, description, details, timestamp
+		FROM actions
+		WHERE agent_id = ?
+		ORDER BY timestamp DESC
+		LIMIT 50
+	`
+
+	rows, err := m.db.Query(actionsQuery, agent.ID)
 	if err != nil {
 		return err
+	}
+	defer rows.Close()
+
+	actions := []Action{}
+	for rows.Next() {
+		var a Action
+		var details sql.NullString
+
+		err := rows.Scan(&a.ID, &a.AgentID, &a.ActionType, &a.Description, &details, &a.Timestamp)
+		if err != nil {
+			return err
+		}
+
+		if details.Valid {
+			a.Details = details.String
+		}
+
+		actions = append(actions, a)
 	}
 	m.actions = actions
 
 	// Load commits - includes commits from child agents (hierarchical visibility)
-	ctx2, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
-	commits, err := m.data.Commits.LoadByAgentHierarchy(ctx2, domain.AgentID(agent.ID), 20)
-	cancel2()
+	commitsQuery := `
+		WITH RECURSIVE agent_hierarchy AS (
+			SELECT id FROM agents WHERE id = ?
+			UNION ALL
+			SELECT a.id FROM agents a
+			INNER JOIN agent_hierarchy ah ON a.parent_agent_id = ah.id
+		)
+		SELECT id, agent_id, commit_hash, commit_message, timestamp
+		FROM commits
+		WHERE agent_id IN (SELECT id FROM agent_hierarchy)
+		ORDER BY timestamp DESC
+		LIMIT 20
+	`
+
+	commitRows, err := m.db.Query(commitsQuery, agent.ID)
 	if err != nil {
 		return err
 	}
+	defer commitRows.Close()
+
+	commits := []Commit{}
+	for commitRows.Next() {
+		var c Commit
+		var message sql.NullString
+
+		err := commitRows.Scan(&c.ID, &c.AgentID, &c.CommitHash, &message, &c.Timestamp)
+		if err != nil {
+			return err
+		}
+
+		if message.Valid {
+			c.CommitMessage = message.String
+		}
+
+		commits = append(commits, c)
+	}
 	m.commits = commits
 
-	// Load notes for current agent
-	ctx3, cancel3 := context.WithTimeout(context.Background(), 5*time.Second)
-	notes, err := m.data.Notes.LoadByAgent(ctx3, domain.AgentID(agent.ID))
-	cancel3()
-	if err != nil {
-		// Don't fail if notes loading fails
-		m.err = err
-		notes = []Note{}
+	// Load notes for current session
+	notes := []Note{}
+	if agent.SessionID != "" {
+		notesQuery := `
+			SELECT id, session_id, content, created_at
+			FROM notes
+			WHERE session_id = ?
+			ORDER BY created_at DESC
+			LIMIT 20
+		`
+
+		noteRows, err := m.db.Query(notesQuery, agent.SessionID)
+		if err != nil {
+			return err
+		}
+		defer noteRows.Close()
+
+		for noteRows.Next() {
+			var n Note
+
+			err := noteRows.Scan(&n.ID, &n.SessionID, &n.Content, &n.Timestamp)
+			if err != nil {
+				return err
+			}
+
+			notes = append(notes, n)
+		}
+
+		if err := noteRows.Err(); err != nil {
+			return err
+		}
 	}
 	m.notes = notes
 
@@ -429,7 +656,7 @@ func (m *Model) loadAgentDetails() error {
 		m.err = err
 	}
 
-	return nil
+	return commitRows.Err()
 }
 
 // loadLogs loads logs for the current agent session
@@ -439,12 +666,28 @@ func (m *Model) loadLogs() error {
 		return nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	logsQuery := `
+		SELECT id, session_id, type, message, created_at
+		FROM logs
+		WHERE session_id = ?
+		ORDER BY created_at DESC
+		LIMIT 100
+	`
 
-	logs, err := m.data.Logs.LoadBySession(ctx, m.selectedAgent.SessionID, 100)
+	rows, err := m.db.Query(logsQuery, m.selectedAgent.SessionID)
 	if err != nil {
 		return err
+	}
+	defer rows.Close()
+
+	logs := []Log{}
+	for rows.Next() {
+		var log Log
+		err := rows.Scan(&log.ID, &log.SessionID, &log.Type, &log.Message, &log.Timestamp)
+		if err != nil {
+			return err
+		}
+		logs = append(logs, log)
 	}
 
 	m.logs = logs
@@ -454,42 +697,142 @@ func (m *Model) loadLogs() error {
 		m.logsIndex = len(m.logs) - 1
 	}
 
-	return nil
+	return rows.Err()
 }
 
 // loadMonthlyCosts loads all session metrics from the current month with timestamps
 func (m *Model) loadMonthlyCosts() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	query := `
+		SELECT id, agent_id, session_id, tokens_used, tokens_budget, tokens_remaining,
+		       input_tokens, output_tokens, estimated_cost_usd, model_name, timestamp, created_at, notes
+		FROM session_metrics
+		WHERE strftime('%Y-%m', timestamp) = strftime('%Y-%m', 'now')
+		ORDER BY timestamp DESC
+	`
 
-	now := time.Now()
-	metrics, err := m.data.Metrics.LoadMonthly(ctx, now.Year(), now.Month())
+	rows, err := m.db.Query(query)
 	if err != nil {
 		return err
 	}
+	defer rows.Close()
 
-	// Convert to pointer slice for compatibility
-	ptrMetrics := make([]*SessionMetric, len(metrics))
-	for i := range metrics {
-		ptrMetrics[i] = &metrics[i]
+	metrics := []*SessionMetric{}
+	for rows.Next() {
+		var metric SessionMetric
+		var sessionID, modelName, notes sql.NullString
+		var inputTokens, outputTokens sql.NullInt64
+		var estimatedCost sql.NullFloat64
+
+		err := rows.Scan(
+			&metric.ID,
+			&metric.AgentID,
+			&sessionID,
+			&metric.TokensUsed,
+			&metric.TokensBudget,
+			&metric.TokensRemaining,
+			&inputTokens,
+			&outputTokens,
+			&estimatedCost,
+			&modelName,
+			&metric.Timestamp,
+			&metric.CreatedAt,
+			&notes,
+		)
+		if err != nil {
+			return err
+		}
+
+		if sessionID.Valid {
+			metric.SessionID = sessionID.String
+		}
+		if inputTokens.Valid {
+			metric.InputTokens = int(inputTokens.Int64)
+		}
+		if outputTokens.Valid {
+			metric.OutputTokens = int(outputTokens.Int64)
+		}
+		if estimatedCost.Valid {
+			metric.EstimatedCostUSD = estimatedCost.Float64
+		}
+		if modelName.Valid {
+			metric.ModelName = modelName.String
+		}
+		if notes.Valid {
+			metric.Notes = notes.String
+		}
+
+		metrics = append(metrics, &metric)
 	}
 
-	m.monthlyCosts = ptrMetrics
-	return nil
+	m.monthlyCosts = metrics
+	return rows.Err()
 }
 
 // loadAllSessionMetrics loads the latest session metrics for all agents
 func (m *Model) loadAllSessionMetrics() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	query := `
+		SELECT DISTINCT ON (agent_id) id, agent_id, session_id, tokens_used, tokens_budget, tokens_remaining,
+		       input_tokens, output_tokens, estimated_cost_usd, model_name, timestamp, created_at, notes
+		FROM session_metrics
+		ORDER BY agent_id, timestamp DESC
+	`
 
-	metrics, err := m.data.Metrics.LoadAll(ctx)
+	rows, err := m.db.Query(query)
 	if err != nil {
 		return err
 	}
+	defer rows.Close()
+
+	metrics := []SessionMetric{}
+	for rows.Next() {
+		var metric SessionMetric
+		var sessionID, modelName, notes sql.NullString
+		var inputTokens, outputTokens sql.NullInt64
+		var estimatedCost sql.NullFloat64
+
+		err := rows.Scan(
+			&metric.ID,
+			&metric.AgentID,
+			&sessionID,
+			&metric.TokensUsed,
+			&metric.TokensBudget,
+			&metric.TokensRemaining,
+			&inputTokens,
+			&outputTokens,
+			&estimatedCost,
+			&modelName,
+			&metric.Timestamp,
+			&metric.CreatedAt,
+			&notes,
+		)
+		if err != nil {
+			return err
+		}
+
+		if sessionID.Valid {
+			metric.SessionID = sessionID.String
+		}
+		if inputTokens.Valid {
+			metric.InputTokens = int(inputTokens.Int64)
+		}
+		if outputTokens.Valid {
+			metric.OutputTokens = int(outputTokens.Int64)
+		}
+		if estimatedCost.Valid {
+			metric.EstimatedCostUSD = estimatedCost.Float64
+		}
+		if modelName.Valid {
+			metric.ModelName = modelName.String
+		}
+		if notes.Valid {
+			metric.Notes = notes.String
+		}
+
+		metrics = append(metrics, metric)
+	}
 
 	m.allSessionMetrics = metrics
-	return nil
+	return rows.Err()
 }
 
 // loadSessionMetrics loads session metrics for the current agent
@@ -499,16 +842,72 @@ func (m *Model) loadSessionMetrics() error {
 		return nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	metricsQuery := `
+		SELECT id, agent_id, session_id, tokens_used, tokens_budget, tokens_remaining,
+		       input_tokens, output_tokens, estimated_cost_usd, model_name, timestamp, created_at, notes
+		FROM session_metrics
+		WHERE agent_id = ?
+		ORDER BY timestamp DESC
+		LIMIT 10
+	`
 
-	metrics, err := m.data.Metrics.LoadByAgent(ctx, domain.AgentID(m.selectedAgent.ID), 10)
+	rows, err := m.db.Query(metricsQuery, m.selectedAgent.ID)
 	if err != nil {
 		return err
 	}
+	defer rows.Close()
+
+	metrics := []SessionMetric{}
+	for rows.Next() {
+		var metric SessionMetric
+		var sessionID, modelName, notes sql.NullString
+		var inputTokens, outputTokens sql.NullInt64
+		var estimatedCost sql.NullFloat64
+
+		err := rows.Scan(
+			&metric.ID,
+			&metric.AgentID,
+			&sessionID,
+			&metric.TokensUsed,
+			&metric.TokensBudget,
+			&metric.TokensRemaining,
+			&inputTokens,
+			&outputTokens,
+			&estimatedCost,
+			&modelName,
+			&metric.Timestamp,
+			&metric.CreatedAt,
+			&notes,
+		)
+		if err != nil {
+			return err
+		}
+
+		if sessionID.Valid {
+			metric.SessionID = sessionID.String
+		}
+		if inputTokens.Valid {
+			metric.InputTokens = int(inputTokens.Int64)
+		}
+		if outputTokens.Valid {
+			metric.OutputTokens = int(outputTokens.Int64)
+		}
+		if estimatedCost.Valid {
+			metric.EstimatedCostUSD = estimatedCost.Float64
+		}
+		if modelName.Valid {
+			metric.ModelName = modelName.String
+		}
+		if notes.Valid {
+			metric.Notes = notes.String
+		}
+
+		metrics = append(metrics, metric)
+	}
 
 	m.sessionMetrics = metrics
-	return nil
+
+	return rows.Err()
 }
 
 // syncCCUsageData performs on-demand sync of ccusage data
@@ -652,7 +1051,7 @@ func (m *Model) loadAgentTaskCounts() {
 		// Determine the tag to search for
 		if m.agents[i].ParentAgentID != "" {
 			// Subagent: search for +subagent_<agent_id>
-			searchTag = fmt.Sprintf("+subagent_%s", strings.ReplaceAll(string(m.agents[i].ID), "-", "_"))
+			searchTag = fmt.Sprintf("+subagent_%s", strings.ReplaceAll(m.agents[i].ID, "-", "_"))
 			debugf("Agent %s (subagent): searching for tag %s", m.agents[i].ID, searchTag)
 		} else if m.agents[i].SessionID != "" {
 			// Parent agent: search for +session_<session_id>

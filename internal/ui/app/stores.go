@@ -51,10 +51,17 @@ type NotesStore interface {
 type CommitsStore interface {
 	LoadByAgent(ctx context.Context, agentID domain.AgentID) ([]domain.Commit, error)
 	LoadRecent(ctx context.Context, limit int) ([]domain.Commit, error)
+	LoadByAgentHierarchy(ctx context.Context, agentID domain.AgentID, limit int) ([]domain.Commit, error)
 }
 
 // ActionsStore handles agent action operations
 type ActionsStore interface {
-	LoadByAgent(ctx context.Context, agentID domain.AgentID) ([]domain.Action, error)
+	LoadByAgent(ctx context.Context, agentID domain.AgentID, limit int) ([]domain.Action, error)
 	Create(ctx context.Context, action domain.Action) error
+}
+
+// LogsStore handles session logs operations
+type LogsStore interface {
+	LoadBySession(ctx context.Context, sessionID string, limit int) ([]domain.Log, error)
+	Create(ctx context.Context, sessionID, logType, message string) error
 }

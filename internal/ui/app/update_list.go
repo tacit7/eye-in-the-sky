@@ -157,7 +157,7 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		// Use agent ID as session ID for now
-		return m, ResumeSession(m.claudePath, agent.ID)
+		return m, ResumeSession(m.claudePath, string(agent.ID))
 	}
 
 	if Matches(msg, m.keys.StartSession) {
@@ -170,7 +170,7 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.statusMsg = "Claude binary not found"
 			return m, nil
 		}
-		return m, StartSession(m.claudePath, agent.ID)
+		return m, StartSession(m.claudePath, string(agent.ID))
 	}
 
 	if Matches(msg, m.keys.GoToWindow) {
@@ -192,7 +192,7 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.statusMsg = "No agent selected"
 			return m, nil
 		}
-		return m, m.archiveAgentCmd(agent.ID)
+		return m, m.archiveAgentCmd(string(agent.ID))
 	}
 
 	// Fallback keys (temporary)

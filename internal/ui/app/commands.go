@@ -1,18 +1,23 @@
 package app
 
 import (
+	"context"
 	"fmt"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/tacit7/eye-in-the-sky/internal/ccusage/parser"
+	"github.com/tacit7/eye-in-the-sky/internal/domain"
 )
 
 // archiveAgentCmd creates a command to archive an agent
 func (m *Model) archiveAgentCmd(agentID string) tea.Cmd {
 	return func() tea.Msg {
 		// Update agent status to completed in database
-		query := `UPDATE agents SET status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = ?`
-		if _, err := m.db.Exec(query, agentID); err != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		if err := m.data.Agents.UpdateStatus(ctx, domain.AgentID(agentID), "completed"); err != nil {
 			return cmdResult{
 				success: false,
 				message: "Failed to archive agent",

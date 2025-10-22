@@ -73,3 +73,38 @@ func (s *commitsStore) LoadRecent(ctx context.Context, limit int) ([]domain.Comm
 
 	return commits, nil
 }
+
+// LoadByAgentHierarchy loads commits for an agent and all its child agents
+func (s *commitsStore) LoadByAgentHierarchy(ctx context.Context, agentID domain.AgentID, limit int) ([]domain.Commit, error) {
+	query := `
+		WITH RECURSIVE agent_hierarchy AS (
+			SELECT id FROM agents WHERE id = ?
+			UNION ALL
+			SELECT a.id FROM agents a
+			INNER JOIN agent_hierarchy ah ON a.parent_agent_id = ah.id
+		)
+		SELECT c.id, c.agent_id, c.hash, c.message, c.timestamp
+		FROM commits c
+		WHERE c.agent_id IN (SELECT id FROM agent_hierarchy)
+		ORDER BY c.timestamp DESC
+		LIMIT ?
+	`
+
+	rows, err := s.db.QueryContext(ctx, query, string(agentID), limit)
+	if err != nil {
+		return nil, fmt.Errorf("query commits hierarchy: %w", err)
+	}
+	defer rows.Close()
+
+	var commits []domain.Commit
+	for rows.Next() {
+		var c domain.Commit
+		err := rows.Scan(&c.ID, &c.AgentID, &c.Hash, &c.Message, &c.Timestamp)
+		if err != nil {
+			return nil, fmt.Errorf("scan commit: %w", err)
+		}
+		commits = append(commits, c)
+	}
+
+	return commits, nil
+}

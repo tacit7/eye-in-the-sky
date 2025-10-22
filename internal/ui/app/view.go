@@ -325,7 +325,7 @@ func (m *Model) renderAgentInfoHeader() string {
 	}
 
 	// Agent ID
-	idText := m.styles.Primary.Render("Agent: ") + m.styles.Active.Render(agent.ID)
+	idText := m.styles.Primary.Render("Agent: ") + m.styles.Active.Render(string(agent.ID))
 	parts = append(parts, idText)
 
 	// Agent description
@@ -360,7 +360,7 @@ func (m *Model) renderHeader() string {
 		viewPath = "/agents"
 	case ViewDetail:
 		if m.selectedAgent != nil {
-			viewPath = fmt.Sprintf("/agents/%s", truncateID(m.selectedAgent.ID, 8))
+			viewPath = fmt.Sprintf("/agents/%s", truncateID(string(m.selectedAgent.ID), 8))
 		} else {
 			viewPath = "/agents/detail"
 		}
@@ -670,8 +670,8 @@ func (m *Model) renderAgentDetails() string {
 			commit := m.commits[i]
 			line := fmt.Sprintf("  %s  %s  %s",
 				commit.Timestamp.Format("15:04:05"),
-				truncateCommitHash(commit.CommitHash, 8),
-				truncate(commit.CommitMessage, 60),
+				truncateCommitHash(string(commit.Hash), 8),
+				truncate(commit.Message, 60),
 			)
 			b.WriteString(m.styles.Text.Render(line))
 			b.WriteString("\n")
@@ -699,7 +699,7 @@ func (m *Model) renderAgentDetails() string {
 			// Get first line only
 			firstLine := getFirstLine(note.Content)
 			line := fmt.Sprintf("  %s  %s",
-				note.Timestamp.Format("15:04:05"),
+				note.CreatedAt.Format("15:04:05"),
 				truncate(firstLine, 80),
 			)
 			b.WriteString(m.styles.Text.Render(line))
@@ -914,8 +914,8 @@ func (m *Model) renderCommitsTab() string {
 	items := make([]string, len(m.commits))
 	for i, commit := range m.commits {
 		date := commit.Timestamp.Format("2006-01-02")
-		hash := truncateCommitHash(commit.CommitHash, 8)
-		subject := truncate(commit.CommitMessage, 40)
+		hash := truncateCommitHash(string(commit.Hash), 8)
+		subject := truncate(commit.Message, 40)
 		items[i] = fmt.Sprintf("%s  %s  %s", date, hash, subject)
 	}
 
@@ -962,7 +962,7 @@ func (m *Model) renderNotesTab() string {
 	// Build item list for left pane
 	items := make([]string, len(m.notes))
 	for i, note := range m.notes {
-		timestamp := note.Timestamp.Format("15:04:05")
+		timestamp := note.CreatedAt.Format("15:04:05")
 		preview := truncate(note.Content, 30)
 		items[i] = fmt.Sprintf("%s  %s", timestamp, preview)
 	}
@@ -1271,7 +1271,7 @@ func (m *Model) renderUsageTab() string {
 		for _, metric := range m.allSessionMetrics {
 			usagePercent := float64(metric.TokensUsed) / float64(metric.TokensBudget) * 100
 
-			agentID := truncate(metric.AgentID, 8)
+			agentID := truncate(string(metric.AgentID), 8)
 			usage := fmt.Sprintf("%.1f%%", usagePercent)
 			tokens := fmt.Sprintf("%d", metric.TokensUsed)
 			cost := fmt.Sprintf("$%.4f", metric.EstimatedCostUSD)
