@@ -224,15 +224,16 @@ type ProjectFile struct {
 
 // Task represents a Taskwarrior task
 type Task struct {
-	UUID        string
-	Description string
-	Status      string
-	Priority    string
-	Project     string
-	Tags        []string
-	Due         time.Time
-	Entry       time.Time
-	Annotations []TaskAnnotation
+	UUID           string
+	Description    string
+	Status         string
+	Priority       string
+	Project        string
+	Tags           []string
+	Due            time.Time
+	Entry          time.Time
+	Annotations    []TaskAnnotation
+	WorkflowStatus string // Extracted from tags: ready, working, testing, debugging, review, revision, qa, blocked, waiting, hold, merged, deployed, verified
 }
 
 // TaskAnnotation represents a task annotation with timestamp

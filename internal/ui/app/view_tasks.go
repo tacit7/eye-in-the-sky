@@ -10,6 +10,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // TaskStateType represents the async state of task loading
@@ -74,7 +75,14 @@ func (m *Model) renderAgentTasks() string {
 		if len(shortUUID) > 8 {
 			shortUUID = shortUUID[:8]
 		}
-		items[i] = fmt.Sprintf("[%s] [%-10s] %s", shortUUID, status, truncate(task.Description, 40))
+
+		// Add workflow status badge if present
+		workflowBadge := ""
+		if task.WorkflowStatus != "" {
+			workflowBadge = m.renderWorkflowBadge(task.WorkflowStatus) + " "
+		}
+
+		items[i] = fmt.Sprintf("[%s] [%-10s] %s%s", shortUUID, status, workflowBadge, truncate(task.Description, 35))
 	}
 
 	// Build detail content for right pane
@@ -130,7 +138,14 @@ func (m *Model) renderProjectTickets() string {
 		if len(shortUUID) > 8 {
 			shortUUID = shortUUID[:8]
 		}
-		items[i] = fmt.Sprintf("[%s] [%-10s] %s", shortUUID, status, truncate(task.Description, 40))
+
+		// Add workflow status badge if present
+		workflowBadge := ""
+		if task.WorkflowStatus != "" {
+			workflowBadge = m.renderWorkflowBadge(task.WorkflowStatus) + " "
+		}
+
+		items[i] = fmt.Sprintf("[%s] [%-10s] %s%s", shortUUID, status, workflowBadge, truncate(task.Description, 35))
 	}
 
 	// Build detail content for right pane
@@ -193,6 +208,13 @@ func (m *Model) renderTaskDetails(task Task) string {
 	if task.Project != "" {
 		b.WriteString(m.styles.Primary.Render("Project: "))
 		b.WriteString(m.styles.Text.Render(task.Project))
+		b.WriteString("\n\n")
+	}
+
+	// Workflow Status
+	if task.WorkflowStatus != "" {
+		b.WriteString(m.styles.Primary.Render("Workflow Status: "))
+		b.WriteString(m.renderWorkflowBadge(task.WorkflowStatus))
 		b.WriteString("\n\n")
 	}
 
@@ -296,16 +318,18 @@ func (m *Model) loadTasks() error {
 		cleanDescription = strings.ReplaceAll(cleanDescription, agentSearchStr, "")
 		cleanDescription = strings.TrimSpace(cleanDescription)
 
+		tags := getTags(taskData, "tags")
 		task := Task{
-			UUID:        getString(taskData, "uuid"),
-			Description: cleanDescription,
-			Status:      getString(taskData, "status"),
-			Priority:    getString(taskData, "priority"),
-			Project:     getString(taskData, "project"),
-			Tags:        getTags(taskData, "tags"),
-			Due:         getTime(taskData, "due"),
-			Entry:       getTime(taskData, "entry"),
-			Annotations: getAnnotations(taskData, "annotations"),
+			UUID:           getString(taskData, "uuid"),
+			Description:    cleanDescription,
+			Status:         getString(taskData, "status"),
+			Priority:       getString(taskData, "priority"),
+			Project:        getString(taskData, "project"),
+			Tags:           tags,
+			Due:            getTime(taskData, "due"),
+			Entry:          getTime(taskData, "entry"),
+			Annotations:    getAnnotations(taskData, "annotations"),
+			WorkflowStatus: extractWorkflowStatus(tags),
 		}
 		m.tasks = append(m.tasks, task)
 	}
@@ -473,16 +497,18 @@ func (m *Model) loadTasksCmd() tea.Cmd {
 			cleanDescription = strings.ReplaceAll(cleanDescription, agentSearchStr, "")
 			cleanDescription = strings.TrimSpace(cleanDescription)
 
+			tags := getTags(taskData, "tags")
 			task := Task{
-				UUID:        getString(taskData, "uuid"),
-				Description: cleanDescription,
-				Status:      getString(taskData, "status"),
-				Priority:    getString(taskData, "priority"),
-				Project:     getString(taskData, "project"),
-				Tags:        getTags(taskData, "tags"),
-				Due:         getTime(taskData, "due"),
-				Entry:       getTime(taskData, "entry"),
-				Annotations: getAnnotations(taskData, "annotations"),
+				UUID:           getString(taskData, "uuid"),
+				Description:    cleanDescription,
+				Status:         getString(taskData, "status"),
+				Priority:       getString(taskData, "priority"),
+				Project:        getString(taskData, "project"),
+				Tags:           tags,
+				Due:            getTime(taskData, "due"),
+				Entry:          getTime(taskData, "entry"),
+				Annotations:    getAnnotations(taskData, "annotations"),
+				WorkflowStatus: extractWorkflowStatus(tags),
 			}
 			filteredTasks = append(filteredTasks, task)
 		}
@@ -531,16 +557,18 @@ func (m *Model) loadProjectTickets() error {
 	// Convert to Task structs
 	m.projectTickets = make([]Task, 0, len(tasks))
 	for _, taskData := range tasks {
+		tags := getTags(taskData, "tags")
 		task := Task{
-			UUID:        getString(taskData, "uuid"),
-			Description: getString(taskData, "description"),
-			Status:      getString(taskData, "status"),
-			Priority:    getString(taskData, "priority"),
-			Project:     getString(taskData, "project"),
-			Tags:        getTags(taskData, "tags"),
-			Due:         getTime(taskData, "due"),
-			Entry:       getTime(taskData, "entry"),
-			Annotations: getAnnotations(taskData, "annotations"),
+			UUID:           getString(taskData, "uuid"),
+			Description:    getString(taskData, "description"),
+			Status:         getString(taskData, "status"),
+			Priority:       getString(taskData, "priority"),
+			Project:        getString(taskData, "project"),
+			Tags:           tags,
+			Due:            getTime(taskData, "due"),
+			Entry:          getTime(taskData, "entry"),
+			Annotations:    getAnnotations(taskData, "annotations"),
+			WorkflowStatus: extractWorkflowStatus(tags),
 		}
 		m.projectTickets = append(m.projectTickets, task)
 	}
@@ -588,16 +616,18 @@ func (m *Model) loadProjectTicketsCmd() tea.Cmd {
 		// Convert to Task structs
 		filteredTasks := make([]Task, 0, len(tasks))
 		for _, taskData := range tasks {
+			tags := getTags(taskData, "tags")
 			task := Task{
-				UUID:        getString(taskData, "uuid"),
-				Description: getString(taskData, "description"),
-				Status:      getString(taskData, "status"),
-				Priority:    getString(taskData, "priority"),
-				Project:     getString(taskData, "project"),
-				Tags:        getTags(taskData, "tags"),
-				Due:         getTime(taskData, "due"),
-				Entry:       getTime(taskData, "entry"),
-				Annotations: getAnnotations(taskData, "annotations"),
+				UUID:           getString(taskData, "uuid"),
+				Description:    getString(taskData, "description"),
+				Status:         getString(taskData, "status"),
+				Priority:       getString(taskData, "priority"),
+				Project:        getString(taskData, "project"),
+				Tags:           tags,
+				Due:            getTime(taskData, "due"),
+				Entry:          getTime(taskData, "entry"),
+				Annotations:    getAnnotations(taskData, "annotations"),
+				WorkflowStatus: extractWorkflowStatus(tags),
 			}
 			filteredTasks = append(filteredTasks, task)
 		}
@@ -607,4 +637,71 @@ func (m *Model) loadProjectTicketsCmd() tea.Cmd {
 
 		return TasksLoadedMsg{Tasks: filteredTasks}
 	}
+}
+
+// extractWorkflowStatus extracts workflow status tag from task tags
+// Workflow tags: ready, working, testing, debugging, review, revision, qa, blocked, waiting, hold, merged, deployed, verified
+func extractWorkflowStatus(tags []string) string {
+	workflowTags := []string{"ready", "working", "testing", "debugging", "review", "revision", "qa", "blocked", "waiting", "hold", "merged", "deployed", "verified"}
+
+	for _, tag := range tags {
+		for _, workflow := range workflowTags {
+			if tag == workflow {
+				return workflow
+			}
+		}
+	}
+	return ""
+}
+
+// renderWorkflowBadge renders a colored workflow status badge
+func (m *Model) renderWorkflowBadge(status string) string {
+	var style lipgloss.Style
+	var badge string
+
+	switch status {
+	case "ready":
+		style = lipgloss.NewStyle().Foreground(lipgloss.Color("10")) // Green
+		badge = "READY"
+	case "working":
+		style = lipgloss.NewStyle().Foreground(lipgloss.Color("12")) // Blue
+		badge = "WORKING"
+	case "testing":
+		style = lipgloss.NewStyle().Foreground(lipgloss.Color("14")) // Cyan
+		badge = "TESTING"
+	case "debugging":
+		style = lipgloss.NewStyle().Foreground(lipgloss.Color("11")) // Yellow
+		badge = "DEBUG"
+	case "review":
+		style = lipgloss.NewStyle().Foreground(lipgloss.Color("13")) // Magenta
+		badge = "REVIEW"
+	case "revision":
+		style = lipgloss.NewStyle().Foreground(lipgloss.Color("13")) // Magenta
+		badge = "REVISION"
+	case "qa":
+		style = lipgloss.NewStyle().Foreground(lipgloss.Color("13")) // Magenta
+		badge = "QA"
+	case "blocked":
+		style = lipgloss.NewStyle().Foreground(lipgloss.Color("9")) // Red
+		badge = "BLOCKED"
+	case "waiting":
+		style = lipgloss.NewStyle().Foreground(lipgloss.Color("11")) // Yellow
+		badge = "WAITING"
+	case "hold":
+		style = lipgloss.NewStyle().Foreground(lipgloss.Color("9")) // Red
+		badge = "HOLD"
+	case "merged":
+		style = lipgloss.NewStyle().Foreground(lipgloss.Color("10")) // Green
+		badge = "MERGED"
+	case "deployed":
+		style = lipgloss.NewStyle().Foreground(lipgloss.Color("10")) // Green
+		badge = "DEPLOYED"
+	case "verified":
+		style = lipgloss.NewStyle().Foreground(lipgloss.Color("10")) // Green
+		badge = "VERIFIED"
+	default:
+		return ""
+	}
+
+	return style.Render(badge)
 }
