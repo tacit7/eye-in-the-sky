@@ -76,13 +76,7 @@ func (m *Model) renderAgentTasks() string {
 			shortUUID = shortUUID[:8]
 		}
 
-		// Add workflow status badge if present
-		workflowBadge := ""
-		if task.WorkflowStatus != "" {
-			workflowBadge = m.renderWorkflowBadge(task.WorkflowStatus) + " "
-		}
-
-		items[i] = fmt.Sprintf("[%s] [%-10s] %s%s", shortUUID, status, workflowBadge, truncate(task.Description, 35))
+		items[i] = fmt.Sprintf("[%s] [%-10s] %s", shortUUID, status, truncate(task.Description, 40))
 	}
 
 	// Build detail content for right pane
@@ -139,13 +133,7 @@ func (m *Model) renderProjectTickets() string {
 			shortUUID = shortUUID[:8]
 		}
 
-		// Add workflow status badge if present
-		workflowBadge := ""
-		if task.WorkflowStatus != "" {
-			workflowBadge = m.renderWorkflowBadge(task.WorkflowStatus) + " "
-		}
-
-		items[i] = fmt.Sprintf("[%s] [%-10s] %s%s", shortUUID, status, workflowBadge, truncate(task.Description, 35))
+		items[i] = fmt.Sprintf("[%s] [%-10s] %s", shortUUID, status, truncate(task.Description, 40))
 	}
 
 	// Build detail content for right pane
