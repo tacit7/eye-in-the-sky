@@ -181,6 +181,7 @@ type Agent struct {
 	SessionID    string
 	ParentAgentID       string
 	TaskCount           int // Number of TaskWarrior tasks for this agent
+	RecentTasks         []Task // Last 5 tasks for this agent
 }
 
 // Action represents an agent action from the database
