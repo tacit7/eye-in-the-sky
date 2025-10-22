@@ -1,0 +1,83 @@
+package data
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+
+	"github.com/tacit7/eye-in-the-sky/internal/domain"
+)
+
+// notesStore implements SQL operations for notes
+type notesStore struct {
+	db *sql.DB
+}
+
+// NewNotesStore creates a new notes store
+func NewNotesStore(db *sql.DB) *notesStore {
+	return &notesStore{db: db}
+}
+
+// LoadByAgent loads notes for a specific agent
+func (s *notesStore) LoadByAgent(ctx context.Context, agentID domain.AgentID) ([]domain.Note, error) {
+	query := `
+		SELECT id, agent_id, content, created_at
+		FROM notes
+		WHERE agent_id = ?
+		ORDER BY created_at DESC
+	`
+
+	rows, err := s.db.QueryContext(ctx, query, string(agentID))
+	if err != nil {
+		return nil, fmt.Errorf("query notes: %w", err)
+	}
+	defer rows.Close()
+
+	var notes []domain.Note
+	for rows.Next() {
+		var n domain.Note
+		err := rows.Scan(&n.ID, &n.AgentID, &n.Content, &n.CreatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("scan note: %w", err)
+		}
+		notes = append(notes, n)
+	}
+
+	return notes, nil
+}
+
+// Create creates a new note
+func (s *notesStore) Create(ctx context.Context, agentID domain.AgentID, content string) error {
+	query := `
+		INSERT INTO notes (agent_id, content, created_at)
+		VALUES (?, ?, CURRENT_TIMESTAMP)
+	`
+
+	_, err := s.db.ExecContext(ctx, query, string(agentID), content)
+	if err != nil {
+		return fmt.Errorf("insert note: %w", err)
+	}
+
+	return nil
+}
+
+// Delete deletes a note
+func (s *notesStore) Delete(ctx context.Context, noteID domain.NoteID) error {
+	query := `DELETE FROM notes WHERE id = ?`
+
+	result, err := s.db.ExecContext(ctx, query, int(noteID))
+	if err != nil {
+		return fmt.Errorf("delete note: %w", err)
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("rows affected: %w", err)
+	}
+
+	if rows == 0 {
+		return fmt.Errorf("note not found: %d", noteID)
+	}
+
+	return nil
+}
