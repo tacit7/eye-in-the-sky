@@ -19,78 +19,74 @@ func (m *Model) View() string {
 		return m.renderHelp()
 	}
 
-	switch m.currentView {
-	case ViewList:
-		return m.renderListView()
-	case ViewDetail:
-		return m.renderDetailView()
-	default:
-		return "Unknown view"
+	// Use renderer map for view dispatching
+	if fn, ok := m.renderers[m.currentView]; ok {
+		return fn(m)
 	}
+
+	return "Unknown view"
 }
 
 // renderHeader renders the top header bar
 func (m *Model) renderHeader() string {
-	// Calculate widths
-	headerWidth := m.width - 2 // Account for padding
-	if headerWidth < 40 {
-		headerWidth = 40
+	// Build title with version
+	title := m.styles.Bold.Render(AppTitle)
+	version := m.styles.Subtle.Render(" " + AppVersion)
+
+	// Use Lipgloss to center the content
+	content := lipgloss.JoinHorizontal(lipgloss.Top, title, version)
+
+	// Calculate header width
+	headerWidth := m.width - HeaderPadding
+	if headerWidth < MinHeaderWidth {
+		headerWidth = MinHeaderWidth
 	}
 
-	// Title section
-	title := " 👁️ Eye in the Sky - Agent Management "
-	appVersion := "v0.2.0" // TODO: Make this configurable
-	titleAndVersion := title + appVersion
+	// Center the content horizontally
+	centeredContent := lipgloss.PlaceHorizontal(
+		headerWidth,
+		lipgloss.Center,
+		content,
+	)
 
-	// Generate padding and center title
-	padding := (headerWidth - len(titleAndVersion))
-	leftPad := padding / 2
-	rightPad := padding - leftPad
-
-	// Build header with centered title
-	var headerContent strings.Builder
-	headerContent.WriteString(strings.Repeat(" ", leftPad))
-	headerContent.WriteString(m.styles.Bold.Render(title))
-	headerContent.WriteString(m.styles.Subtle.Render(appVersion))
-	headerContent.WriteString(strings.Repeat(" ", rightPad))
-
-	// Style the header with background
-	styledHeader := m.styles.Header.
+	// Apply header styling
+	return m.styles.Header.
 		Width(headerWidth).
-		Render(headerContent.String())
-
-	return styledHeader
+		Render(centeredContent)
 }
 
 // renderFooter renders the bottom status bar
 func (m *Model) renderFooter() string {
-	var footer string
-	footerWidth := m.width - 2 // Account for padding
+	footerWidth := m.width - FooterPadding
 
-	// Build the key help section based on current view
-	keyHelp := m.getKeyHelp()
-	left := m.styles.KeyHelp.Render(keyHelp)
-
-	// Status section (only show status messages temporarily)
-	middle := ""
-	if m.statusMsg != "" && time.Since(m.statusTime) < 3*time.Second {
-		middle = m.styles.StatusBar.Render(m.statusMsg)
-	}
-
-	// Sync status - right aligned
+	// Build the three footer sections
+	left := m.styles.KeyHelp.Render(m.getKeyHelp())
+	middle := m.getStatusMessage()
 	right := m.getRightStatus()
 
-	// Calculate spacing
-	leftWidth := lipgloss.Width(left)
-	middleWidth := lipgloss.Width(middle)
-	rightWidth := lipgloss.Width(right)
-	spacing := footerWidth - leftWidth - middleWidth - rightWidth
+	// Use Lipgloss to place content horizontally
+	footer := lipgloss.PlaceHorizontal(
+		footerWidth,
+		lipgloss.Center,
+		middle,
+		lipgloss.WithWhitespaceChars(" "),
+		lipgloss.WithWhitespaceForeground(m.styles.Subtle.GetForeground()),
+	)
 
-	if spacing > 0 {
-		spacer := strings.Repeat(" ", spacing)
-		footer = left + spacer + middle + right
+	// Place left and right content
+	if lipgloss.Width(left)+lipgloss.Width(right) < footerWidth {
+		footer = lipgloss.JoinHorizontal(
+			lipgloss.Top,
+			left,
+			lipgloss.PlaceHorizontal(
+				footerWidth-lipgloss.Width(left)-lipgloss.Width(right),
+				lipgloss.Center,
+				middle,
+			),
+			right,
+		)
 	} else {
-		// If not enough space, just show key help
+		// Not enough space, prioritize key help
 		footer = left
 	}
 
@@ -100,70 +96,111 @@ func (m *Model) renderFooter() string {
 		Render(footer)
 }
 
+// getStatusMessage returns the current status message if within timeout
+func (m *Model) getStatusMessage() string {
+	if m.statusMsg != "" && time.Since(m.statusTime) < StatusTimeout {
+		return m.styles.StatusBar.Render(m.statusMsg)
+	}
+	return ""
+}
+
 // getKeyHelp returns context-sensitive key hints
 func (m *Model) getKeyHelp() string {
-	// Build the key help section based on current view
 	var keyHelp []string
 
+	// Get context-specific keys
 	switch m.currentView {
 	case ViewList:
-		switch m.listTabs.ActiveIndex {
-		case 1: // Project tab
-			// Handle the sub-navigation within project tab
-			switch m.projectSection {
-			case "tasks":
-				keyHelp = []string{"[j/k] navigate", "[enter] open task", "[d] mark done", "[←] back"}
-			case "claude":
-				keyHelp = []string{"[j/k] scroll", "[←] back"}
-			case "markdown":
-				keyHelp = []string{"[j/k] navigate files", "[←] back"}
-			default:
-				keyHelp = []string{"[t] tasks", "[c] claude.md", "[m] markdown files", "[tab] back to overview"}
-			}
-		default: // Overview and others
-			keyHelp = []string{"[j/k] navigate", "[tab] switch tab", "[enter] details"}
-			if m.selectedIndex >= 0 && m.selectedIndex < len(m.agents) {
-				keyHelp = append(keyHelp, "[c] continue")
-			}
-		}
+		keyHelp = m.getListKeyHelp()
 	case ViewDetail:
-		keyHelp = []string{"[o/c/l/n/a/t] tabs", "[j/k] navigate", "[h/l] scroll"}
-		if m.tabs.ActiveIndex == 0 {
-			// Back arrow selected
-			keyHelp = append(keyHelp, "[enter/esc] back")
-		}
+		keyHelp = m.getDetailKeyHelp()
 	default:
-		keyHelp = []string{"[j/k] navigate", "[enter] select"}
+		keyHelp = m.getDefaultKeyHelp()
 	}
 
-	keyHelp = append(keyHelp, "[r] refresh", "[?] help", "[q] quit")
+	// Add common keys
+	keyHelp = append(keyHelp, m.getCommonKeyHelp()...)
 	return strings.Join(keyHelp, "  ")
+}
+
+// getListKeyHelp returns key help for list view
+func (m *Model) getListKeyHelp() []string {
+	switch m.listTabs.ActiveIndex {
+	case 1: // Project tab
+		return m.getProjectTabKeyHelp()
+	default: // Overview and others
+		keyHelp := []string{"[j/k] navigate", "[tab] switch tab", "[enter] details"}
+		if m.selectedIndex >= 0 && m.selectedIndex < len(m.agents) {
+			keyHelp = append(keyHelp, "[c] continue")
+		}
+		return keyHelp
+	}
+}
+
+// getProjectTabKeyHelp returns key help for project tab navigation
+func (m *Model) getProjectTabKeyHelp() []string {
+	switch m.projectSection {
+	case "tasks":
+		return []string{"[j/k] navigate", "[enter] open task", "[d] mark done", "[←] back"}
+	case "claude":
+		return []string{"[j/k] scroll", "[←] back"}
+	case "markdown":
+		return []string{"[j/k] navigate files", "[←] back"}
+	default:
+		return []string{"[t] tasks", "[c] claude.md", "[m] markdown files", "[tab] back to overview"}
+	}
+}
+
+// getDetailKeyHelp returns key help for detail view
+func (m *Model) getDetailKeyHelp() []string {
+	keyHelp := []string{"[o/c/l/n/a/t] tabs", "[j/k] navigate", "[h/l] scroll"}
+	if m.tabs.ActiveIndex == 0 {
+		// Back arrow selected
+		keyHelp = append(keyHelp, "[enter/esc] back")
+	}
+	return keyHelp
+}
+
+// getDefaultKeyHelp returns default key help
+func (m *Model) getDefaultKeyHelp() []string {
+	return []string{"[j/k] navigate", "[enter] select"}
+}
+
+// getCommonKeyHelp returns keys that are always available
+func (m *Model) getCommonKeyHelp() []string {
+	return []string{"[r] refresh", "[?] help", "[q] quit"}
 }
 
 // getRightStatus returns the right-aligned status information
 func (m *Model) getRightStatus() string {
-	// Sync status - right aligned
-	right := ""
 	if m.isLoading {
-		right = m.styles.Warning.Render(" ⟳ Refreshing...")
-	} else if m.err != nil {
-		right = m.styles.Error.Render(" ✗ Error")
-	} else {
-		// Show last update time
-		if !m.lastUpdate.IsZero() {
-			elapsed := time.Since(m.lastUpdate)
-			var updateStr string
-			if elapsed < 1*time.Second {
-				updateStr = "just now"
-			} else if elapsed < 60*time.Second {
-				updateStr = fmt.Sprintf("%ds ago", int(elapsed.Seconds()))
-			} else if elapsed < 60*time.Minute {
-				updateStr = fmt.Sprintf("%dm ago", int(elapsed.Minutes()))
-			} else {
-				updateStr = fmt.Sprintf("%dh ago", int(elapsed.Hours()))
-			}
-			right = m.styles.Subtle.Render(fmt.Sprintf(" Updated %s", updateStr))
-		}
+		return m.styles.Warning.Render(" ⟳ Refreshing...")
 	}
-	return right
+
+	// Use unified error status
+	if errorStatus := m.getErrorStatus(); errorStatus != "" {
+		return errorStatus
+	}
+
+	// Show last update time
+	if !m.lastUpdate.IsZero() {
+		updateStr := m.formatElapsedTime(time.Since(m.lastUpdate))
+		return m.styles.Subtle.Render(fmt.Sprintf(" Updated %s", updateStr))
+	}
+
+	return ""
+}
+
+// formatElapsedTime formats an elapsed duration for display
+func (m *Model) formatElapsedTime(elapsed time.Duration) string {
+	switch {
+	case elapsed < JustNowThreshold:
+		return "just now"
+	case elapsed < SecondsThreshold:
+		return fmt.Sprintf("%ds ago", int(elapsed.Seconds()))
+	case elapsed < MinutesThreshold:
+		return fmt.Sprintf("%dm ago", int(elapsed.Minutes()))
+	default:
+		return fmt.Sprintf("%dh ago", int(elapsed.Hours()))
+	}
 }

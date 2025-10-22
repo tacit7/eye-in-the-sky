@@ -12,7 +12,7 @@ import (
 type ViewHandler func(*Model, tea.KeyMsg) (tea.Model, tea.Cmd)
 
 // viewHandlers maps views to their key handlers
-var viewHandlers = map[ViewMode]ViewHandler{
+var viewHandlers = map[ViewType]ViewHandler{
 	ViewList:   (*Model).handleListKeys,
 	ViewDetail: (*Model).handleDetailKeys,
 }
