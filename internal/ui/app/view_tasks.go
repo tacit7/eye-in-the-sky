@@ -291,26 +291,35 @@ func (m *Model) loadTasks() error {
 		return fmt.Errorf("failed to parse tasks: %w", err)
 	}
 
-	// Convert to Task structs, filtering by appropriate tag in description
+	// Convert to Task structs, filtering by appropriate tag
 	m.tasks = make([]Task, 0, len(tasks))
-	agentSearchStr := fmt.Sprintf("+agent_%s", strings.ReplaceAll(m.selectedAgent.ID, "-", "_"))
+	cleanSearchTag := strings.TrimPrefix(searchTag, "+")
 	for _, taskData := range tasks {
-		description := getString(taskData, "description")
-		// Filter tasks that contain the appropriate tag (workaround for Taskwarrior tag parsing)
-		if !strings.Contains(description, searchTag) {
+		// Check if task is pending (skip completed/deleted unless we want to show them)
+		status := getString(taskData, "status")
+		if status != "pending" && status != "deleted" {
 			continue
 		}
-		// Clean up description by removing agent and session/subagent tags
-		cleanDescription := strings.TrimSpace(description)
-		cleanDescription = strings.ReplaceAll(cleanDescription, searchTag, "")
-		cleanDescription = strings.ReplaceAll(cleanDescription, agentSearchStr, "")
-		cleanDescription = strings.TrimSpace(cleanDescription)
 
+		// Check if task has the matching tag in its tags array
 		tags := getTags(taskData, "tags")
+		hasTag := false
+		for _, tag := range tags {
+			if tag == cleanSearchTag {
+				hasTag = true
+				break
+			}
+		}
+		if !hasTag {
+			continue
+		}
+
+		description := getString(taskData, "description")
+
 		task := Task{
 			UUID:           getString(taskData, "uuid"),
-			Description:    cleanDescription,
-			Status:         getString(taskData, "status"),
+			Description:    description,
+			Status:         status,
 			Priority:       getString(taskData, "priority"),
 			Project:        getString(taskData, "project"),
 			Tags:           tags,
