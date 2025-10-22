@@ -1,0 +1,325 @@
+package app
+
+import (
+	"fmt"
+	"sort"
+	"strings"
+
+	"github.com/charmbracelet/lipgloss"
+	"github.com/tacit7/eye-in-the-sky/internal/domain"
+)
+
+// renderListView renders the agent list view
+func (m *Model) renderListView() string {
+	// Check which tab is active
+	var contentBuilder strings.Builder
+
+	// Reserve space for header (3 lines) + title bar + footer + borders
+	visibleHeight := m.height - 8
+	if visibleHeight < 1 {
+		visibleHeight = 10
+	}
+
+	// Calculate and store layout for click hit testing
+	m.listLayout = ListLayout{
+		HeaderH: 3, // renderHeader uses ~3 lines
+		TabsH:   2, // tabs box uses ~2 lines
+		FooterH: 2, // renderFooter uses ~2 lines
+		Content: Bounds{X: 2, Y: 5, W: m.width - 4, H: visibleHeight + 2},
+		RowH:    1, // one line per agent
+	}
+
+	// Render content based on active tab
+	switch m.listTabs.ActiveIndex {
+	case 1: // Project tab
+		contentBuilder.WriteString(m.renderProjectTab())
+	case 3: // Usage tab
+		contentBuilder.WriteString(m.renderUsageTab())
+	default: // Overview, Claude tabs
+		if len(m.agents) == 0 {
+			contentBuilder.WriteString(m.styles.Subtle.Render("  No agents found"))
+			contentBuilder.WriteString("\n")
+		} else {
+			// Add header row
+			headerLine := fmt.Sprintf("%-2s %-12s  %-40s  %-40s  %-30s  %s",
+				"",
+				"Status",
+				"Agent ID",
+				"Task",
+				"Source",
+				"Session",
+			)
+			contentBuilder.WriteString(m.styles.Primary.Render(headerLine))
+			contentBuilder.WriteString("\n")
+			contentBuilder.WriteString(m.styles.Border.Render(strings.Repeat("─", m.width-6)))
+			contentBuilder.WriteString("\n")
+
+			endIndex := m.listOffset + visibleHeight
+			if endIndex > len(m.agents) {
+				endIndex = len(m.agents)
+			}
+
+			for i := m.listOffset; i < endIndex; i++ {
+				selected := i == m.selectedIndex
+				line := m.renderAgentLine(m.agents[i], selected)
+				contentBuilder.WriteString(line)
+				contentBuilder.WriteString("\n")
+			}
+		}
+	}
+
+	// Build content with proper boxing
+	contentLines := strings.Split(strings.TrimRight(contentBuilder.String(), "\n"), "\n")
+	paddedLines := make([]string, 0, visibleHeight)
+
+	// Ensure minimum height and pad shorter content
+	for i := 0; i < visibleHeight; i++ {
+		if i < len(contentLines) {
+			// Ensure line fills the width
+			line := contentLines[i]
+			lineWidth := lipgloss.Width(line)
+			if lineWidth < m.width-6 {
+				line = line + strings.Repeat(" ", (m.width-6)-lineWidth)
+			}
+			paddedLines = append(paddedLines, line)
+		} else {
+			// Empty line padding
+			paddedLines = append(paddedLines, strings.Repeat(" ", m.width-6))
+		}
+	}
+
+	// Build the complete view with all components
+	var view strings.Builder
+
+	// Header
+	view.WriteString(m.renderHeader())
+	view.WriteString("\n\n")
+
+	// Tabs box (render even in Claude tab to maintain layout)
+	tabsDisplay := m.listTabs.Render()
+	view.WriteString(tabsDisplay)
+	view.WriteString("\n")
+
+	// Content box with visible content
+	contentBox := m.styles.ContentBox.
+		Width(m.width - 4).
+		Height(visibleHeight + 2). // +2 for borders
+		Render(strings.Join(paddedLines, "\n"))
+	view.WriteString(contentBox)
+	view.WriteString("\n")
+
+	// Footer
+	view.WriteString(m.renderFooter())
+
+	// Error display (overlays if present)
+	if m.err != nil {
+		errorBox := m.styles.ErrorBox.
+			Width(40).
+			Render(fmt.Sprintf("Error: %v", m.err))
+		return lipgloss.Place(m.width, m.height,
+			lipgloss.Center, lipgloss.Center,
+			errorBox,
+			lipgloss.WithWhitespaceChars(""),
+			lipgloss.WithWhitespaceForeground(m.styles.Subtle.GetForeground()))
+	}
+
+	return view.String()
+}
+
+// renderAgentLine renders a single agent line in the list
+func (m *Model) renderAgentLine(agent domain.Agent, selected bool) string {
+	// Icon for parent/child relationship
+	icon := " "
+	// Check if it's a subagent by looking at ParentSessionID
+	if agent.ParentSessionID != "" {
+		// This is a subagent - use green pipe
+		icon = m.styles.Success.Render("│")
+	}
+
+	// Truncate fields to fit
+	statusStr := string(agent.Status)
+	if len(statusStr) > 10 {
+		statusStr = statusStr[:10]
+	}
+
+	agentIDStr := string(agent.ID)
+	if len(agentIDStr) > 38 {
+		agentIDStr = agentIDStr[:38]
+	}
+
+	taskStr := agent.CurrentTask
+	if taskStr == "" {
+		taskStr = agent.FeatureDesc
+	}
+	if len(taskStr) > 38 {
+		taskStr = taskStr[:35] + "..."
+	}
+
+	sourceStr := string(agent.Source)
+	if len(sourceStr) > 28 {
+		sourceStr = sourceStr[:28]
+	}
+
+	// Session ID - truncate for display
+	sessionStr := agent.SessionID
+	if len(sessionStr) > 12 {
+		sessionStr = sessionStr[:12] // Show first 12 chars
+	}
+
+	// Status coloring
+	var statusStyle lipgloss.Style
+	switch agent.Status {
+	case "active":
+		statusStyle = m.styles.Success
+	case "working":
+		statusStyle = m.styles.Warning
+	case "idle":
+		statusStyle = m.styles.Subtle
+	case "failed":
+		statusStyle = m.styles.Error
+	case "completed":
+		statusStyle = m.styles.Primary
+	default:
+		statusStyle = m.styles.Subtle
+	}
+
+	// Build the line
+	line := fmt.Sprintf("%s %-12s  %-40s  %-40s  %-30s  %s",
+		icon,
+		statusStyle.Render(statusStr),
+		agentIDStr,
+		taskStr,
+		sourceStr,
+		sessionStr,
+	)
+
+	if selected {
+		return m.styles.Selected.Render(line)
+	}
+	return line
+}
+
+// renderSubagentGroup renders a hierarchical view of agents with their subagents
+func (m *Model) renderSubagentGroup(agents []domain.Agent, parentSessionID string) []string {
+	var lines []string
+
+	// Sort agents: parents first, then children
+	sort.Slice(agents, func(i, j int) bool {
+		// Parents (no ParentSessionID) come first
+		if agents[i].ParentSessionID == "" && agents[j].ParentSessionID != "" {
+			return true
+		}
+		if agents[i].ParentSessionID != "" && agents[j].ParentSessionID == "" {
+			return false
+		}
+		// Then sort by creation time
+		return agents[i].CreatedAt.Before(agents[j].CreatedAt)
+	})
+
+	// Track which parent sessions have been rendered
+	renderedParents := make(map[string]bool)
+
+	for _, agent := range agents {
+		// Skip if this is a child and we've already rendered it under its parent
+		if agent.ParentSessionID != "" && renderedParents[agent.SessionID] {
+			continue
+		}
+
+		// Render parent agent
+		if agent.ParentSessionID == "" {
+			selected := m.selectedIndex >= 0 && m.agents[m.selectedIndex].ID == agent.ID
+			lines = append(lines, m.renderAgentLine(agent, selected))
+			renderedParents[agent.SessionID] = true
+
+			// Find and render all children of this parent
+			for _, child := range agents {
+				if child.ParentSessionID == agent.SessionID {
+					selected := m.selectedIndex >= 0 && m.agents[m.selectedIndex].ID == child.ID
+					lines = append(lines, m.renderAgentLine(child, selected))
+					renderedParents[child.SessionID] = true
+				}
+			}
+		}
+	}
+
+	// Render any orphaned children (shouldn't normally happen)
+	for _, agent := range agents {
+		if !renderedParents[agent.SessionID] {
+			selected := m.selectedIndex >= 0 && m.agents[m.selectedIndex].ID == agent.ID
+			lines = append(lines, m.renderAgentLine(agent, selected))
+		}
+	}
+
+	return lines
+}
+
+// getAgentHierarchy builds a hierarchical structure of agents
+func (m *Model) getAgentHierarchy() map[string][]domain.Agent {
+	hierarchy := make(map[string][]domain.Agent)
+
+	// Group agents by parent session ID
+	for _, agent := range m.agents {
+		if agent.ParentSessionID == "" {
+			// This is a parent agent
+			hierarchy[agent.SessionID] = []domain.Agent{agent}
+		} else {
+			// This is a subagent
+			hierarchy[agent.ParentSessionID] = append(hierarchy[agent.ParentSessionID], agent)
+		}
+	}
+
+	return hierarchy
+}
+
+// renderClaudeTab renders the Claude tab content (currently same as Overview)
+func (m *Model) renderClaudeTab() string {
+	// For now, render the same as Overview
+	// In the future, this could show Claude-specific metrics or status
+	return m.renderAgentList()
+}
+
+// renderAgentList is a helper to render the basic agent list
+func (m *Model) renderAgentList() string {
+	var contentBuilder strings.Builder
+
+	if len(m.agents) == 0 {
+		contentBuilder.WriteString(m.styles.Subtle.Render("  No agents found"))
+		return contentBuilder.String()
+	}
+
+	// Add header row
+	headerLine := fmt.Sprintf("%-2s %-12s  %-40s  %-40s  %-30s  %s",
+		"",
+		"Status",
+		"Agent ID",
+		"Task",
+		"Source",
+		"Session",
+	)
+	contentBuilder.WriteString(m.styles.Primary.Render(headerLine))
+	contentBuilder.WriteString("\n")
+	contentBuilder.WriteString(m.styles.Border.Render(strings.Repeat("─", m.width-6)))
+	contentBuilder.WriteString("\n")
+
+	// Calculate visible range
+	visibleHeight := m.height - 8
+	if visibleHeight < 1 {
+		visibleHeight = 10
+	}
+	endIndex := m.listOffset + visibleHeight
+	if endIndex > len(m.agents) {
+		endIndex = len(m.agents)
+	}
+
+	// Render visible agents
+	for i := m.listOffset; i < endIndex; i++ {
+		selected := i == m.selectedIndex
+		line := m.renderAgentLine(m.agents[i], selected)
+		contentBuilder.WriteString(line)
+		if i < endIndex-1 {
+			contentBuilder.WriteString("\n")
+		}
+	}
+
+	return contentBuilder.String()
+}

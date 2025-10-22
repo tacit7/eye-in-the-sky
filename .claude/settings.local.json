@@ -36,7 +36,8 @@
       "Bash(task 33 annotate:*)",
       "Bash(task add:*)",
       "Bash(task 34 annotate:*)",
-      "Bash(task 39 annotate:*)"
+      "Bash(task 39 annotate:*)",
+      "Bash(chmod:*)"
     ],
     "deny": [],
     "ask": [],

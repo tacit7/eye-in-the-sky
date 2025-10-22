@@ -17,7 +17,8 @@ type Task struct {
 	Due             time.Time
 	Entry           time.Time
 	Annotations     []TaskAnnotation
-	WorkflowStatus  string // ready, working, testing, review, blocked, etc.
+	WorkflowStatus  string   // ready, working, testing, review, blocked, etc.
+	VirtualTags     []string // Computed tags from TaskWarrior
 }
 
 // TaskAnnotation represents a task annotation with timestamp

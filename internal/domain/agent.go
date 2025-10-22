@@ -21,6 +21,8 @@ type Agent struct {
 	AgentDescription    string
 	ProjectName         string
 	SessionID           string
+	ParentSessionID     string
 	ParentAgentID       string
+	CompletedAt         *time.Time
 	TaskCount           int    // Number of tasks from TaskWarrior
 }

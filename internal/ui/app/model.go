@@ -30,6 +30,20 @@ const (
 	ViewDetail
 )
 
+// TaskStateType represents the loading state of tasks
+type TaskStateType int
+
+const (
+	TaskLoading TaskStateType = iota
+	TaskLoaded
+	TaskError
+)
+
+// TasksErrorMsg is sent when tasks fail to load
+type TasksErrorMsg struct {
+	Error error
+}
+
 // Bounds represents screen coordinates and dimensions
 type Bounds struct {
 	X, Y, W, H int
@@ -101,6 +115,7 @@ type Model struct {
 	// Per-view scroll state
 	tasksIndex    int
 	tasksOffset   int
+	taskIndex     int  // Current selected task in detail view
 	commitsIndex  int
 	commitsOffset int
 	notesIndex    int
@@ -125,10 +140,13 @@ type Model struct {
 
 	// Polling
 	lastRefresh time.Time
+	lastUpdate  time.Time
+	isLoading   bool
 	err         error
 
 	// Status message
-	statusMsg string
+	statusMsg  string
+	statusTime time.Time
 
 	// CCUsage database connection
 	ccusageDB *db.CCUsageDB
@@ -160,7 +178,8 @@ type Model struct {
 	claudeMDContent   string
 	projectTasksIndex int
 	projectMDFilesIndex int
-	projectSelectedSection int // 0: tasks, 1: CLAUDE.md, 2: .md files
+	projectSelectedSection int    // 0: tasks, 1: CLAUDE.md, 2: .md files
+	projectSection        string  // Current section in project tab
 	projectTasksOffset    int
 	projectMDFilesOffset  int
 }
@@ -195,19 +214,37 @@ type TaskAnnotation = domain.TaskAnnotation
 
 // Styles holds all lipgloss styles
 type Styles struct {
-	Active    lipgloss.Style
-	Working   lipgloss.Style
-	Idle      lipgloss.Style
-	Stale     lipgloss.Style
-	Unknown   lipgloss.Style
-	Completed lipgloss.Style
-	Failed    lipgloss.Style
-	Primary   lipgloss.Style
-	Secondary lipgloss.Style
-	Border    lipgloss.Style
-	Title     lipgloss.Style
-	Text      lipgloss.Style
-	Subtle    lipgloss.Style
+	Active       lipgloss.Style
+	Working      lipgloss.Style
+	Idle         lipgloss.Style
+	Stale        lipgloss.Style
+	Unknown      lipgloss.Style
+	Completed    lipgloss.Style
+	Failed       lipgloss.Style
+	Primary      lipgloss.Style
+	Secondary    lipgloss.Style
+	Border       lipgloss.Style
+	Title        lipgloss.Style
+	Text         lipgloss.Style
+	Subtle       lipgloss.Style
+	Success      lipgloss.Style
+	Warning      lipgloss.Style
+	Error        lipgloss.Style
+	ContentBox   lipgloss.Style
+	InfoBox      lipgloss.Style
+	ErrorBox     lipgloss.Style
+	Header       lipgloss.Style
+	Footer       lipgloss.Style
+	StatusBar    lipgloss.Style
+	KeyHelp      lipgloss.Style
+	Selected     lipgloss.Style
+	Label        lipgloss.Style
+	Value        lipgloss.Style
+	SectionTitle lipgloss.Style
+	Git          lipgloss.Style
+	Code         lipgloss.Style
+	Highlight    lipgloss.Style
+	Bold         lipgloss.Style
 }
 
 // NewModel creates a new application model
@@ -321,6 +358,26 @@ func createStyles(theme Theme) Styles {
 		Title:     lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Colors.Title)).Bold(true),
 		Text:      lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Colors.Text)),
 		Subtle:    lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Colors.Subtle)),
+
+		// Additional styles for new views
+		Success:      lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Colors.Active)),
+		Warning:      lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Colors.Working)),
+		Error:        lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Colors.Failed)),
+		ContentBox:   lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color(theme.Colors.Border)),
+		InfoBox:      lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color(theme.Colors.Primary)),
+		ErrorBox:     lipgloss.NewStyle().Border(lipgloss.DoubleBorder()).BorderForeground(lipgloss.Color(theme.Colors.Failed)),
+		Header:       lipgloss.NewStyle().Background(lipgloss.Color("235")).Foreground(lipgloss.Color(theme.Colors.Title)),
+		Footer:       lipgloss.NewStyle().Background(lipgloss.Color("235")).Foreground(lipgloss.Color(theme.Colors.Text)),
+		StatusBar:    lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Colors.Primary)),
+		KeyHelp:      lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Colors.Subtle)),
+		Selected:     lipgloss.NewStyle().Background(lipgloss.Color("238")).Foreground(lipgloss.Color(theme.Colors.Active)),
+		Label:        lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Colors.Secondary)),
+		Value:        lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Colors.Text)),
+		SectionTitle: lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Colors.Primary)).Bold(true),
+		Git:          lipgloss.NewStyle().Foreground(lipgloss.Color("#f97316")),
+		Code:         lipgloss.NewStyle().Background(lipgloss.Color("235")).Foreground(lipgloss.Color(theme.Colors.Text)),
+		Highlight:    lipgloss.NewStyle().Background(lipgloss.Color("238")).Foreground(lipgloss.Color(theme.Colors.Active)).Bold(true),
+		Bold:         lipgloss.NewStyle().Bold(true),
 	}
 }
 
@@ -585,6 +642,65 @@ func (m *Model) loadCCUsageData() error {
 
 	m.lastCCUsageSync = time.Now()
 	return nil
+}
+
+// loadTasks loads tasks for the current agent
+func (m *Model) loadTasks() error {
+	if m.selectedAgent == nil {
+		m.tasks = []Task{}
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	tasks, err := m.data.Tasks.LoadByAgent(ctx, domain.AgentID(m.selectedAgent.ID), 100, 0)
+	if err != nil {
+		return err
+	}
+
+	m.tasks = tasks
+	return nil
+}
+
+// loadProjectTickets loads project tickets for the current agent
+func (m *Model) loadProjectTickets() error {
+	if m.selectedAgent == nil || m.selectedAgent.ProjectName == "" {
+		m.projectTickets = []Task{}
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Load tickets by project tag
+	tasks, err := m.data.Tasks.LoadByProject(ctx, m.selectedAgent.ProjectName, 100)
+	if err != nil {
+		return err
+	}
+
+	m.projectTickets = tasks
+	return nil
+}
+
+// loadTasksCmd returns a command to load tasks
+func (m *Model) loadTasksCmd() tea.Cmd {
+	return func() tea.Msg {
+		if err := m.loadTasks(); err != nil {
+			return TasksErrorMsg{Error: err}
+		}
+		return nil
+	}
+}
+
+// loadProjectTicketsCmd returns a command to load project tickets
+func (m *Model) loadProjectTicketsCmd() tea.Cmd {
+	return func() tea.Msg {
+		if err := m.loadProjectTickets(); err != nil {
+			return TasksErrorMsg{Error: err}
+		}
+		return nil
+	}
 }
 
 // loadTabData loads data for the currently active tab

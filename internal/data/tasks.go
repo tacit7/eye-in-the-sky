@@ -214,6 +214,40 @@ func (s *taskStore) MarkDone(ctx context.Context, taskID domain.TaskID) error {
 	return nil
 }
 
+// LoadByProject loads tasks for a specific project
+func (s *taskStore) LoadByProject(ctx context.Context, projectName string, limit int) ([]domain.Task, error) {
+	// Use TaskWarrior to get tasks with project tag
+	projectTag := fmt.Sprintf("project:%s", projectName)
+
+	var args []string
+	args = append(args, projectTag, "export")
+
+	cmd := exec.CommandContext(ctx, "task", args...)
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("task export: %w", err)
+	}
+
+	// Parse the JSON output
+	var rawTasks []twTask
+	if err := json.Unmarshal(output, &rawTasks); err != nil {
+		return nil, fmt.Errorf("parse task json: %w", err)
+	}
+
+	// Convert to domain tasks
+	var tasks []domain.Task
+	for _, raw := range rawTasks {
+		task := s.toDomainTask(raw)
+		tasks = append(tasks, task)
+
+		if limit > 0 && len(tasks) >= limit {
+			break
+		}
+	}
+
+	return tasks, nil
+}
+
 // getSearchTag determines the appropriate tag for an agent
 func (s *taskStore) getSearchTag(agent domain.Agent) string {
 	if agent.ParentAgentID != "" {

@@ -93,3 +93,8 @@ func (m *TabsModel) Update(msg tea.Msg) {
 		}
 	}
 }
+
+// Render is an alias for View() for backwards compatibility
+func (m *TabsModel) Render() string {
+	return m.View()
+}
