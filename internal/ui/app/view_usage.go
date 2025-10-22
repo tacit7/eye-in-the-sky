@@ -2,6 +2,8 @@ package app
 
 import (
 	"fmt"
+	"strings"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // renderUsageTab renders session costs for all agents with monthly breakdown
@@ -61,8 +63,27 @@ func (m *Model) renderUsageTab() string {
 		sections = append(sections, m.renderSectionWithTitle("Total All-Time Cost", content))
 	}
 
-	// Compose all sections together
-	return m.renderUsageSections(sections...)
+	// Build complete usage dashboard with enhancements
+	header := m.renderGradientHeader()
+	summaryBar := m.renderSummaryBar()
+	separator := m.styles.Border.Render(strings.Repeat("─", 70))
+	sectionsContent := m.renderUsageSections(sections...)
+	footer := m.renderUsageFooter()
+
+	// Compose final view
+	content := lipgloss.JoinVertical(lipgloss.Left,
+		header,
+		"",
+		summaryBar,
+		separator,
+		"",
+		sectionsContent,
+		footer,
+	)
+
+	// Set viewport content and return view
+	m.usageViewport.SetContent(content)
+	return m.usageViewport.View()
 }
 
 // renderMonthlyCostsBreakdown renders monthly cost breakdown using table builder

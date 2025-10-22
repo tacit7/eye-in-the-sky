@@ -26,3 +26,17 @@ func calculateUsagePercent(tokensUsed, tokensBudget int) float64 {
 func formatUsagePercent(percent float64) string {
 	return fmt.Sprintf("%.1f%%", percent)
 }
+
+// colorCost applies color to cost values based on thresholds
+// Green: < $1.00, Yellow: $1.00-$5.00, Red: > $5.00
+func colorCost(cost float64, styles *Styles) string {
+	formatted := fmt.Sprintf("$%.4f", cost)
+	switch {
+	case cost > 5.0:
+		return styles.Error.Render(formatted)
+	case cost > 1.0:
+		return styles.Warning.Render(formatted)
+	default:
+		return styles.Success.Render(formatted)
+	}
+}

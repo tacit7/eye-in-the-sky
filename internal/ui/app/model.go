@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
@@ -22,11 +23,11 @@ import (
 	"github.com/tacit7/eye-in-the-sky/internal/ui/util"
 )
 
-// ViewMode represents the current view state
-type ViewMode int
+// ViewType represents the current view state
+type ViewType int
 
 const (
-	ViewList ViewMode = iota
+	ViewList ViewType = iota
 	ViewDetail
 )
 
@@ -58,6 +59,9 @@ type ListLayout struct {
 	RowH    int    // height per row; with your current render this is 1
 }
 
+// ViewRenderer is a function that renders a view
+type ViewRenderer func(m *Model) string
+
 // Model represents the application state
 type Model struct {
 	// Data access layer
@@ -68,6 +72,9 @@ type Model struct {
 	keys        KeyBindings
 	theme       Theme
 	styles      Styles
+
+	// View renderers map
+	renderers map[ViewType]ViewRenderer
 
 	// Help system
 	help     help.Model
@@ -89,7 +96,7 @@ type Model struct {
 	listTabs components.TabsModel
 
 	// View state
-	currentView ViewMode
+	currentView ViewType
 	showAll     bool // Show all agents or only active ones
 
 	// Agent list state
@@ -138,6 +145,9 @@ type Model struct {
 	width  int
 	height int
 
+	// Layout management
+	layoutManager *LayoutManager
+
 	// Polling
 	lastRefresh time.Time
 	lastUpdate  time.Time
@@ -182,6 +192,9 @@ type Model struct {
 	projectSection        string  // Current section in project tab
 	projectTasksOffset    int
 	projectMDFilesOffset  int
+
+	// Usage view viewport
+	usageViewport viewport.Model
 }
 
 // Type aliases for backward compatibility during migration
@@ -307,6 +320,9 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 		mdRenderer = nil
 	}
 
+	// Create viewport for usage tab (will be resized on window size updates)
+	usageViewport := viewport.New(80, 20)
+
 	m := &Model{
 		data:          NewDataClient(db),
 		ccusageDB:     ccusageDB,
@@ -321,11 +337,18 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 		mdRenderer:    mdRenderer,
 		tabs:          tabs,
 		listTabs:      listTabs,
+		usageViewport: usageViewport,
 		currentView:   ViewList,
 		showAll:       config.ShowAllAgents,
 		agents:        []Agent{},
 		ccusageSyncing: false,
 		lastClickRow:  -1, // Initialize to -1 so first click doesn't trigger double-click
+	}
+
+	// Initialize view renderers map
+	m.renderers = map[ViewType]ViewRenderer{
+		ViewList:   (*Model).renderListView,
+		ViewDetail: (*Model).renderDetail,
 	}
 
 	// Detect project information at startup

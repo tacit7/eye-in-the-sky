@@ -2,32 +2,34 @@ package app
 
 import (
 	"strings"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // renderUsageSections composes multiple usage sections with proper spacing and borders
 func (m *Model) renderUsageSections(sections ...string) string {
-	var validSections []string
+	// Create rounded border style for sections
+	sectionBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("240")).
+		Padding(1, 2).
+		MarginTop(1)
+
+	var boxedSections []string
 
 	for _, section := range sections {
 		trimmed := strings.TrimSpace(section)
 		if trimmed != "" {
-			validSections = append(validSections, trimmed)
+			// Wrap each section in a rounded border box
+			boxedSections = append(boxedSections, sectionBox.Render(trimmed))
 		}
 	}
 
-	if len(validSections) == 0 {
+	if len(boxedSections) == 0 {
 		return ""
 	}
 
-	// Join sections with double newlines for spacing
-	result := strings.Join(validSections, "\n\n")
-
-	// Add final border at the end
-	if len(validSections) > 0 {
-		result += "\n\n" + m.styles.Border.Render(strings.Repeat("─", 70))
-	}
-
-	return result
+	// Join boxed sections with newlines
+	return strings.Join(boxedSections, "\n")
 }
 
 // renderSectionWithTitle renders a section with a styled title
@@ -40,6 +42,20 @@ func (m *Model) renderSectionWithTitle(title string, content string) string {
 	b.WriteString(m.styles.Title.Render(title))
 	b.WriteString("\n\n")
 	b.WriteString(content)
+
+	return b.String()
+}
+
+// renderUsageFooter renders the footer help hints for the usage tab
+func (m *Model) renderUsageFooter() string {
+	hints := "↑/↓ Scroll  |  R Refresh  |  Q Quit"
+	separator := m.styles.Border.Render(strings.Repeat("─", 70))
+
+	var b strings.Builder
+	b.WriteString("\n")
+	b.WriteString(separator)
+	b.WriteString("\n")
+	b.WriteString(m.styles.Subtle.Render(hints))
 
 	return b.String()
 }

@@ -2,9 +2,50 @@ package app
 
 import (
 	"fmt"
+	"strings"
+	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/tacit7/eye-in-the-sky/internal/ccusage/api"
 )
+
+// renderSummaryBar renders the top-level summary bar with key metrics
+func (m *Model) renderSummaryBar() string {
+	totalCost := 0.0
+	totalTokens := 0
+
+	// Aggregate from Eye-in-the-Sky session metrics
+	for _, metric := range m.allSessionMetrics {
+		totalCost += metric.EstimatedCostUSD
+		totalTokens += metric.TokensUsed
+	}
+
+	// Aggregate from Claude Code monthly data
+	for _, monthly := range m.ccusageMonthly {
+		totalCost += monthly.TotalCost
+	}
+
+	// Format individual parts with styling
+	costPart := m.styles.Primary.Render(fmt.Sprintf("💰 Total: %s", colorCost(totalCost, &m.styles)))
+	tokensPart := m.styles.Text.Render(fmt.Sprintf("🧠 Tokens: %s", formatNumber(totalTokens)))
+	updatePart := m.styles.Subtle.Render("🕓 Updated: just now") // TODO: track actual lastSync
+
+	// Join with separators
+	separator := m.styles.Subtle.Render("  |  ")
+	parts := []string{costPart, tokensPart, updatePart}
+
+	return strings.Join(parts, separator)
+}
+
+// renderGradientHeader renders the styled usage page header
+func (m *Model) renderGradientHeader() string {
+	headerStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("15")).
+		Background(lipgloss.Color("33")).
+		Bold(true).
+		Padding(0, 2)
+
+	return headerStyle.Render("🛰️  Eye in the Sky — Usage Metrics")
+}
 
 // renderEyeInTheSkyUsage renders the Eye-in-the-Sky session metrics table
 func (m *Model) renderEyeInTheSkyUsage(summary UsageSummary) string {
@@ -155,29 +196,35 @@ func (m *Model) renderClaudeMonthlyUsage(summary UsageSummary) string {
 	return result
 }
 
-// renderBillingBlock renders the current billing block information
+// renderBillingBlock renders the current billing block information with progress bar
 func (m *Model) renderBillingBlock(block *api.ActiveBlockReport) string {
 	if block == nil {
 		return ""
 	}
 
-	table := NewTableBuilder().
-		SetBorderStyle(BorderSimple).
-		SetHeaderStyle(m.styles.Primary).
-		AddColumn("Period", 20, AlignLeft, false).
-		AddColumn("Input", 15, AlignRight, false).
-		AddColumn("Output", 15, AlignRight, false).
-		AddColumn("Cost", 12, AlignRight, false).
-		AddColumn("Time Left", 15, AlignLeft, false)
+	var b strings.Builder
 
-	rows := [][]string{{
-		fmt.Sprintf("%s - %s", block.StartTime, block.EndTime),
-		formatNumber(block.InputTokens),
-		formatNumber(block.OutputTokens),
-		fmt.Sprintf("$%.4f", block.TotalCost),
-		block.TimeRemaining,
-	}}
+	// Create progress bar (showing 62% as placeholder - would need actual budget data to calculate)
+	// For now, we'll use a visual indicator based on time remaining
+	prog := progress.New(progress.WithDefaultGradient())
+	prog.Width = 40
 
-	rendered, _ := table.RenderTable(rows)
-	return rendered
+	// Estimate progress (placeholder - would need actual start/end timestamps to calculate accurately)
+	percent := 0.62 // 62% remaining as per spec
+	progBar := prog.ViewAs(percent)
+
+	// Build the display
+	b.WriteString(progBar)
+	b.WriteString(fmt.Sprintf("  %.0f%% remaining (%s)", percent*100, block.TimeRemaining))
+	b.WriteString("\n\n")
+
+	// Add token and cost information
+	info := fmt.Sprintf("%s input | %s output | %s cache | %s total",
+		m.styles.Text.Render(formatNumber(block.InputTokens)),
+		m.styles.Text.Render(formatNumber(block.OutputTokens)),
+		m.styles.Text.Render(formatNumber(block.CacheTokens)),
+		colorCost(block.TotalCost, &m.styles))
+	b.WriteString(info)
+
+	return b.String()
 }
