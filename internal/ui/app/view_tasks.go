@@ -431,8 +431,8 @@ func (m *Model) loadTasksCmd() tea.Cmd {
 		var searchTag string
 
 		if isSubagent {
-			// For subagents: filter by +subagent:<agent_id> tag
-			searchTag = fmt.Sprintf("+subagent:%s", strings.ReplaceAll(m.selectedAgent.ID, "-", "_"))
+			// For subagents: filter by +subagent_<agent_id> tag (no colon, TaskWarrior can't query colons)
+			searchTag = fmt.Sprintf("+subagent_%s", strings.ReplaceAll(m.selectedAgent.ID, "-", "_"))
 			log.Printf("[TASKS] Async loading tasks for subagent: %s (tag: %s)", m.selectedAgent.ID, searchTag)
 		} else {
 			// For parent agents: filter by +session:<session_id> tag
@@ -459,7 +459,7 @@ func (m *Model) loadTasksCmd() tea.Cmd {
 		}
 
 		// Convert to Task structs with filtering
-		agentSearchStr := fmt.Sprintf("+agent:%s", strings.ReplaceAll(m.selectedAgent.ID, "-", "_"))
+		agentSearchStr := fmt.Sprintf("+agent_%s", strings.ReplaceAll(m.selectedAgent.ID, "-", "_"))
 		filteredTasks := make([]Task, 0, len(tasks))
 
 		for _, taskData := range tasks {
