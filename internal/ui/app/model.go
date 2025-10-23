@@ -349,6 +349,9 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 	// Create viewport for usage tab (will be resized on window size updates)
 	usageViewport := viewport.New(80, 20)
 
+	// Create viewport for Claude tab (will be resized on window size updates)
+	claudeViewport := viewport.New(80, 20)
+
 	// Create usage service with system clock
 	usageSvc := services.NewUsageService(services.SystemClock{})
 
@@ -364,16 +367,19 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 		windowFocuser: windowFocuser,
 		claudePath:    claudePath,
 		mdRenderer:    mdRenderer,
-		tabs:          tabs,
-		listTabs:      listTabs,
-		usageViewport: usageViewport,
-		currentView:   ViewList,
-		showAll:       config.ShowAllAgents,
-		agents:        []Agent{},
+		tabs:           tabs,
+		listTabs:       listTabs,
+		usageViewport:  usageViewport,
+		claudeViewport: claudeViewport,
+		currentView:    ViewList,
+		showAll:        config.ShowAllAgents,
+		agents:         []Agent{},
 		ccusageSyncing: false,
-		lastClickRow:  -1, // Initialize to -1 so first click doesn't trigger double-click
-		usageSvc:      usageSvc,
-		usageDirty:    true, // Start dirty to force initial build
+		lastClickRow:   -1, // Initialize to -1 so first click doesn't trigger double-click
+		usageSvc:       usageSvc,
+		usageDirty:     true, // Start dirty to force initial build
+		claudeFiles:    []ClaudeFile{},
+		claudeShowingContent: false,
 	}
 
 	// Initialize view renderers map
@@ -439,6 +445,7 @@ func createStyles(theme Theme) Styles {
 func (m *Model) Init() tea.Cmd {
 	return tea.Batch(
 		loadAgentsCmd(m.data.Agents), // Load initial agents
+		m.loadClaudeFilesCmd(),        // Load Claude config files
 		m.tickCmd(),                   // Start ticker
 	)
 }

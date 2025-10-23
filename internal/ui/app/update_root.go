@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"log"
 	"time"
 
@@ -58,6 +59,26 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
         debugf("Viewport: %dx%d | Terminal: %dx%d",
             m.usageViewport.Width, m.usageViewport.Height,
             msg.Width, msg.Height)
+    }
+
+    // Update Claude viewport dimensions dynamically
+    if m.currentView == ViewList && m.listTabs.ActiveIndex == 2 {
+        const headerHeight = 2  // Header + tabs
+        const footerHeight = 1  // Footer hints
+        const leftPaneWidth = 30  // Approximate file list width
+
+        available := msg.Height - headerHeight - footerHeight - 1
+        if available < 10 {
+            available = 10
+        }
+
+        rightPaneWidth := msg.Width - leftPaneWidth - 8  // Account for borders
+        if rightPaneWidth < 40 {
+            rightPaneWidth = 40
+        }
+
+        m.claudeViewport.Width = rightPaneWidth
+        m.claudeViewport.Height = available
     }
 		return m, nil
 
@@ -174,6 +195,51 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case TasksLoadedMsg, TasksErrorMsg:
 		// Handle async task loading messages
 		return m.handleTasksMessages(msg)
+
+	// Claude tab messages
+	case claudeFilesLoadedMsg:
+		if msg.err != nil {
+			m.err = msg.err
+			m.statusMsg = "Failed to load Claude config files"
+			return m, nil
+		}
+		m.claudeFiles = msg.files
+		m.statusMsg = fmt.Sprintf("Loaded %d Claude config files", len(msg.files))
+		return m, nil
+
+	case claudeFileContentLoadedMsg:
+		if msg.err != nil {
+			m.err = msg.err
+			m.statusMsg = "Failed to load file content"
+			return m, nil
+		}
+		m.claudeContent = msg.content
+		m.claudeViewport.SetContent(msg.content)
+		m.claudeViewport.GotoTop()
+		m.statusMsg = fmt.Sprintf("Loaded %s", msg.path)
+		return m, nil
+
+	case claudeEditorClosedMsg:
+		if msg.err != nil {
+			m.statusMsg = "Editor closed with error"
+		} else {
+			m.statusMsg = "File edited"
+			// Reload the file content after editing
+			if m.claudeSelectedIndex >= 0 && m.claudeSelectedIndex < len(m.claudeFiles) {
+				selectedFile := m.claudeFiles[m.claudeSelectedIndex]
+				return m, loadClaudeFileContentCmd(selectedFile.Path)
+			}
+		}
+		return m, nil
+
+	case claudeValidationResultMsg:
+		m.claudeValidStatus = msg.status
+		if msg.valid {
+			m.statusMsg = "JSON is valid"
+		} else {
+			m.statusMsg = "JSON validation failed"
+		}
+		return m, nil
 	}
 
 	return m, nil

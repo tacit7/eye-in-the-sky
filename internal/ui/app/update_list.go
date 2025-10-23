@@ -142,6 +142,78 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// Claude tab navigation and operations (only when Claude tab is active)
+	if m.listTabs.ActiveIndex == 2 {
+		switch msg.String() {
+		case "j", "down":
+			// Navigate file list down
+			if !m.claudeShowingContent && m.claudeSelectedIndex < len(m.claudeFiles)-1 {
+				m.claudeSelectedIndex++
+			} else if m.claudeShowingContent {
+				// Scroll content viewport down
+				m.claudeViewport.LineDown(1)
+			}
+			return m, nil
+		case "k", "up":
+			// Navigate file list up
+			if !m.claudeShowingContent && m.claudeSelectedIndex > 0 {
+				m.claudeSelectedIndex--
+			} else if m.claudeShowingContent {
+				// Scroll content viewport up
+				m.claudeViewport.LineUp(1)
+			}
+			return m, nil
+		case "enter":
+			// Load selected file
+			if m.claudeSelectedIndex >= 0 && m.claudeSelectedIndex < len(m.claudeFiles) {
+				selectedFile := m.claudeFiles[m.claudeSelectedIndex]
+				if !selectedFile.IsDir {
+					m.claudeShowingContent = true
+					return m, loadClaudeFileContentCmd(selectedFile.Path)
+				}
+			}
+			return m, nil
+		case "v":
+			// Validate JSON
+			if m.claudeShowingContent && m.claudeContent != "" {
+				return m, validateClaudeFileCmd(m.claudeContent)
+			}
+			return m, nil
+		case "e":
+			// Open in editor (only for files, not directories)
+			if m.claudeSelectedIndex >= 0 && m.claudeSelectedIndex < len(m.claudeFiles) {
+				selectedFile := m.claudeFiles[m.claudeSelectedIndex]
+				if !selectedFile.IsDir {
+					return m, openClaudeFileInEditor(selectedFile.Path)
+				}
+			}
+			return m, nil
+		case "r":
+			// Refresh file list
+			m.statusMsg = "Refreshing Claude config files..."
+			return m, m.loadClaudeFilesCmd()
+		case "esc", "q":
+			// Back to file list from content view
+			if m.claudeShowingContent {
+				m.claudeShowingContent = false
+				m.claudeContent = ""
+				m.claudeValidStatus = ""
+				return m, nil
+			}
+			return m, nil
+		case "pgup":
+			if m.claudeShowingContent {
+				m.claudeViewport.HalfViewUp()
+			}
+			return m, nil
+		case "pgdown":
+			if m.claudeShowingContent {
+				m.claudeViewport.HalfViewDown()
+			}
+			return m, nil
+		}
+	}
+
 	if Matches(msg, m.keys.ToggleFilter) {
 		// Toggle show all agents
 		m.showAll = !m.showAll

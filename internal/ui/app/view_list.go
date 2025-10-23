@@ -47,9 +47,11 @@ func (m *Model) renderTabContent(layout Layout) string {
 	switch m.listTabs.ActiveIndex {
 	case 1: // Project tab
 		return m.renderProjectTab()
+	case 2: // Claude tab
+		return m.renderClaudeTab()
 	case 3: // Usage tab
 		return m.renderUsageTab()
-	default: // Overview, Claude tabs
+	default: // Overview tab
 		return m.renderAgentTableContent(layout)
 	}
 }
@@ -135,12 +137,6 @@ func (m *Model) renderAgentTable(agents []domain.Agent, config TableConfig) stri
 	// Render the table
 	result, _ := tb.RenderTable(rows)
 	return result
-}
-
-// renderClaudeTab renders the Claude tab (reuses agent table)
-func (m *Model) renderClaudeTab() string {
-	layout := LayoutForModel(m)
-	return m.renderAgentTableContent(layout)
 }
 
 // renderAgentList is deprecated - use renderAgentTable instead
