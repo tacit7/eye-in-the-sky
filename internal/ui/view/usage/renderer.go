@@ -71,11 +71,11 @@ func RenderSessionUsage(summary services.UsageSummary, styles Styles, newTable f
 	table := newTable().
 		SetBorderStyle(0). // BorderSimple
 		SetHeaderStyle(styles.Primary()).
-		AddColumn("Agent", 10, 0, true). // AlignLeft
-		AddColumn("Usage %", 8, 1, false). // AlignRight
-		AddColumn("Tokens", 12, 1, false).
-		AddColumn("Cost USD", 10, 1, false).
-		AddColumn("Model", 12, 0, true)
+		AddColumn("Agent", 10, 0, true). // Left-aligned
+		AddColumn("Usage %", 8, 2, false). // Right-aligned
+		AddColumn("Tokens", 12, 2, false). // Right-aligned
+		AddColumn("Cost USD", 10, 2, false). // Right-aligned
+		AddColumn("Model", 12, 0, true) // Left-aligned
 
 	// Build rows
 	rows := make([][]string, 0, len(summary.Rows))
@@ -109,13 +109,13 @@ func RenderClaudeDailyUsage(summary services.UsageSummary, styles Styles, newTab
 		SetBorderStyle(1). // BorderBoxed
 		SetHeaderStyle(styles.Primary()).
 		SetAlternatingRowStyle(styles.AlternatingRowDark(), styles.AlternatingRowLight()).
-		AddColumn("Date", 15, 0, false). // Widened for weekday (Mon 2025-10-22)
-		AddColumn("Input", 14, 1, false).
-		AddColumn("Output", 14, 1, false).
-		AddColumn("CacheWr", 14, 1, false).
-		AddColumn("CacheRd", 14, 1, false).
-		AddColumn("Total Tokens", 16, 1, false).
-		AddColumn("Cost USD", 12, 1, false)
+		AddColumn("Date", 15, 0, false). // Left-aligned, widened for weekday (Mon 2025-10-22)
+		AddColumn("Input", 14, 2, false). // Right-aligned
+		AddColumn("Output", 14, 2, false). // Right-aligned
+		AddColumn("CacheWr", 14, 2, false). // Right-aligned
+		AddColumn("CacheRd", 14, 2, false). // Right-aligned
+		AddColumn("Total Tokens", 16, 2, false). // Right-aligned
+		AddColumn("Cost USD", 12, 2, false) // Right-aligned
 
 	// Build rows from service data (which has structured token fields)
 	rows := make([][]string, 0, len(summary.Rows))
@@ -152,12 +152,12 @@ func RenderClaudeMonthlyUsage(summary services.UsageSummary, styles Styles, newT
 		SetBorderStyle(1). // BorderBoxed
 		SetHeaderStyle(styles.Primary()).
 		SetAlternatingRowStyle(styles.AlternatingRowDark(), styles.AlternatingRowLight()).
-		AddColumn("Month", 12, 0, false).
-		AddColumn("Days", 12, 1, false).
-		AddColumn("Input Tokens", 16, 1, false).
-		AddColumn("Output Tokens", 16, 1, false).
-		AddColumn("Total Tokens", 16, 1, false).
-		AddColumn("Cost USD", 12, 1, false)
+		AddColumn("Month", 12, 0, false). // Left-aligned
+		AddColumn("Days", 12, 2, false). // Right-aligned
+		AddColumn("Input Tokens", 16, 2, false). // Right-aligned
+		AddColumn("Output Tokens", 16, 2, false). // Right-aligned
+		AddColumn("Total Tokens", 16, 2, false). // Right-aligned
+		AddColumn("Cost USD", 12, 2, false) // Right-aligned
 
 	// Build rows from service data (which has structured fields)
 	rows := make([][]string, 0, len(summary.Rows))
@@ -260,11 +260,11 @@ func RenderMonthlyUsage(summary services.UsageSummary, styles Styles, newTable f
 	table := newTable().
 		SetBorderStyle(0). // BorderSimple
 		SetHeaderStyle(styles.Primary()).
-		AddColumn("Timestamp", 20, 0, false). // AlignLeft
-		AddColumn("Usage %", 8, 1, false).    // AlignRight
-		AddColumn("Tokens Used", 12, 1, false).
-		AddColumn("Cost USD", 10, 1, false).
-		AddColumn("Model", 8, 0, true)
+		AddColumn("Timestamp", 20, 0, false). // Left-aligned
+		AddColumn("Usage %", 8, 2, false). // Right-aligned
+		AddColumn("Tokens Used", 12, 2, false). // Right-aligned
+		AddColumn("Cost USD", 10, 2, false). // Right-aligned
+		AddColumn("Model", 8, 0, true) // Left-aligned
 
 	// Build rows
 	rows := make([][]string, 0, len(summary.Rows))
