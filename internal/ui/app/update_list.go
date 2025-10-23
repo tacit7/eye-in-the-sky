@@ -11,6 +11,28 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Log all key presses for debugging
 	debugf("Key pressed: %s", msg.String())
 
+	// Set keybindings resolver context for list view tabs
+	if m.keybindResolver != nil {
+		var tabName string
+		if m.listTabs.ActiveIndex < len(m.listTabs.Titles) {
+			switch m.listTabs.ActiveIndex {
+			case 0:
+				tabName = "overview"
+			case 1:
+				tabName = "project"
+			case 2:
+				tabName = "claude"
+			case 3:
+				tabName = "usage"
+			case 4:
+				tabName = "config"
+			}
+		}
+		if tabName != "" {
+			m.keybindResolver.SetContext("list", tabName)
+		}
+	}
+
 	// Tab navigation
 	switch msg.String() {
 	case "tab", "right":
