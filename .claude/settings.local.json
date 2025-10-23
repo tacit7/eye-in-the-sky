@@ -37,7 +37,16 @@
       "Bash(task add:*)",
       "Bash(task 34 annotate:*)",
       "Bash(task 39 annotate:*)",
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "Bash(task 38 start:*)",
+      "Bash(go get:*)",
+      "Bash(go test:*)",
+      "Bash(task 40 annotate:*)",
+      "Bash(git log:*)",
+      "Bash(task 41 info:*)",
+      "Read(//Users/urielmaldonado/.claude/**)",
+      "Bash(task 45 start:*)",
+      "Bash(task 48 start:*)"
     ],
     "deny": [],
     "ask": [],
@@ -50,5 +59,6 @@
         }
       }
     }
-  }
+  },
+  "outputStyle": "default"
 }
