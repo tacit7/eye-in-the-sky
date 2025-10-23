@@ -119,6 +119,15 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.projectSelectedSection = 2 // Markdown files
 			m.projectMDFilesIndex = 0
 			return m, nil
+		case "n":
+			// Open New Ticket form
+			var projectName string
+			if m.projectInfo != nil {
+				projectName = m.projectInfo.RepoName
+			}
+			formSpec := modal.NewTicketFormSpec(projectName)
+			m.modalManager.OpenForm(formSpec)
+			return m, nil
 		case "j", "down":
 			// Navigate within section
 			switch m.projectSelectedSection {
