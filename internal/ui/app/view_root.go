@@ -14,6 +14,11 @@ func (m *Model) View() string {
 		return "Loading..."
 	}
 
+	// Render modal if active (highest priority)
+	if m.modalManager.IsActive() {
+		return m.renderModalOverlay()
+	}
+
 	// Render help overlay if shown
 	if m.showHelp {
 		return m.renderHelp()
@@ -203,4 +208,38 @@ func (m *Model) formatElapsedTime(elapsed time.Duration) string {
 	default:
 		return fmt.Sprintf("%dh ago", int(elapsed.Hours()))
 	}
+}
+
+// renderModalOverlay renders the modal on top of the current view
+func (m *Model) renderModalOverlay() string {
+	// Create modal overlay with semi-transparent background
+	modalWidth := m.width - 4
+	if modalWidth < 60 {
+		modalWidth = 60
+	}
+	modalHeight := m.height - 4
+	if modalHeight < 10 {
+		modalHeight = 10
+	}
+
+	// Get modal content
+	modalContent := m.modalManager.View()
+
+	// Create a centered box with the modal content
+	box := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(m.styles.Primary.GetForeground()).
+		Padding(1, 2).
+		Width(modalWidth).
+		MaxHeight(modalHeight)
+
+	centeredModal := lipgloss.Place(
+		m.width,
+		m.height,
+		lipgloss.Center,
+		lipgloss.Center,
+		box.Render(modalContent),
+	)
+
+	return centeredModal
 }

@@ -20,6 +20,18 @@ var viewHandlers = map[ViewType]ViewHandler{
 
 // Update handles messages and updates the model
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Modal gate: if modal is active, route all messages through modal
+	if m.modalManager.IsActive() {
+		switch msg := msg.(type) {
+		case tea.KeyMsg, tea.WindowSizeMsg:
+			cmd := m.modalManager.Update(msg)
+			return m, cmd
+		default:
+			// Other messages pass through normally
+			return m, nil
+		}
+	}
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		return m.handleKeyPress(msg)

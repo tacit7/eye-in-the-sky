@@ -20,6 +20,8 @@ import (
 	"github.com/tacit7/eye-in-the-sky/internal/ccusage/parser"
 	"github.com/tacit7/eye-in-the-sky/internal/domain"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/components"
+	"github.com/tacit7/eye-in-the-sky/internal/ui/keybindings"
+	"github.com/tacit7/eye-in-the-sky/internal/ui/modal"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/services"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/util"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/viewmodel"
@@ -213,6 +215,10 @@ type Model struct {
 	claudeViewport      viewport.Model
 	claudeValidStatus   string
 	claudeShowingContent bool
+
+	// Modal system
+	modalManager *modal.Modal
+	keybindResolver *keybindings.Resolver
 }
 
 // Type aliases for backward compatibility during migration
@@ -355,6 +361,18 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 	// Create usage service with system clock
 	usageSvc := services.NewUsageService(services.SystemClock{})
 
+	// Load keybindings and initialize resolver
+	var keybindResolver *keybindings.Resolver
+	resolver, err := keybindings.LoadKeybindings()
+	if err != nil {
+		log.Printf("Warning: Failed to load keybindings: %v, using defaults\n", err)
+		resolver = &keybindings.Resolver{}
+	}
+	keybindResolver = resolver
+
+	// Initialize modal manager
+	modalManager := modal.New()
+
 	m := &Model{
 		data:          NewDataClient(db),
 		ccusageDB:     ccusageDB,
@@ -380,6 +398,8 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 		usageDirty:     true, // Start dirty to force initial build
 		claudeFiles:    []ClaudeFile{},
 		claudeShowingContent: false,
+		modalManager: modalManager,
+		keybindResolver: keybindResolver,
 	}
 
 	// Initialize view renderers map
