@@ -17,11 +17,11 @@ func repeatPlaceholders(count int) string {
 // CreateAgent inserts a new agent
 func (db *DB) CreateAgent(agent *Agent) error {
 	query := `
-		INSERT INTO agents (id, status, source, git_worktree_path, feature_description, current_task, last_activity_at, window_id, terminal_application, project_name, parent_agent_id)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO agents (id, status, source, git_worktree_path, feature_description, current_task, last_activity_at, window_id, terminal_application, project_name, session_id, parent_agent_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	_, err := db.conn.Exec(query, agent.ID, agent.Status, agent.Source, agent.GitWorktreePath,
-		agent.FeatureDescription, agent.CurrentTask, agent.LastActivityAt, agent.WindowID, agent.TerminalApplication, agent.ProjectName, agent.ParentAgentID)
+		agent.FeatureDescription, agent.CurrentTask, agent.LastActivityAt, agent.WindowID, agent.TerminalApplication, agent.ProjectName, agent.SessionID, agent.ParentAgentID)
 	if err != nil {
 		return fmt.Errorf("failed to create agent: %w", err)
 	}
@@ -45,6 +45,27 @@ func (db *DB) GetAgent(id string) (*Agent, error) {
 			return nil, NewAgentError(id, "get", ErrAgentNotFound)
 		}
 		return nil, NewAgentError(id, "get", err)
+	}
+	return &agent, nil
+}
+
+// GetAgentBySessionID retrieves the most recent agent for a session ID
+func (db *DB) GetAgentBySessionID(sessionID string) (*Agent, error) {
+	query := `
+		SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, session_id, persona_id, parent_agent_id
+		FROM agents WHERE session_id = ?
+		ORDER BY created_at DESC
+		LIMIT 1
+	`
+	var agent Agent
+	row := db.conn.QueryRow(query, sessionID)
+	err := row.Scan(&agent.ID, &agent.Status, &agent.Source, &agent.Description, &agent.CreatedAt, &agent.UpdatedAt,
+		&agent.GitWorktreePath, &agent.FeatureDescription, &agent.CurrentTask, &agent.LastActivityAt, &agent.WindowID, &agent.ProjectName, &agent.SessionID, &agent.PersonaID, &agent.ParentAgentID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil // Return nil without error if not found
+		}
+		return nil, fmt.Errorf("failed to get agent by session ID: %w", err)
 	}
 	return &agent, nil
 }
