@@ -171,3 +171,49 @@ func createDefaultKeybindings(path string) error {
 	log.Printf("Created default keybindings at %s\n", path)
 	return nil
 }
+
+// LoadKeybindingsYAML reads and returns the keybindings YAML file content as a string
+func LoadKeybindingsYAML() (string, error) {
+	path := GetKeybindingsPath()
+
+	// Check if file exists; if not, create defaults
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		if err := createDefaultKeybindings(path); err != nil {
+			return "", fmt.Errorf("failed to create default keybindings: %w", err)
+		}
+	}
+
+	// Read file content
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("failed to read keybindings file: %w", err)
+	}
+
+	return string(data), nil
+}
+
+// SaveKeybindingsYAML atomically writes keybindings YAML content to file
+func SaveKeybindingsYAML(content string) error {
+	path := GetKeybindingsPath()
+	dir := filepath.Dir(path)
+
+	// Ensure directory exists
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
+	}
+
+	// Write to temporary file first (atomic save)
+	tmpPath := path + ".tmp"
+	if err := os.WriteFile(tmpPath, []byte(content), 0644); err != nil {
+		return fmt.Errorf("failed to write temporary file: %w", err)
+	}
+
+	// Atomically rename temp file to actual file
+	if err := os.Rename(tmpPath, path); err != nil {
+		os.Remove(tmpPath) // Clean up temp file on error
+		return fmt.Errorf("failed to save keybindings: %w", err)
+	}
+
+	log.Printf("Saved keybindings to %s\n", path)
+	return nil
+}

@@ -261,6 +261,33 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case keybindingsSavedMsg:
+		// Handle keybindings save result
+		if msg.err != nil {
+			m.err = msg.err
+			m.statusMsg = fmt.Sprintf("Failed to save keybindings: %v", msg.err)
+		} else {
+			m.keybindingsYAML = m.keybindingsEditBuf
+			m.keybindingsEditing = false
+			m.keybindingsEditBuf = ""
+			m.keybindingsModified = false
+			m.statusMsg = "Keybindings saved successfully"
+		}
+		return m, nil
+
+	case keybindingsReloadedMsg:
+		// Handle keybindings reload result
+		if msg.err != nil {
+			m.err = msg.err
+			m.statusMsg = fmt.Sprintf("Failed to reload keybindings: %v", msg.err)
+		} else {
+			m.keybindingsYAML = msg.content
+			m.keybindingsEditBuf = ""
+			m.keybindingsModified = false
+			m.statusMsg = "Keybindings reloaded from file"
+		}
+		return m, nil
+
 	case modal.FormSubmitted:
 		// Handle form submission from modal
 		return m.handleFormSubmission(msg)

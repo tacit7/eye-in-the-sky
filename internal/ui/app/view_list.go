@@ -51,6 +51,8 @@ func (m *Model) renderTabContent(layout Layout) string {
 		return m.renderClaudeTab()
 	case 3: // Usage tab
 		return m.renderUsageTab()
+	case 4: // Keybindings/Config tab
+		return m.renderConfigTab()
 	default: // Overview tab
 		return m.renderAgentTableContent(layout)
 	}
@@ -143,4 +145,38 @@ func (m *Model) renderAgentTable(agents []domain.Agent, config TableConfig) stri
 func (m *Model) renderAgentList() string {
 	layout := LayoutForModel(m)
 	return m.renderAgentTableContent(layout)
+}
+
+// renderConfigTab renders the keybindings configuration tab
+func (m *Model) renderConfigTab() string {
+	if m.keybindingsYAML == "" {
+		return m.styles.Subtle.Render("  Loading keybindings...")
+	}
+
+	var b strings.Builder
+
+	// Title and mode indicator
+	title := "⚙️  Keybindings Configuration"
+	if m.keybindingsEditing {
+		title += " [EDIT MODE]"
+	}
+	b.WriteString(m.styles.SectionTitle.Render(title))
+	b.WriteString("\n")
+
+	// Display content or edit buffer
+	if m.keybindingsEditing {
+		// In edit mode, show the buffer
+		b.WriteString(m.styles.Subtle.Render("Editing keybindings. Press Ctrl+S to save, Esc to cancel.\n"))
+		b.WriteString(m.keybindingsEditBuf)
+		if m.keybindingsModified {
+			b.WriteString("\n")
+			b.WriteString(m.styles.Warning.Render("(modified)"))
+		}
+	} else {
+		// In view mode, show with scrolling
+		b.WriteString(m.styles.Subtle.Render("Press 'e' to edit, 'r' to reload, j/k to scroll.\n"))
+		b.WriteString(m.keybindingsYAML)
+	}
+
+	return b.String()
 }

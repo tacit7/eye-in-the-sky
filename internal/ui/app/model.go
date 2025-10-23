@@ -219,6 +219,13 @@ type Model struct {
 	// Modal system
 	modalManager *modal.Modal
 	keybindResolver *keybindings.Resolver
+
+	// Config tab state
+	keybindingsYAML     string // Current YAML content
+	keybindingsEditing  bool   // Is user editing?
+	keybindingsModified bool   // Has content changed?
+	keybindingsEditBuf  string // Edit buffer for changes
+	keybindingsIndex    int    // Scroll position
 }
 
 // Type aliases for backward compatibility during migration
@@ -336,7 +343,7 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 
 	// Create tabs for overview (agent list)
 	listTabs := components.NewTabsModel(
-		[]string{"[O]verview", "[P]roject", "[C]laude", "[T]oken Usage"},
+		[]string{"[O]verview", "[P]roject", "[C]laude", "[T]oken Usage", "[K]eybindings"},
 		theme.Colors.Active,
 		theme.Colors.Text,
 	)
@@ -416,6 +423,11 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 		// Load markdown files and CLAUDE.md
 		m.projectMDFiles = LoadProjectMarkdownFiles(m.projectInfo.GitRootPath)
 		m.claudeMDContent = LoadClaudeMDFile(m.projectInfo.GitRootPath)
+	}
+
+	// Load keybindings YAML content
+	if keybindingsContent, err := keybindings.LoadKeybindingsYAML(); err == nil {
+		m.keybindingsYAML = keybindingsContent
 	}
 
 	// Initial load will happen in Init()

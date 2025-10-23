@@ -1,6 +1,8 @@
 package app
 
 import (
+	"strings"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/modal"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/util"
@@ -236,6 +238,101 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, cmd
 			}
 			return m, nil
+		}
+	}
+
+	// Config tab navigation and operations (only when Config tab is active)
+	if m.listTabs.ActiveIndex == 4 {
+		switch msg.String() {
+		case "e", "E":
+			// Toggle edit mode
+			if !m.keybindingsEditing {
+				// Enter edit mode
+				m.keybindingsEditing = true
+				m.keybindingsEditBuf = m.keybindingsYAML
+				m.keybindingsModified = false
+				m.statusMsg = "Edit mode on. Press Ctrl+S to save, Esc to cancel."
+			} else {
+				// Exit edit mode without saving
+				m.keybindingsEditing = false
+				m.keybindingsEditBuf = ""
+				m.keybindingsModified = false
+				m.statusMsg = "Edit mode cancelled."
+			}
+			return m, nil
+
+		case "ctrl+s":
+			// Save changes
+			if m.keybindingsEditing && m.keybindingsModified {
+				return m, m.saveKeybindingsCmd(m.keybindingsEditBuf)
+			}
+			m.statusMsg = "No changes to save."
+			return m, nil
+
+		case "esc":
+			// Cancel edit mode
+			if m.keybindingsEditing {
+				m.keybindingsEditing = false
+				m.keybindingsEditBuf = ""
+				m.keybindingsModified = false
+				m.statusMsg = "Edit mode cancelled."
+				return m, nil
+			}
+			return m, nil
+
+		case "r", "R":
+			// Reload keybindings from file
+			if !m.keybindingsEditing {
+				return m, m.reloadKeybindingsCmd()
+			}
+			m.statusMsg = "Cannot reload while editing. Save or cancel first."
+			return m, nil
+
+		case "j", "down":
+			// Scroll down when not in edit mode
+			if !m.keybindingsEditing && m.keybindingsIndex < len(strings.Split(m.keybindingsYAML, "\n"))-1 {
+				m.keybindingsIndex++
+				return m, nil
+			}
+			return m, nil
+
+		case "k", "up":
+			// Scroll up when not in edit mode
+			if !m.keybindingsEditing && m.keybindingsIndex > 0 {
+				m.keybindingsIndex--
+				return m, nil
+			}
+			return m, nil
+
+		default:
+			// In edit mode, handle text input
+			if m.keybindingsEditing {
+				// Handle character input
+				if len(msg.String()) == 1 && msg.Runes[0] >= 32 && msg.Runes[0] <= 126 {
+					// Printable character
+					m.keybindingsEditBuf += msg.String()
+					m.keybindingsModified = true
+					return m, nil
+				}
+
+				// Handle special keys
+				switch msg.String() {
+				case "enter":
+					m.keybindingsEditBuf += "\n"
+					m.keybindingsModified = true
+					return m, nil
+				case "backspace":
+					if len(m.keybindingsEditBuf) > 0 {
+						m.keybindingsEditBuf = m.keybindingsEditBuf[:len(m.keybindingsEditBuf)-1]
+						m.keybindingsModified = true
+					}
+					return m, nil
+				case "tab":
+					m.keybindingsEditBuf += "\t"
+					m.keybindingsModified = true
+					return m, nil
+				}
+			}
 		}
 	}
 
