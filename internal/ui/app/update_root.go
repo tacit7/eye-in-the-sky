@@ -293,9 +293,76 @@ func (m *Model) handleGlobalKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if Matches(msg, m.keys.HelpToggle) {
-		m.showHelp = !m.showHelp
+		m.openContextualHelp()
 		return m, nil
 	}
 
 	return m, nil
+}
+
+// openContextualHelp opens the help modal with keybindings for the current context
+func (m *Model) openContextualHelp() {
+	if m.keybindResolver == nil {
+		return
+	}
+
+	// Determine the current scope based on view and tab
+	var scope string
+
+	if m.currentView == ViewList {
+		// Determine which list tab is active
+		if m.listTabs.ActiveIndex < len(m.listTabs.Titles) {
+			tabName := m.listTabs.Titles[m.listTabs.ActiveIndex]
+			// Map tab names to scope names
+			switch {
+			case tabName == "[O]verview" || tabName == "Overview":
+				scope = "list_overview"
+			case tabName == "[P]roject" || tabName == "Project":
+				scope = "list_project"
+			case tabName == "[C]laude" || tabName == "Claude":
+				scope = "list_claude"
+			case tabName == "[T]oken Usage" || tabName == "Token Usage":
+				scope = "list_usage"
+			default:
+				scope = "list_overview"
+			}
+		}
+	} else if m.currentView == ViewDetail {
+		// Determine which detail tab is active
+		if m.tabs.ActiveIndex < len(m.tabs.Titles) {
+			tabName := m.tabs.Titles[m.tabs.ActiveIndex]
+			// Map tab names to scope names
+			switch {
+			case tabName == "[A]gent View" || tabName == "Agent View":
+				scope = "detail_overview"
+			case tabName == "[C]ommits" || tabName == "Commits":
+				scope = "detail_commits"
+			case tabName == "[L]ogs" || tabName == "Logs":
+				scope = "detail_logs"
+			case tabName == "[N]otes" || tabName == "Notes":
+				scope = "detail_notes"
+			case tabName == "[A]ctions" || tabName == "Actions":
+				scope = "detail_actions"
+			case tabName == "[T]asks" || tabName == "Tasks":
+				scope = "detail_tasks"
+			default:
+				scope = "detail_overview"
+			}
+		}
+	} else {
+		scope = "global"
+	}
+
+	// Get keybindings for the scope and open help modal
+	bindings := m.keybindResolver.GetScopeKeybindings(scope)
+
+	// Also include global keybindings
+	globalBindings := m.keybindResolver.GetScopeKeybindings("global")
+	for action, keys := range globalBindings {
+		if _, exists := bindings[action]; !exists {
+			bindings[action] = keys
+		}
+	}
+
+	m.modalManager.OpenHelpForScope(scope, bindings)
 }
