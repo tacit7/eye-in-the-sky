@@ -6,9 +6,15 @@ import (
 
 // handleDetailKeys handles keys in detail view
 func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Use keybindings resolver for current tab context
+	if m.keybindResolver != nil {
+		currentTab := getCurrentDetailTabName(m.tabs.ActiveIndex)
+		m.keybindResolver.SetContext("detail", currentTab)
+	}
+
 	// In detail view, q/esc go back to list instead of quitting
 	if Matches(msg, m.keys.Back) || Matches(msg, m.keys.Quit) {
-		// Go back to list view
+		// Go back to list view, preserving selection
 		m.currentView = ViewList
 		m.detailOffset = 0
 		return m, nil
@@ -250,4 +256,28 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+// getCurrentDetailTabName returns the keybindings scope name for the current detail tab
+func getCurrentDetailTabName(tabIndex int) string {
+	switch tabIndex {
+	case 0:
+		return "back"
+	case 1:
+		return "overview"
+	case 2:
+		return "commits"
+	case 3:
+		return "logs"
+	case 4:
+		return "notes"
+	case 5:
+		return "actions"
+	case 6:
+		return "tasks"
+	case 7:
+		return "projects"
+	default:
+		return "overview"
+	}
 }
