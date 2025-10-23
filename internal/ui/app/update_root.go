@@ -204,6 +204,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.claudeFiles = msg.files
+		// Clamp selection to valid range after refresh
+		if m.claudeSelectedIndex >= len(m.claudeFiles) && len(m.claudeFiles) > 0 {
+			m.claudeSelectedIndex = len(m.claudeFiles) - 1
+		}
 		m.statusMsg = fmt.Sprintf("Loaded %d Claude config files", len(msg.files))
 		return m, nil
 

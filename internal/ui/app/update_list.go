@@ -149,18 +149,24 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			// Navigate file list down
 			if !m.claudeShowingContent && m.claudeSelectedIndex < len(m.claudeFiles)-1 {
 				m.claudeSelectedIndex++
+				return m, nil
 			} else if m.claudeShowingContent {
 				// Scroll content viewport down
-				m.claudeViewport.LineDown(1)
+				var cmd tea.Cmd
+				m.claudeViewport, cmd = m.claudeViewport.Update(msg)
+				return m, cmd
 			}
 			return m, nil
 		case "k", "up":
 			// Navigate file list up
 			if !m.claudeShowingContent && m.claudeSelectedIndex > 0 {
 				m.claudeSelectedIndex--
+				return m, nil
 			} else if m.claudeShowingContent {
 				// Scroll content viewport up
-				m.claudeViewport.LineUp(1)
+				var cmd tea.Cmd
+				m.claudeViewport, cmd = m.claudeViewport.Update(msg)
+				return m, cmd
 			}
 			return m, nil
 		case "enter":
@@ -203,12 +209,16 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "pgup":
 			if m.claudeShowingContent {
-				m.claudeViewport.HalfViewUp()
+				var cmd tea.Cmd
+				m.claudeViewport, cmd = m.claudeViewport.Update(msg)
+				return m, cmd
 			}
 			return m, nil
 		case "pgdown":
 			if m.claudeShowingContent {
-				m.claudeViewport.HalfViewDown()
+				var cmd tea.Cmd
+				m.claudeViewport, cmd = m.claudeViewport.Update(msg)
+				return m, cmd
 			}
 			return m, nil
 		}
