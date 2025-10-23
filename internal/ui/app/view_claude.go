@@ -14,47 +14,42 @@ func (m *Model) renderClaudeTab() string {
 	}
 
 	// Calculate dimensions for two-pane layout
-	leftPaneWidth := m.width / 3
-	if leftPaneWidth < 30 {
-		leftPaneWidth = 30
+	// Use simple division, no boxes (parent handles that)
+	leftPaneWidth := (m.width - 6) / 3
+	if leftPaneWidth < 25 {
+		leftPaneWidth = 25
 	}
-	rightPaneWidth := m.width - leftPaneWidth - 6 // Account for borders and spacing
-	contentHeight := m.height - 8 // Account for header, tabs, footer
-
-	if contentHeight < 10 {
-		contentHeight = 10
-	}
+	rightPaneWidth := m.width - leftPaneWidth - 10
 
 	// Render left pane (file list)
-	leftPane := m.renderClaudeFileList(contentHeight)
-	leftBox := m.styles.ContentBox.
-		Width(leftPaneWidth).
-		Height(contentHeight).
-		BorderForeground(lipgloss.Color(m.theme.Colors.Border)).
-		Render(leftPane)
+	leftPane := m.renderClaudeFileList()
 
 	// Render right pane (content viewer or instructions)
 	rightPane := m.renderClaudeContentViewer()
-	rightBox := m.styles.ContentBox.
-		Width(rightPaneWidth).
-		Height(contentHeight).
-		BorderForeground(lipgloss.Color(m.theme.Colors.Border)).
-		Render(rightPane)
 
-	// Compose with separator
+	// Style the panes without borders
+	leftStyle := lipgloss.NewStyle().
+		Width(leftPaneWidth).
+		Padding(0, 1)
+
+	rightStyle := lipgloss.NewStyle().
+		Width(rightPaneWidth).
+		Padding(0, 1)
+
+	// Separator
 	separator := lipgloss.NewStyle().
 		Foreground(lipgloss.Color(m.theme.Colors.Border)).
-		Render("│")
+		Render(" │ ")
 
 	return lipgloss.JoinHorizontal(lipgloss.Top,
-		leftBox,
+		leftStyle.Render(leftPane),
 		separator,
-		rightBox,
+		rightStyle.Render(rightPane),
 	)
 }
 
 // renderClaudeFileList renders the file list on the left pane
-func (m *Model) renderClaudeFileList(height int) string {
+func (m *Model) renderClaudeFileList() string {
 	var lines []string
 
 	// Title
@@ -86,11 +81,6 @@ func (m *Model) renderClaudeFileList(height int) string {
 		}
 
 		lines = append(lines, line)
-	}
-
-	// Pad to fill height
-	for len(lines) < height-2 {
-		lines = append(lines, "")
 	}
 
 	return strings.Join(lines, "\n")
