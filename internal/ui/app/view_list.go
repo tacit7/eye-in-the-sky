@@ -165,7 +165,7 @@ func (m *Model) renderConfigTab() string {
 
 	// Display content or edit buffer
 	if m.keybindingsEditing {
-		// In edit mode, show the buffer
+		// In edit mode, show the buffer with instructions
 		b.WriteString(m.styles.Subtle.Render("Editing keybindings. Press Ctrl+S to save, Esc to cancel.\n"))
 		b.WriteString(m.keybindingsEditBuf)
 		if m.keybindingsModified {
@@ -173,9 +173,25 @@ func (m *Model) renderConfigTab() string {
 			b.WriteString(m.styles.Warning.Render("(modified)"))
 		}
 	} else {
-		// In view mode, show with scrolling
-		b.WriteString(m.styles.Subtle.Render("Press 'e' to edit, 'r' to reload, j/k to scroll.\n"))
-		b.WriteString(m.keybindingsYAML)
+		// In view mode, show with viewport scrolling
+		b.WriteString(m.styles.Subtle.Render("Press 'e' to edit, 'r' to reload, j/k or ↑↓ to scroll.\n"))
+
+		// Get viewport view
+		view := m.keybindingsViewport.View()
+
+		// Top scroll indicator
+		if m.keybindingsViewport.AtTop() {
+			b.WriteString("\n")
+		} else {
+			b.WriteString(m.styles.Subtle.Render("▲") + "\n")
+		}
+
+		b.WriteString(view)
+
+		// Bottom scroll indicator
+		if !m.keybindingsViewport.AtBottom() {
+			b.WriteString("\n" + m.styles.Subtle.Render("▼"))
+		}
 	}
 
 	return b.String()

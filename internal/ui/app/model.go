@@ -225,7 +225,7 @@ type Model struct {
 	keybindingsEditing  bool   // Is user editing?
 	keybindingsModified bool   // Has content changed?
 	keybindingsEditBuf  string // Edit buffer for changes
-	keybindingsIndex    int    // Scroll position
+	keybindingsViewport viewport.Model
 }
 
 // Type aliases for backward compatibility during migration
@@ -365,6 +365,9 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 	// Create viewport for Claude tab (will be resized on window size updates)
 	claudeViewport := viewport.New(80, 20)
 
+	// Create viewport for Config tab (will be resized on window size updates)
+	keybindingsViewport := viewport.New(80, 20)
+
 	// Create usage service with system clock
 	usageSvc := services.NewUsageService(services.SystemClock{})
 
@@ -396,6 +399,7 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 		listTabs:       listTabs,
 		usageViewport:  usageViewport,
 		claudeViewport: claudeViewport,
+		keybindingsViewport: keybindingsViewport,
 		currentView:    ViewList,
 		showAll:        config.ShowAllAgents,
 		agents:         []Agent{},
@@ -428,6 +432,7 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 	// Load keybindings YAML content
 	if keybindingsContent, err := keybindings.LoadKeybindingsYAML(); err == nil {
 		m.keybindingsYAML = keybindingsContent
+		m.keybindingsViewport.SetContent(keybindingsContent)
 	}
 
 	// Initial load will happen in Init()

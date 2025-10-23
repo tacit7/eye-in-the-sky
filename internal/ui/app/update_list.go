@@ -1,8 +1,6 @@
 package app
 
 import (
-	"strings"
-
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/modal"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/util"
@@ -290,17 +288,37 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 		case "j", "down":
 			// Scroll down when not in edit mode
-			if !m.keybindingsEditing && m.keybindingsIndex < len(strings.Split(m.keybindingsYAML, "\n"))-1 {
-				m.keybindingsIndex++
-				return m, nil
+			if !m.keybindingsEditing {
+				var cmd tea.Cmd
+				m.keybindingsViewport, cmd = m.keybindingsViewport.Update(msg)
+				return m, cmd
 			}
 			return m, nil
 
 		case "k", "up":
 			// Scroll up when not in edit mode
-			if !m.keybindingsEditing && m.keybindingsIndex > 0 {
-				m.keybindingsIndex--
-				return m, nil
+			if !m.keybindingsEditing {
+				var cmd tea.Cmd
+				m.keybindingsViewport, cmd = m.keybindingsViewport.Update(msg)
+				return m, cmd
+			}
+			return m, nil
+
+		case "pgup":
+			// Page up when not in edit mode
+			if !m.keybindingsEditing {
+				var cmd tea.Cmd
+				m.keybindingsViewport, cmd = m.keybindingsViewport.Update(msg)
+				return m, cmd
+			}
+			return m, nil
+
+		case "pgdown":
+			// Page down when not in edit mode
+			if !m.keybindingsEditing {
+				var cmd tea.Cmd
+				m.keybindingsViewport, cmd = m.keybindingsViewport.Update(msg)
+				return m, cmd
 			}
 			return m, nil
 

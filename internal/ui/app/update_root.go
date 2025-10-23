@@ -95,6 +95,20 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
         m.claudeViewport.Width = rightPaneWidth
         m.claudeViewport.Height = available
     }
+
+    // Update Config tab viewport dimensions dynamically
+    if m.currentView == ViewList && m.listTabs.ActiveIndex == 4 {
+        const headerHeight = 2  // Header + tabs
+        const footerHeight = 1  // Footer hints
+
+        available := msg.Height - headerHeight - footerHeight - 1  // -1 for breathing room
+        if available < 10 {
+            available = 10
+        }
+
+        m.keybindingsViewport.Width = msg.Width - 4
+        m.keybindingsViewport.Height = available
+    }
 		return m, nil
 
 	case tickMsg:
@@ -268,6 +282,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusMsg = fmt.Sprintf("Failed to save keybindings: %v", msg.err)
 		} else {
 			m.keybindingsYAML = m.keybindingsEditBuf
+			m.keybindingsViewport.SetContent(m.keybindingsEditBuf)
 			m.keybindingsEditing = false
 			m.keybindingsEditBuf = ""
 			m.keybindingsModified = false
@@ -282,6 +297,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusMsg = fmt.Sprintf("Failed to reload keybindings: %v", msg.err)
 		} else {
 			m.keybindingsYAML = msg.content
+			m.keybindingsViewport.SetContent(msg.content)
+			m.keybindingsViewport.GotoTop()
 			m.keybindingsEditBuf = ""
 			m.keybindingsModified = false
 			m.statusMsg = "Keybindings reloaded from file"
