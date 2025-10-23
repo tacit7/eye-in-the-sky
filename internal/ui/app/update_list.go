@@ -30,11 +30,13 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "t", "T":
 		m.listTabs.Set(3) // Usage
 		m.statusMsg = "Switched to Usage tab"
-		return m, nil
+		// Trigger usage content refresh
+		return m, func() tea.Msg { return RefreshUsageMsg{} }
 	case "u", "U":
 		m.listTabs.Set(3) // Usage (support both u and U for backward compatibility)
 		m.statusMsg = "Switched to Usage tab"
-		return m, nil
+		// Trigger usage content refresh
+		return m, func() tea.Msg { return RefreshUsageMsg{} }
 	case "i", "I":
 		// Initialize CCUsage database (only in Usage tab when empty)
 		if m.listTabs.ActiveIndex == 3 && m.ccusageDB != nil && m.ccusageEntryCount == 0 && !m.ccusageSyncing {
@@ -77,6 +79,24 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, loadAgentDetailsCmd(m.data, m.selectedAgent.ID)
 		}
 		return m, nil
+	}
+
+	// Usage tab scrolling (only when Usage tab is active)
+	if m.listTabs.ActiveIndex == 3 {
+		switch msg.String() {
+		case "up", "k":
+			m.usageViewport.LineUp(1)
+			return m, nil
+		case "down", "j":
+			m.usageViewport.LineDown(1)
+			return m, nil
+		case "pgup":
+			m.usageViewport.HalfViewUp()
+			return m, nil
+		case "pgdown":
+			m.usageViewport.HalfViewDown()
+			return m, nil
+		}
 	}
 
 	// Project tab navigation and scrolling (only when Project tab is active)

@@ -38,9 +38,27 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-		m.help.Width = msg.Width
+    m.width = msg.Width
+    m.height = msg.Height
+    m.help.Width = msg.Width
+
+    // Update usage viewport dimensions dynamically
+    if m.currentView == ViewList && m.listTabs.ActiveIndex == 3 {
+        const headerHeight = 2  // Header + tabs
+        const footerHeight = 1  // Footer hints
+
+        available := msg.Height - headerHeight - footerHeight - 1  // -1 for breathing room
+        if available < 10 {
+            available = 10
+        }
+
+        m.usageViewport.Width = msg.Width - 4
+        m.usageViewport.Height = available
+
+        debugf("Viewport: %dx%d | Terminal: %dx%d",
+            m.usageViewport.Width, m.usageViewport.Height,
+            msg.Width, msg.Height)
+    }
 		return m, nil
 
 	case tickMsg:
@@ -55,14 +73,43 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if err := m.loadCCUsageData(); err != nil {
 				// Log but don't fail
 				log.Printf("Warning: Failed to reload ccusage data: %v\n", err)
+			} else if m.currentView == ViewList && m.listTabs.ActiveIndex == 3 {
+				// Trigger usage refresh if usage tab is active
+				cmds = append(cmds, func() tea.Msg { return RefreshUsageMsg{} })
 			}
 		}
 
 		return m, tea.Batch(cmds...)
 
 	case initCCUsageMsg:
-		// Sync complete, data reloaded
-		return m, m.tickCmd()
+		// Sync complete, data reloaded - trigger usage refresh
+		return m, tea.Batch(
+			m.tickCmd(),
+			func() tea.Msg { return RefreshUsageMsg{} },
+		)
+
+	case RefreshUsageMsg:
+		// Resize viewport first (before setting content for correct scroll bounds)
+		const headerHeight = 2
+		const footerHeight = 1
+		available := m.height - headerHeight - footerHeight - 1
+		if available < 10 {
+			available = 10
+		}
+		m.usageViewport.Width = m.width - 4
+		m.usageViewport.Height = available
+
+		// Refresh usage tab content
+		summary := m.buildUsageSummary()
+		content := m.renderUsageContent(summary)
+		m.usageViewport.SetContent(content)
+		m.cachedUsageRender = content
+		m.usageDirty = false
+
+		debugf("RefreshUsage: Viewport=%dx%d, Content length=%d",
+			m.usageViewport.Width, m.usageViewport.Height, len(content))
+
+		return m, nil
 
 	case cmdResult:
 		// Handle command execution results

@@ -20,7 +20,9 @@ import (
 	"github.com/tacit7/eye-in-the-sky/internal/ccusage/parser"
 	"github.com/tacit7/eye-in-the-sky/internal/domain"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/components"
+	"github.com/tacit7/eye-in-the-sky/internal/ui/services"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/util"
+	"github.com/tacit7/eye-in-the-sky/internal/ui/viewmodel"
 )
 
 // ViewType represents the current view state
@@ -195,6 +197,22 @@ type Model struct {
 
 	// Usage view viewport
 	usageViewport viewport.Model
+
+	// Usage service and caching
+	usageSvc           *services.UsageService
+	cachedUsageVM      *viewmodel.UsageViewModel
+	cachedUsageRender  string
+	usageDirty         bool
+	widthUnchanged     bool
+	lastRenderWidth    int
+
+	// Claude tab state
+	claudeFiles         []ClaudeFile
+	claudeSelectedIndex int
+	claudeContent       string
+	claudeViewport      viewport.Model
+	claudeValidStatus   string
+	claudeShowingContent bool
 }
 
 // Type aliases for backward compatibility during migration
@@ -220,6 +238,14 @@ type ProjectFile struct {
 	Name    string // Just the filename
 	Path    string // Full path relative to project root
 	Content string // File contents
+}
+
+// ClaudeFile represents a config file in ~/.claude
+type ClaudeFile struct {
+	Name    string // Filename (e.g., "settings.json")
+	Path    string // Full path
+	IsDir   bool   // True if it's a directory
+	ModTime time.Time
 }
 
 // TaskAnnotation is kept local as it's referenced by domain.Task
@@ -323,6 +349,9 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 	// Create viewport for usage tab (will be resized on window size updates)
 	usageViewport := viewport.New(80, 20)
 
+	// Create usage service with system clock
+	usageSvc := services.NewUsageService(services.SystemClock{})
+
 	m := &Model{
 		data:          NewDataClient(db),
 		ccusageDB:     ccusageDB,
@@ -343,6 +372,8 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 		agents:        []Agent{},
 		ccusageSyncing: false,
 		lastClickRow:  -1, // Initialize to -1 so first click doesn't trigger double-click
+		usageSvc:      usageSvc,
+		usageDirty:    true, // Start dirty to force initial build
 	}
 
 	// Initialize view renderers map
@@ -425,6 +456,9 @@ type tickMsg time.Time
 // initCCUsageMsg triggers CCUsage database initialization
 type initCCUsageMsg struct{}
 
+// RefreshUsageMsg triggers a usage tab content refresh
+type RefreshUsageMsg struct{}
+
 // loadAgents loads agents from database
 func (m *Model) loadAgents() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -459,6 +493,7 @@ func (m *Model) loadAgents() error {
 		return nil
 	}
 
+	m.usageDirty = true // Mark cache dirty after agent load
 	return nil
 }
 
@@ -664,6 +699,7 @@ func (m *Model) loadCCUsageData() error {
 	m.ccusageCosts = costs
 
 	m.lastCCUsageSync = time.Now()
+	m.usageDirty = true // Mark cache dirty after data load
 	return nil
 }
 
