@@ -109,7 +109,7 @@ func RenderClaudeDailyUsage(summary services.UsageSummary, styles Styles, newTab
 		SetBorderStyle(1). // BorderBoxed
 		SetHeaderStyle(styles.Primary()).
 		SetAlternatingRowStyle(styles.AlternatingRowDark(), styles.AlternatingRowLight()).
-		AddColumn("Date", 12, 0, false).
+		AddColumn("Date", 15, 0, false). // Widened for weekday (Mon 2025-10-22)
 		AddColumn("Input", 14, 1, false).
 		AddColumn("Output", 14, 1, false).
 		AddColumn("CacheWr", 14, 1, false).

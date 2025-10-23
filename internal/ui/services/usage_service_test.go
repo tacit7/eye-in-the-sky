@@ -220,10 +220,10 @@ func TestUsageService_Build_DailyCC(t *testing.T) {
 		t.Fatalf("Expected 2 daily rows (aggregated), got %d", len(summary.DailyCC.Rows))
 	}
 
-	// First row should be most recent date (2025-10-22)
+	// First row should be most recent date (2025-10-22 is a Wednesday)
 	row1 := summary.DailyCC.Rows[0]
-	if row1.Timestamp != "2025-10-22" {
-		t.Errorf("Expected first row date = 2025-10-22, got %s", row1.Timestamp)
+	if row1.Timestamp != "Wed 2025-10-22" {
+		t.Errorf("Expected first row date = Wed 2025-10-22, got %s", row1.Timestamp)
 	}
 
 	// Check aggregation

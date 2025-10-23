@@ -216,8 +216,14 @@ func (s *UsageService) buildDailySummary(reports []api.DailyReport) UsageSummary
 		totalTokens := report.InputTokens + report.OutputTokens +
 			report.CacheCreationTokens + report.CacheReadTokens
 
+		// Parse date and format with weekday (e.g., "Mon 2025-10-22")
+		formattedDate := date // fallback to original
+		if parsedDate, err := time.Parse("2006-01-02", date); err == nil {
+			formattedDate = parsedDate.Format("Mon 2006-01-02")
+		}
+
 		rows = append(rows, UsageRow{
-			Timestamp:    date,
+			Timestamp:    formattedDate,
 			TokensUsed:   totalTokens,
 			Cost:         report.TotalCost,
 			InputTokens:  report.InputTokens,
