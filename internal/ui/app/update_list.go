@@ -189,9 +189,8 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, nil
 			} else if m.claudeShowingContent {
 				// Scroll content viewport down
-				var cmd tea.Cmd
-				m.claudeViewport, cmd = m.claudeViewport.Update(msg)
-				return m, cmd
+				m.claudeViewport.LineDown(1)
+				return m, nil
 			}
 			return m, nil
 		case "k", "up":
@@ -201,9 +200,8 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, nil
 			} else if m.claudeShowingContent {
 				// Scroll content viewport up
-				var cmd tea.Cmd
-				m.claudeViewport, cmd = m.claudeViewport.Update(msg)
-				return m, cmd
+				m.claudeViewport.LineUp(1)
+				return m, nil
 			}
 			return m, nil
 		case "enter":
