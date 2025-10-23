@@ -2,6 +2,7 @@ package app
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/tacit7/eye-in-the-sky/internal/ui/modal"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/util"
 )
 
@@ -49,7 +50,12 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "n":
-		// 'n' is reserved for NewSession - don't handle it here, let it fall through
+		// Open New Session form in Overview tab only
+		if m.listTabs.ActiveIndex == 0 {
+			formSpec := modal.NewSessionFormSpec()
+			m.modalManager.OpenForm(formSpec)
+			return m, nil
+		}
 	}
 
 	if Matches(msg, m.keys.NavigateDown) {

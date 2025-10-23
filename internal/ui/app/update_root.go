@@ -3,9 +3,12 @@ package app
 import (
 	"fmt"
 	"log"
+	"os/exec"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/google/uuid"
+	"github.com/tacit7/eye-in-the-sky/internal/ui/modal"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/util"
 )
 
@@ -256,9 +259,93 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusMsg = "JSON validation failed"
 		}
 		return m, nil
+
+	case modal.FormSubmitted:
+		// Handle form submission from modal
+		return m.handleFormSubmission(msg)
 	}
 
 	return m, nil
+}
+
+// handleFormSubmission handles form submissions from modals
+func (m *Model) handleFormSubmission(msg modal.FormSubmitted) (tea.Model, tea.Cmd) {
+	switch msg.Source {
+	case "new-session":
+		// Create new Claude Code session with description
+		description := msg.Data["description"]
+		if description == "" {
+			m.statusMsg = "Session description required"
+			return m, nil
+		}
+		return m, m.createNewSessionCmd(description)
+
+	case "new-ticket":
+		// Create new Taskwarrior ticket
+		description := msg.Data["description"]
+		project := msg.Data["project"]
+		tags := msg.Data["tags"]
+		if description == "" {
+			m.statusMsg = "Ticket description required"
+			return m, nil
+		}
+		return m, m.createNewTicketCmd(description, project, tags)
+
+	default:
+		m.statusMsg = fmt.Sprintf("Unknown form source: %s", msg.Source)
+		return m, nil
+	}
+}
+
+// createNewSessionCmd creates a command to spawn a new Claude Code session
+func (m *Model) createNewSessionCmd(description string) tea.Cmd {
+	return func() tea.Msg {
+		// Generate new session ID
+		sessionID := uuid.New().String()
+
+		// Run AppleScript to create session in new Claude Code window
+		script := fmt.Sprintf(`tell application "Terminal" to do script "%s --session-id %s '%s'"`,
+			m.claudePath, sessionID, description)
+
+		cmd := exec.Command("osascript", "-e", script)
+		if err := cmd.Run(); err != nil {
+			return errMsg{err: fmt.Errorf("failed to create session: %w", err)}
+		}
+
+		m.statusMsg = fmt.Sprintf("New session created: %s", truncateID(sessionID, 8))
+		return cmdResult{
+			success: true,
+			message: fmt.Sprintf("New session created: %s", description),
+		}
+	}
+}
+
+// createNewTicketCmd creates a command to create a new Taskwarrior ticket
+func (m *Model) createNewTicketCmd(description string, project string, tags string) tea.Cmd {
+	return func() tea.Msg {
+		// Build task command arguments
+		args := []string{"add", description}
+
+		if project != "" {
+			args = append(args, fmt.Sprintf("project:%s", project))
+		}
+
+		if tags != "" {
+			args = append(args, tags)
+		}
+
+		// Execute task command
+		cmd := exec.Command("task", args...)
+		if err := cmd.Run(); err != nil {
+			return errMsg{err: fmt.Errorf("failed to create ticket: %w", err)}
+		}
+
+		m.statusMsg = fmt.Sprintf("Ticket created: %s", description)
+		return cmdResult{
+			success: true,
+			message: fmt.Sprintf("Ticket created: %s", description),
+		}
+	}
 }
 
 // errMsg is sent when an error occurs
