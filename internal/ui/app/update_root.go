@@ -235,6 +235,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.claudeContent = msg.content
 		m.claudeViewport.SetContent(msg.content)
 		m.claudeViewport.GotoTop()
+		m.claudeValidStatus = "" // Clear validation status on new file load
 		m.statusMsg = fmt.Sprintf("Loaded %s", msg.path)
 		return m, nil
 

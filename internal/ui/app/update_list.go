@@ -218,7 +218,7 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.claudeShowingContent {
 				m.claudeShowingContent = false
 				m.claudeContent = ""
-				m.claudeValidStatus = ""
+				// Note: claudeValidStatus persists (sticky) until next validation or file load
 				return m, nil
 			}
 			return m, nil
