@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
@@ -79,8 +78,8 @@ type Model struct {
 	// View renderers map
 	renderers map[ViewType]ViewRenderer
 
-	// Help system
-	help     help.Model
+	// Help system (old help overlay deprecated - using new modal-based help)
+	// help field removed
 	showHelp bool
 
 	// Window focuser
