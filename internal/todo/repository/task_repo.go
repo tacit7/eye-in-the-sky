@@ -28,9 +28,9 @@ func (tr *TaskRepo) CreateTask(projectID int, input models.CreateTaskInput) (*mo
 	}
 
 	result, err := tr.db.Exec(
-		`INSERT INTO tasks (project_id, description, parent_id, state_code, priority, weight, position)
-		 VALUES (?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM tasks WHERE project_id = ?))`,
-		projectID, input.Description, input.ParentID, input.StateCode, input.Priority, input.Weight, projectID,
+		`INSERT INTO tasks (project_id, description, parent_id, state_code, priority, weight, session_id, agent_id, position)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM tasks WHERE project_id = ?))`,
+		projectID, input.Description, input.ParentID, input.StateCode, input.Priority, input.Weight, input.SessionID, input.AgentID, projectID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to insert task: %w", err)
@@ -48,10 +48,10 @@ func (tr *TaskRepo) CreateTask(projectID int, input models.CreateTaskInput) (*mo
 func (tr *TaskRepo) FindByID(id int) (*models.Task, error) {
 	task := &models.Task{}
 	err := tr.db.QueryRow(
-		`SELECT id, project_id, description, state_code, parent_id, priority, weight, position, due_date, created_at, updated_at, archived_at
+		`SELECT id, project_id, description, state_code, parent_id, priority, weight, position, due_date, session_id, agent_id, created_at, updated_at, archived_at
 		 FROM tasks WHERE id = ?`,
 		id,
-	).Scan(&task.ID, &task.ProjectID, &task.Description, &task.StateCode, &task.ParentID, &task.Priority, &task.Weight, &task.Position, &task.DueDate, &task.CreatedAt, &task.UpdatedAt, &task.ArchivedAt)
+	).Scan(&task.ID, &task.ProjectID, &task.Description, &task.StateCode, &task.ParentID, &task.Priority, &task.Weight, &task.Position, &task.DueDate, &task.SessionID, &task.AgentID, &task.CreatedAt, &task.UpdatedAt, &task.ArchivedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("task not found")
@@ -335,7 +335,7 @@ func (tr *TaskRepo) Reorder(taskID int, newPosition int) (*models.Task, error) {
 
 // List retrieves tasks for a project with filters and ordering.
 func (tr *TaskRepo) List(projectID int, filters models.Filters, sortBy models.SortOrder) ([]models.Task, error) {
-	query := `SELECT id, project_id, description, state_code, parent_id, priority, weight, position, due_date, created_at, updated_at, archived_at
+	query := `SELECT id, project_id, description, state_code, parent_id, priority, weight, position, due_date, session_id, agent_id, created_at, updated_at, archived_at
 	          FROM tasks WHERE project_id = ?`
 
 	args := []interface{}{projectID}
@@ -401,7 +401,7 @@ func (tr *TaskRepo) List(projectID int, filters models.Filters, sortBy models.So
 	var tasks []models.Task
 	for rows.Next() {
 		task := models.Task{}
-		if err := rows.Scan(&task.ID, &task.ProjectID, &task.Description, &task.StateCode, &task.ParentID, &task.Priority, &task.Weight, &task.Position, &task.DueDate, &task.CreatedAt, &task.UpdatedAt, &task.ArchivedAt); err != nil {
+		if err := rows.Scan(&task.ID, &task.ProjectID, &task.Description, &task.StateCode, &task.ParentID, &task.Priority, &task.Weight, &task.Position, &task.DueDate, &task.SessionID, &task.AgentID, &task.CreatedAt, &task.UpdatedAt, &task.ArchivedAt); err != nil {
 			return nil, fmt.Errorf("failed to scan task: %w", err)
 		}
 		if err := tr.loadTaskRelations(&task); err != nil {
@@ -416,7 +416,7 @@ func (tr *TaskRepo) List(projectID int, filters models.Filters, sortBy models.So
 // Search performs full-text search on tasks.
 func (tr *TaskRepo) Search(projectID int, query string, limit, offset int) ([]models.SearchResult, error) {
 	rows, err := tr.db.Query(
-		`SELECT t.id, t.project_id, t.description, t.state_code, t.parent_id, t.priority, t.weight, t.position, t.due_date, t.created_at, t.updated_at, t.archived_at, s.rank
+		`SELECT t.id, t.project_id, t.description, t.state_code, t.parent_id, t.priority, t.weight, t.position, t.due_date, t.session_id, t.agent_id, t.created_at, t.updated_at, t.archived_at, s.rank
 		 FROM task_search s
 		 JOIN tasks t ON s.rowid = t.id
 		 WHERE t.project_id = ? AND s MATCH ?
@@ -433,7 +433,7 @@ func (tr *TaskRepo) Search(projectID int, query string, limit, offset int) ([]mo
 	for rows.Next() {
 		result := models.SearchResult{}
 		task := models.Task{}
-		if err := rows.Scan(&task.ID, &task.ProjectID, &task.Description, &task.StateCode, &task.ParentID, &task.Priority, &task.Weight, &task.Position, &task.DueDate, &task.CreatedAt, &task.UpdatedAt, &task.ArchivedAt, &result.Rank); err != nil {
+		if err := rows.Scan(&task.ID, &task.ProjectID, &task.Description, &task.StateCode, &task.ParentID, &task.Priority, &task.Weight, &task.Position, &task.DueDate, &task.SessionID, &task.AgentID, &task.CreatedAt, &task.UpdatedAt, &task.ArchivedAt, &result.Rank); err != nil {
 			return nil, fmt.Errorf("failed to scan search result: %w", err)
 		}
 		if err := tr.loadTaskRelations(&task); err != nil {

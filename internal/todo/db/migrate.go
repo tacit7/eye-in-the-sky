@@ -26,6 +26,32 @@ func (db *DB) RunMigrations() error {
 		}
 	}
 
+	// Add columns for session and agent tracking (if not already present)
+	if err := db.addSessionAgentColumns(); err != nil {
+		return fmt.Errorf("failed to add session/agent columns: %w", err)
+	}
+
+	return nil
+}
+
+// addSessionAgentColumns adds session_id and agent_id columns to existing databases
+func (db *DB) addSessionAgentColumns() error {
+	// Add session_id column if it doesn't exist
+	if _, err := db.conn.Exec(`
+		ALTER TABLE tasks ADD COLUMN session_id TEXT;
+	`); err != nil {
+		// Column likely already exists; ignore error
+		_ = err
+	}
+
+	// Add agent_id column if it doesn't exist
+	if _, err := db.conn.Exec(`
+		ALTER TABLE tasks ADD COLUMN agent_id TEXT;
+	`); err != nil {
+		// Column likely already exists; ignore error
+		_ = err
+	}
+
 	return nil
 }
 
@@ -66,6 +92,8 @@ CREATE TABLE IF NOT EXISTS tasks (
 	weight INTEGER,
 	position INTEGER DEFAULT 0,
 	due_date TIMESTAMP,
+	session_id TEXT,
+	agent_id TEXT,
 	created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 	updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 	archived_at TIMESTAMP,

@@ -37,6 +37,8 @@ type Task struct {
 	Weight      *int       `json:"weight,omitempty"`
 	Position    int        `json:"position"`
 	DueDate     *time.Time `json:"due_date,omitempty"`
+	SessionID   *string    `json:"session_id,omitempty"` // Eye-in-the-Sky session ID
+	AgentID     *string    `json:"agent_id,omitempty"`   // Eye-in-the-Sky agent ID
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
 	ArchivedAt  *time.Time `json:"archived_at,omitempty"`
@@ -112,6 +114,8 @@ type CreateTaskInput struct {
 	StateCode   *string
 	Priority    *int
 	Weight      *int
+	SessionID   *string // Eye-in-the-Sky session ID
+	AgentID     *string // Eye-in-the-Sky agent ID
 }
 
 // UpdateTaskInput is the input for updating a task.

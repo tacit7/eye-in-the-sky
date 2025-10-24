@@ -314,8 +314,8 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 	// Create styles from theme
 	styles := createStyles(theme)
 
-	// Create help model
-	helpModel := NewHelp()
+	// Note: Old help model removed - using new modal-based help system
+	// The help modal is now opened via ? or Shift+H keys
 
 	// Create window focuser
 	windowFocuser := util.NewWindowFocuser()
@@ -383,7 +383,7 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 		config:    config,
 		theme:     theme,
 		styles:    styles,
-		help:          helpModel,
+		// help field removed - using new modal-based help system
 		showHelp:      false,
 		windowFocuser: windowFocuser,
 		claudePath:    claudePath,

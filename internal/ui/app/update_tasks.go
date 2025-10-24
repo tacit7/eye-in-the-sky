@@ -44,8 +44,10 @@ func (m *Model) handleTasksMessages(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // handleTasksKeys handles keys in tasks view
 func (m *Model) handleTasksKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	keyStr := msg.String()
+
 	// In tasks view, q/esc go back to detail instead of quitting
-	if Matches(msg, m.keys.Back) || Matches(msg, m.keys.Quit) {
+	if keyStr == "q" || keyStr == "esc" {
 		// Go back to detail view
 		m.currentView = ViewDetail
 		m.tasksIndex = 0
@@ -53,7 +55,7 @@ func (m *Model) handleTasksKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	if Matches(msg, m.keys.NavigateDown) {
+	if keyStr == "j" || keyStr == "down" {
 		// Move down in list
 		if m.tasksIndex < len(m.tasks)-1 {
 			m.tasksIndex++
@@ -63,7 +65,7 @@ func (m *Model) handleTasksKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	if Matches(msg, m.keys.NavigateUp) {
+	if keyStr == "k" || keyStr == "up" {
 		// Move up in list
 		if m.tasksIndex > 0 {
 			m.tasksIndex--
@@ -73,13 +75,13 @@ func (m *Model) handleTasksKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	if Matches(msg, m.keys.ScrollDown) {
+	if keyStr == "l" {
 		// Scroll detail pane down
 		m.rightPaneOffset++
 		return m, nil
 	}
 
-	if Matches(msg, m.keys.ScrollUp) {
+	if keyStr == "h" {
 		// Scroll detail pane up
 		if m.rightPaneOffset > 0 {
 			m.rightPaneOffset--
@@ -87,14 +89,14 @@ func (m *Model) handleTasksKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	if Matches(msg, m.keys.Refresh) {
+	if keyStr == "r" || keyStr == "R" {
 		// Reload tasks asynchronously
 		m.taskState = TaskLoading
 		m.statusMsg = "Loading tasks..."
 		return m, m.loadTasksCmd()
 	}
 
-	if Matches(msg, m.keys.PageDown) {
+	if keyStr == "pgdown" {
 		// Page down
 		m.tasksIndex += 10
 		if m.tasksIndex >= len(m.tasks) {
@@ -107,7 +109,7 @@ func (m *Model) handleTasksKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	if Matches(msg, m.keys.PageUp) {
+	if keyStr == "pgup" {
 		// Page up
 		m.tasksIndex -= 10
 		if m.tasksIndex < 0 {

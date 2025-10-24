@@ -42,6 +42,8 @@ type CreateRequest struct {
 	Priority    *int     `json:"priority,omitempty"`
 	Tags        []string `json:"tags,omitempty"`
 	ParentID    *int     `json:"parent_id,omitempty"`
+	SessionID   *string  `json:"session_id,omitempty"`
+	AgentID     *string  `json:"agent_id,omitempty"`
 }
 
 func (h *Handler) HandleCreate(ctx context.Context, args json.RawMessage) (interface{}, error) {
@@ -71,6 +73,8 @@ func (h *Handler) HandleCreate(ctx context.Context, args json.RawMessage) (inter
 		ParentID:    req.ParentID,
 		Priority:    req.Priority,
 		StateCode:   stringPtr("todo"),
+		SessionID:   req.SessionID,
+		AgentID:     req.AgentID,
 	}
 
 	task, err := h.svc.GetTasksRepo().CreateTask(req.ProjectID, input)

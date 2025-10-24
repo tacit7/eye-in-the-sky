@@ -6,20 +6,22 @@ import (
 
 // handleLogsKeys handles keys in logs view
 func (m *Model) handleLogsKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	keyStr := msg.String()
+
 	// In logs view, q/esc go back to list instead of quitting
-	if Matches(msg, m.keys.Back) || Matches(msg, m.keys.Quit) {
+	if keyStr == "q" || keyStr == "esc" {
 		// Go back to list view
 		m.currentView = ViewList
 		return m, nil
 	}
 
-	if Matches(msg, m.keys.ScrollDown) {
+	if keyStr == "j" || keyStr == "down" {
 		// Scroll down
 		m.detailOffset++
 		return m, nil
 	}
 
-	if Matches(msg, m.keys.ScrollUp) {
+	if keyStr == "k" || keyStr == "up" {
 		// Scroll up
 		if m.detailOffset > 0 {
 			m.detailOffset--
@@ -27,13 +29,13 @@ func (m *Model) handleLogsKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	if Matches(msg, m.keys.PageDown) {
+	if keyStr == "pgdown" {
 		// Page down
 		m.detailOffset += 10
 		return m, nil
 	}
 
-	if Matches(msg, m.keys.PageUp) {
+	if keyStr == "pgup" {
 		// Page up
 		m.detailOffset -= 10
 		if m.detailOffset < 0 {

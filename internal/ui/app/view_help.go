@@ -12,8 +12,9 @@ func (m *Model) renderHelp() string {
 
 	title := m.styles.Title.Render("Eye in the Sky - Help")
 
-	// Get help content from help model
-	helpView := m.help.View(m.keys)
+	// Get help content from keybindings resolver
+	// This renders the modal-based help which is now used instead
+	helpView := "Use '?' or Shift+H to open context-aware help\n(old help overlay deprecated)"
 
 	// Footer with config info
 	configPath := fmt.Sprintf("Config: %s", configDir)
