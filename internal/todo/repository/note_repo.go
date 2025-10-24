@@ -3,19 +3,18 @@ package repository
 import (
 	"database/sql"
 	"fmt"
-	"time"
 
-	"github.com/tacit7/eye-in-the-sky/internal/todo/db"
+	"github.com/tacit7/eye-in-the-sky/internal/database"
 	"github.com/tacit7/eye-in-the-sky/internal/todo/models"
 )
 
 // NoteRepo handles note-related database operations.
 type NoteRepo struct {
-	db *db.DB
+	db *database.DB
 }
 
 // NewNoteRepo creates a new NoteRepo.
-func NewNoteRepo(database *db.DB) *NoteRepo {
+func NewNoteRepo(database *database.DB) *NoteRepo {
 	return &NoteRepo{db: database}
 }
 
@@ -23,9 +22,9 @@ func NewNoteRepo(database *db.DB) *NoteRepo {
 func (nr *NoteRepo) GetNoteByID(id int) (*models.Note, error) {
 	note := &models.Note{}
 	err := nr.db.QueryRow(
-		"SELECT id, task_id, body_markdown, created_at FROM task_notes WHERE id = ?",
+		"SELECT id, task_id, author, body, created_at FROM task_notes WHERE id = ?",
 		id,
-	).Scan(&note.ID, &note.TaskID, &note.BodyMarkdown, &note.CreatedAt)
+	).Scan(&note.ID, &note.TaskID, &note.Author, &note.Body, &note.CreatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("note not found")
@@ -39,9 +38,9 @@ func (nr *NoteRepo) GetNoteByID(id int) (*models.Note, error) {
 }
 
 // GetNotesByTaskID retrieves all notes for a task, ordered newest first.
-func (nr *NoteRepo) GetNotesByTaskID(taskID int) ([]models.Note, error) {
+func (nr *NoteRepo) GetNotesByTaskID(taskID string) ([]models.Note, error) {
 	rows, err := nr.db.Query(
-		"SELECT id, task_id, body_markdown, created_at FROM task_notes WHERE task_id = ? ORDER BY created_at DESC",
+		"SELECT id, task_id, author, body, created_at FROM task_notes WHERE task_id = ? ORDER BY created_at DESC",
 		taskID,
 	)
 	if err != nil {
@@ -52,7 +51,7 @@ func (nr *NoteRepo) GetNotesByTaskID(taskID int) ([]models.Note, error) {
 	var notes []models.Note
 	for rows.Next() {
 		note := models.Note{}
-		if err := rows.Scan(&note.ID, &note.TaskID, &note.BodyMarkdown, &note.CreatedAt); err != nil {
+		if err := rows.Scan(&note.ID, &note.TaskID, &note.Author, &note.Body, &note.CreatedAt); err != nil {
 			return nil, fmt.Errorf("failed to scan note: %w", err)
 		}
 		notes = append(notes, note)
@@ -62,12 +61,12 @@ func (nr *NoteRepo) GetNotesByTaskID(taskID int) ([]models.Note, error) {
 }
 
 // GetLatestNoteByTaskID retrieves the most recent note for a task.
-func (nr *NoteRepo) GetLatestNoteByTaskID(taskID int) (*models.Note, error) {
+func (nr *NoteRepo) GetLatestNoteByTaskID(taskID string) (*models.Note, error) {
 	note := &models.Note{}
 	err := nr.db.QueryRow(
-		"SELECT id, task_id, body_markdown, created_at FROM task_notes WHERE task_id = ? ORDER BY created_at DESC LIMIT 1",
+		"SELECT id, task_id, author, body, created_at FROM task_notes WHERE task_id = ? ORDER BY created_at DESC LIMIT 1",
 		taskID,
-	).Scan(&note.ID, &note.TaskID, &note.BodyMarkdown, &note.CreatedAt)
+	).Scan(&note.ID, &note.TaskID, &note.Author, &note.Body, &note.CreatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, nil // No notes is valid
@@ -81,9 +80,9 @@ func (nr *NoteRepo) GetLatestNoteByTaskID(taskID int) (*models.Note, error) {
 }
 
 // GetNotesByProjectID retrieves all notes in a project across all tasks.
-func (nr *NoteRepo) GetNotesByProjectID(projectID int) ([]models.Note, error) {
+func (nr *NoteRepo) GetNotesByProjectID(projectID string) ([]models.Note, error) {
 	rows, err := nr.db.Query(
-		`SELECT tn.id, tn.task_id, tn.body_markdown, tn.created_at
+		`SELECT tn.id, tn.task_id, tn.author, tn.body, tn.created_at
 		 FROM task_notes tn
 		 JOIN tasks t ON tn.task_id = t.id
 		 WHERE t.project_id = ?
@@ -98,7 +97,7 @@ func (nr *NoteRepo) GetNotesByProjectID(projectID int) ([]models.Note, error) {
 	var notes []models.Note
 	for rows.Next() {
 		note := models.Note{}
-		if err := rows.Scan(&note.ID, &note.TaskID, &note.BodyMarkdown, &note.CreatedAt); err != nil {
+		if err := rows.Scan(&note.ID, &note.TaskID, &note.Author, &note.Body, &note.CreatedAt); err != nil {
 			return nil, fmt.Errorf("failed to scan note: %w", err)
 		}
 		notes = append(notes, note)
@@ -107,11 +106,11 @@ func (nr *NoteRepo) GetNotesByProjectID(projectID int) ([]models.Note, error) {
 	return notes, rows.Err()
 }
 
-// UpdateNoteContent updates the markdown content of a note.
-func (nr *NoteRepo) UpdateNoteContent(noteID int, bodyMarkdown string) (*models.Note, error) {
+// UpdateNoteContent updates the content of a note.
+func (nr *NoteRepo) UpdateNoteContent(noteID int, body string) (*models.Note, error) {
 	_, err := nr.db.Exec(
-		"UPDATE task_notes SET body_markdown = ? WHERE id = ?",
-		bodyMarkdown, noteID,
+		"UPDATE task_notes SET body = ? WHERE id = ?",
+		body, noteID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update note: %w", err)
@@ -130,7 +129,7 @@ func (nr *NoteRepo) DeleteNote(noteID int) error {
 }
 
 // DeleteNotesByTaskID removes all notes for a task (called when task is deleted).
-func (nr *NoteRepo) DeleteNotesByTaskID(taskID int) error {
+func (nr *NoteRepo) DeleteNotesByTaskID(taskID string) error {
 	_, err := nr.db.Exec("DELETE FROM task_notes WHERE task_id = ?", taskID)
 	if err != nil {
 		return fmt.Errorf("failed to delete notes: %w", err)
@@ -139,7 +138,7 @@ func (nr *NoteRepo) DeleteNotesByTaskID(taskID int) error {
 }
 
 // CountNotesByTaskID returns the number of notes for a task.
-func (nr *NoteRepo) CountNotesByTaskID(taskID int) (int, error) {
+func (nr *NoteRepo) CountNotesByTaskID(taskID string) (int, error) {
 	var count int
 	err := nr.db.QueryRow(
 		"SELECT COUNT(*) FROM task_notes WHERE task_id = ?",
@@ -155,13 +154,12 @@ func (nr *NoteRepo) CountNotesByTaskID(taskID int) (int, error) {
 
 // GetNoteStats returns statistics for notes in a project.
 type NoteStats struct {
-	TotalNotes   int
+	TotalNotes     int
 	TasksWithNotes int
-	LatestNoteDate *time.Time
 }
 
 // GetProjectNoteStats returns note statistics for a project.
-func (nr *NoteRepo) GetProjectNoteStats(projectID int) (*NoteStats, error) {
+func (nr *NoteRepo) GetProjectNoteStats(projectID string) (*NoteStats, error) {
 	stats := &NoteStats{}
 
 	// Count total notes
@@ -188,30 +186,13 @@ func (nr *NoteRepo) GetProjectNoteStats(projectID int) (*NoteStats, error) {
 		return nil, fmt.Errorf("failed to count tasks with notes: %w", err)
 	}
 
-	// Get latest note date
-	var latestDate sql.NullTime
-	err = nr.db.QueryRow(
-		`SELECT MAX(tn.created_at) FROM task_notes tn
-		 JOIN tasks t ON tn.task_id = t.id
-		 WHERE t.project_id = ?`,
-		projectID,
-	).Scan(&latestDate)
-
-	if err != nil && err != sql.ErrNoRows {
-		return nil, fmt.Errorf("failed to get latest note date: %w", err)
-	}
-
-	if latestDate.Valid {
-		stats.LatestNoteDate = &latestDate.Time
-	}
-
 	return stats, nil
 }
 
 // SearchNotes performs full-text search on note content within a project.
-func (nr *NoteRepo) SearchNotes(projectID int, query string, limit, offset int) ([]models.Note, error) {
+func (nr *NoteRepo) SearchNotes(projectID string, query string, limit, offset int) ([]models.Note, error) {
 	rows, err := nr.db.Query(
-		`SELECT tn.id, tn.task_id, tn.body_markdown, tn.created_at
+		`SELECT tn.id, tn.task_id, tn.author, tn.body, tn.created_at
 		 FROM task_notes tn
 		 JOIN tasks t ON tn.task_id = t.id
 		 JOIN task_search ts ON t.id = ts.rowid
@@ -228,7 +209,7 @@ func (nr *NoteRepo) SearchNotes(projectID int, query string, limit, offset int) 
 	var notes []models.Note
 	for rows.Next() {
 		note := models.Note{}
-		if err := rows.Scan(&note.ID, &note.TaskID, &note.BodyMarkdown, &note.CreatedAt); err != nil {
+		if err := rows.Scan(&note.ID, &note.TaskID, &note.Author, &note.Body, &note.CreatedAt); err != nil {
 			return nil, fmt.Errorf("failed to scan note: %w", err)
 		}
 		notes = append(notes, note)

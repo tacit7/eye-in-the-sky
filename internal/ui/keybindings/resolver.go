@@ -24,21 +24,16 @@ func (r *Resolver) Resolve(msg tea.KeyMsg, modalActive bool) (action string, fou
 		}
 	}
 
-	// 2. Check tab scope
-	if r.currentTab != "" {
-		tabKey := "detail_" + r.currentTab
-		if act, ok := r.findAction(tabKey, key); ok {
+	// 2. Check tab/view scope - construct proper scope name
+	if r.currentView != "" && r.currentTab != "" {
+		// For list and detail views, scope is "view_tab" (e.g., "list_overview", "detail_commits")
+		scopeKey := r.currentView + "_" + r.currentTab
+		if act, ok := r.findAction(scopeKey, key); ok {
 			return act, true
 		}
 	}
 
-	// 3. Check view scope
-	viewKey := "list_" + r.currentView
-	if act, ok := r.findAction(viewKey, key); ok {
-		return act, true
-	}
-
-	// 4. Check global scope
+	// 3. Check global scope
 	if act, ok := r.findAction("global", key); ok {
 		return act, true
 	}

@@ -3,6 +3,7 @@ package app
 import (
 	"os"
 	"os/exec"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -38,7 +39,7 @@ type claudeValidationResultMsg struct {
 // loadClaudeFilesCmd returns a command to load Claude config files
 func (m *Model) loadClaudeFilesCmd() tea.Cmd {
 	return func() tea.Msg {
-		files, err := scanClaudeDir()
+		files, err := scanClaudeDir(m.claudeCurrentPath)
 		return claudeFilesLoadedMsg{
 			files: files,
 			err:   err,
@@ -78,6 +79,35 @@ func validateClaudeFileCmd(content string) tea.Cmd {
 		return claudeValidationResultMsg{
 			valid:  valid,
 			status: status,
+		}
+	}
+}
+
+// loadClaudeDirectoryContentCmd returns a command to load directory contents
+func (m *Model) loadClaudeDirectoryContentCmd(path string) tea.Cmd {
+	return func() tea.Msg {
+		files, err := os.ReadDir(path)
+		if err != nil {
+			return claudeFileContentLoadedMsg{
+				path: path,
+				err:  err,
+			}
+		}
+
+		var lines []string
+		for _, file := range files {
+			icon := "📄"
+			if file.IsDir() {
+				icon = "📁"
+			}
+			lines = append(lines, icon+" "+file.Name())
+		}
+
+		content := "📁 Directory contents:\n\n" + strings.Join(lines, "\n")
+		return claudeFileContentLoadedMsg{
+			content: content,
+			path:    path,
+			err:     nil,
 		}
 	}
 }

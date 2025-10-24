@@ -43,6 +43,117 @@ func LoadKeybindings() (*Resolver, error) {
 	return resolver, nil
 }
 
+// LoadKeybindingsDefaults loads hardcoded keybindings (no YAML parsing)
+func LoadKeybindingsDefaults() (*Resolver, error) {
+	// Build keybindings directly in code - NO YAML parsing
+	resolved := make(ResolvedKeybindings)
+
+	// Global keybindings
+	resolved["global"] = map[string]map[string]bool{
+		"quit":              {"ctrl+c": true, "shift+q": true},
+		"help":              {"?": true, "shift+h": true},
+		"toggle_filter":     {"a": true},
+		"continue_session":  {"c": true},
+		"start_session":     {"s": true},
+		"go_to_window":      {"w": true},
+		"archive":           {"d": true},
+	}
+
+	// List view keybindings
+	resolved["list_overview"] = map[string]map[string]bool{
+		"new_session": {"n": true},
+		"select":      {"enter": true, "right": true},
+		"down":        {"j": true, "down": true},
+		"up":          {"k": true, "up": true},
+	}
+
+	resolved["list_project"] = map[string]map[string]bool{
+		"new_ticket": {"n": true},
+		"select":     {"enter": true},
+		"down":       {"j": true, "down": true},
+		"up":         {"k": true, "up": true},
+	}
+
+	resolved["list_claude"] = map[string]map[string]bool{
+		"validate":   {"v": true},
+		"edit":       {"e": true},
+		"refresh":    {"r": true},
+		"open":       {"enter": true},
+		"down":       {"j": true, "down": true},
+		"up":         {"k": true, "up": true},
+		"page_down":  {"pgdown": true},
+		"page_up":    {"pgup": true},
+	}
+
+	resolved["list_usage"] = map[string]map[string]bool{
+		"down":      {"j": true, "down": true},
+		"up":        {"k": true, "up": true},
+		"page_down": {"pgdown": true},
+		"page_up":   {"pgup": true},
+	}
+
+	resolved["list_config"] = map[string]map[string]bool{
+		"down":      {"j": true, "down": true},
+		"up":        {"k": true, "up": true},
+		"page_down": {"pgdown": true},
+		"page_up":   {"pgup": true},
+	}
+
+	// Detail view keybindings
+	resolved["detail_overview"] = map[string]map[string]bool{
+		"select": {"enter": true},
+	}
+
+	resolved["detail_commits"] = map[string]map[string]bool{
+		"down":      {"j": true, "down": true},
+		"up":        {"k": true, "up": true},
+		"refresh":   {"r": true},
+		"page_down": {"pgdown": true},
+		"page_up":   {"pgup": true},
+	}
+
+	resolved["detail_logs"] = map[string]map[string]bool{
+		"down":      {"j": true, "down": true},
+		"up":        {"k": true, "up": true},
+		"refresh":   {"r": true},
+		"page_down": {"pgdown": true},
+		"page_up":   {"pgup": true},
+	}
+
+	resolved["detail_notes"] = map[string]map[string]bool{
+		"down":       {"j": true, "down": true},
+		"up":         {"k": true, "up": true},
+		"refresh":    {"r": true},
+		"new_note":   {"n": true},
+		"page_down":  {"pgdown": true},
+		"page_up":    {"pgup": true},
+	}
+
+	resolved["detail_actions"] = map[string]map[string]bool{
+		"down":      {"j": true, "down": true},
+		"up":        {"k": true, "up": true},
+		"refresh":   {"r": true},
+		"page_down": {"pgdown": true},
+		"page_up":   {"pgup": true},
+	}
+
+	resolved["detail_tasks"] = map[string]map[string]bool{
+		"down":       {"j": true, "down": true},
+		"up":         {"k": true, "up": true},
+		"refresh":    {"r": true},
+		"page_down":  {"pgdown": true},
+		"page_up":    {"pgup": true},
+	}
+
+	resolver := &Resolver{
+		config:   KeybindingsConfig{},
+		resolved: resolved,
+	}
+
+	log.Printf("Loaded hardcoded keybindings\n")
+	return resolver, nil
+}
+
 // GetKeybindingsPath returns the path to the keybindings YAML file
 func GetKeybindingsPath() string {
 	home, err := os.UserHomeDir()
@@ -118,7 +229,7 @@ func createDefaultKeybindings(path string) error {
 	defaultConfig := `keybindings:
   global:
     quit: ["ctrl+c", "shift+q"]
-    help: ["?", "shift+h"]
+    help: ["ctrl+h"]
     toggle_filter: ["a"]
     continue_session: ["c"]
     start_session: ["s"]

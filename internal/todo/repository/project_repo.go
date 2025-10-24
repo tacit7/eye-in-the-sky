@@ -5,74 +5,41 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/tacit7/eye-in-the-sky/internal/todo/db"
+	"github.com/tacit7/eye-in-the-sky/internal/database"
 	"github.com/tacit7/eye-in-the-sky/internal/todo/models"
 )
 
 // ProjectRepo handles project-related database operations.
 type ProjectRepo struct {
-	db *db.DB
+	db *database.DB
 }
 
 // NewProjectRepo creates a new ProjectRepo.
-func NewProjectRepo(database *db.DB) *ProjectRepo {
+func NewProjectRepo(database *database.DB) *ProjectRepo {
 	return &ProjectRepo{db: database}
 }
 
 // CreateProject creates a new project.
-func (pr *ProjectRepo) CreateProject(uuid, name string) (*models.Project, error) {
-	result, err := pr.db.Exec(
-		"INSERT INTO projects (uuid, name) VALUES (?, ?)",
-		uuid, name,
+func (pr *ProjectRepo) CreateProject(id, name string) (*models.Project, error) {
+	_, err := pr.db.Exec(
+		"INSERT INTO projects (id, name, id_algorithm, created_at, updated_at, active) VALUES (?, ?, ?, ?, ?, ?)",
+		id, name, "uuidv5", time.Now(), time.Now(), 1,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to insert project: %w", err)
 	}
 
-	id, err := result.LastInsertId()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get last insert id: %w", err)
-	}
-
-	project := &models.Project{
-		ID:        int(id),
-		UUID:      uuid,
-		Name:      name,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-
-	return project, nil
-}
-
-// CreateOrGetProjectByGitRepo finds or creates a project by git repo slug.
-func (pr *ProjectRepo) CreateOrGetProjectByGitRepo(repoSlug, uuid string) (*models.Project, error) {
-	// Try to find existing project
-	project := &models.Project{}
-	err := pr.db.QueryRow(
-		"SELECT id, uuid, name, repo_slug, created_at, updated_at, archived_at FROM projects WHERE repo_slug = ?",
-		repoSlug,
-	).Scan(&project.ID, &project.UUID, &project.Name, &project.RepoSlug, &project.CreatedAt, &project.UpdatedAt, &project.ArchivedAt)
-
-	if err == sql.ErrNoRows {
-		// Create new project
-		return pr.CreateProject(uuid, repoSlug)
-	}
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to query project: %w", err)
-	}
-
-	return project, nil
+	return pr.GetProjectByID(id)
 }
 
 // GetProjectByID retrieves a project by ID.
-func (pr *ProjectRepo) GetProjectByID(id int) (*models.Project, error) {
+func (pr *ProjectRepo) GetProjectByID(id string) (*models.Project, error) {
 	project := &models.Project{}
 	err := pr.db.QueryRow(
-		"SELECT id, uuid, name, repo_slug, created_at, updated_at, archived_at FROM projects WHERE id = ?",
+		`SELECT id, name, path, remote_url, subpath, module, salt, id_algorithm, created_at, updated_at, last_commit, active
+		 FROM projects WHERE id = ?`,
 		id,
-	).Scan(&project.ID, &project.UUID, &project.Name, &project.RepoSlug, &project.CreatedAt, &project.UpdatedAt, &project.ArchivedAt)
+	).Scan(&project.ID, &project.Name, &project.Path, &project.RemoteURL, &project.Subpath, &project.Module, &project.Salt, &project.IDAlgorithm, &project.CreatedAt, &project.UpdatedAt, &project.LastCommit, &project.Active)
 
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("project not found")
@@ -85,10 +52,11 @@ func (pr *ProjectRepo) GetProjectByID(id int) (*models.Project, error) {
 	return project, nil
 }
 
-// ListProjects returns all non-archived projects.
+// ListProjects returns all active projects.
 func (pr *ProjectRepo) ListProjects() ([]models.Project, error) {
 	rows, err := pr.db.Query(
-		"SELECT id, uuid, name, repo_slug, created_at, updated_at, archived_at FROM projects WHERE archived_at IS NULL ORDER BY created_at DESC",
+		`SELECT id, name, path, remote_url, subpath, module, salt, id_algorithm, created_at, updated_at, last_commit, active
+		 FROM projects WHERE active = 1 ORDER BY created_at DESC`,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query projects: %w", err)
@@ -98,7 +66,7 @@ func (pr *ProjectRepo) ListProjects() ([]models.Project, error) {
 	var projects []models.Project
 	for rows.Next() {
 		project := models.Project{}
-		if err := rows.Scan(&project.ID, &project.UUID, &project.Name, &project.RepoSlug, &project.CreatedAt, &project.UpdatedAt, &project.ArchivedAt); err != nil {
+		if err := rows.Scan(&project.ID, &project.Name, &project.Path, &project.RemoteURL, &project.Subpath, &project.Module, &project.Salt, &project.IDAlgorithm, &project.CreatedAt, &project.UpdatedAt, &project.LastCommit, &project.Active); err != nil {
 			return nil, fmt.Errorf("failed to scan project: %w", err)
 		}
 		projects = append(projects, project)
@@ -107,12 +75,33 @@ func (pr *ProjectRepo) ListProjects() ([]models.Project, error) {
 	return projects, rows.Err()
 }
 
-// UpdateProject updates a project's name.
-func (pr *ProjectRepo) UpdateProject(id int, name string) (*models.Project, error) {
-	_, err := pr.db.Exec(
-		"UPDATE projects SET name = ? WHERE id = ?",
-		name, id,
-	)
+// UpdateProject updates a project's metadata.
+func (pr *ProjectRepo) UpdateProject(id string, updates map[string]interface{}) (*models.Project, error) {
+	// Build dynamic UPDATE query
+	query := "UPDATE projects SET updated_at = ?"
+	args := []interface{}{time.Now()}
+
+	if name, ok := updates["name"].(string); ok {
+		query += ", name = ?"
+		args = append(args, name)
+	}
+	if path, ok := updates["path"].(string); ok {
+		query += ", path = ?"
+		args = append(args, path)
+	}
+	if remoteURL, ok := updates["remote_url"].(string); ok {
+		query += ", remote_url = ?"
+		args = append(args, remoteURL)
+	}
+	if lastCommit, ok := updates["last_commit"].(string); ok {
+		query += ", last_commit = ?"
+		args = append(args, lastCommit)
+	}
+
+	query += " WHERE id = ?"
+	args = append(args, id)
+
+	_, err := pr.db.Exec(query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update project: %w", err)
 	}
@@ -120,71 +109,10 @@ func (pr *ProjectRepo) UpdateProject(id int, name string) (*models.Project, erro
 	return pr.GetProjectByID(id)
 }
 
-// SoftDeleteProject marks a project as archived.
-func (pr *ProjectRepo) SoftDeleteProject(id int) error {
-	_, err := pr.db.Exec(
-		"UPDATE projects SET archived_at = CURRENT_TIMESTAMP WHERE id = ?",
-		id,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to soft delete project: %w", err)
-	}
-	return nil
-}
-
-// SyncWorkflowFromYAML syncs workflow states from a YAML definition.
-// WorkflowYAML should contain a slice of states with Code and DisplayName.
-type WorkflowYAML struct {
-	States []struct {
-		Code        string `yaml:"code"`
-		DisplayName string `yaml:"label"`
-	} `yaml:"workflow"`
-}
-
-// SyncWorkflowFromYAML upserts workflow states for a project.
-func (pr *ProjectRepo) SyncWorkflowFromYAML(projectID int, states []struct {
-	Code        string
-	DisplayName string
-}) error {
-	for i, state := range states {
-		// Check if state exists
-		var existingID int
-		err := pr.db.QueryRow(
-			"SELECT id FROM workflow_states WHERE project_id = ? AND code = ?",
-			projectID, state.Code,
-		).Scan(&existingID)
-
-		if err == sql.ErrNoRows {
-			// Insert new state
-			_, err := pr.db.Exec(
-				"INSERT INTO workflow_states (project_id, code, display_name, position) VALUES (?, ?, ?, ?)",
-				projectID, state.Code, state.DisplayName, i,
-			)
-			if err != nil {
-				return fmt.Errorf("failed to insert workflow state: %w", err)
-			}
-		} else if err == nil {
-			// Update existing state
-			_, err := pr.db.Exec(
-				"UPDATE workflow_states SET display_name = ?, position = ? WHERE id = ?",
-				state.DisplayName, i, existingID,
-			)
-			if err != nil {
-				return fmt.Errorf("failed to update workflow state: %w", err)
-			}
-		} else {
-			return fmt.Errorf("failed to query workflow state: %w", err)
-		}
-	}
-
-	return nil
-}
-
-// GetWorkflowStates returns all states for a project.
-func (pr *ProjectRepo) GetWorkflowStates(projectID int) ([]models.WorkflowState, error) {
+// GetWorkflowStates returns all workflow states (global, not per-project).
+func (pr *ProjectRepo) GetWorkflowStates() ([]models.WorkflowState, error) {
 	rows, err := pr.db.Query(
-		"SELECT id, project_id, code, display_name, position, created_at, updated_at FROM workflow_states WHERE project_id = ? ORDER BY position ASC",
-		projectID,
+		"SELECT id, name, position, color FROM workflow_states ORDER BY position ASC",
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query workflow states: %w", err)
@@ -194,7 +122,7 @@ func (pr *ProjectRepo) GetWorkflowStates(projectID int) ([]models.WorkflowState,
 	var states []models.WorkflowState
 	for rows.Next() {
 		state := models.WorkflowState{}
-		if err := rows.Scan(&state.ID, &state.ProjectID, &state.Code, &state.DisplayName, &state.Position, &state.CreatedAt, &state.UpdatedAt); err != nil {
+		if err := rows.Scan(&state.ID, &state.Name, &state.Position, &state.Color); err != nil {
 			return nil, fmt.Errorf("failed to scan workflow state: %w", err)
 		}
 		states = append(states, state)

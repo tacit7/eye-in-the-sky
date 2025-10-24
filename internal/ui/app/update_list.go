@@ -1,6 +1,8 @@
 package app
 
 import (
+	"path/filepath"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/modal"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/util"
@@ -29,11 +31,14 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 		if tabName != "" {
+			debugf("Setting resolver context to list.%s", tabName)
 			m.keybindResolver.SetContext("list", tabName)
 		}
+	} else {
+		debugf("keybindResolver is NIL in handleListKeys!")
 	}
 
-	// Tab navigation
+	// Tab navigation (direct keys that don't go through resolver)
 	switch msg.String() {
 	case "tab", "right":
 		m.listTabs.Next()
@@ -53,12 +58,10 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "t", "T":
 		m.listTabs.Set(3) // Usage
 		m.statusMsg = "Switched to Usage tab"
-		// Trigger usage content refresh
 		return m, func() tea.Msg { return RefreshUsageMsg{} }
 	case "u", "U":
 		m.listTabs.Set(3) // Usage (support both u and U for backward compatibility)
 		m.statusMsg = "Switched to Usage tab"
-		// Trigger usage content refresh
 		return m, func() tea.Msg { return RefreshUsageMsg{} }
 	case "i", "I":
 		// Initialize CCUsage database (only in Usage tab when empty)
@@ -71,74 +74,148 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			)
 		}
 		return m, nil
-	case "n":
-		// Open New Session form in Overview tab only
-		if m.listTabs.ActiveIndex == 0 {
-			formSpec := modal.NewSessionFormSpec()
-			m.modalManager.OpenForm(formSpec)
-			return m, nil
+	}
+
+	// Use resolver for tab-specific actions
+	if m.keybindResolver != nil {
+		action, found := m.keybindResolver.Resolve(msg, false)
+		if found {
+			switch action {
+			case "new_session":
+				// Open New Session form in Overview tab only
+				if m.listTabs.ActiveIndex == 0 {
+					formSpec := modal.NewSessionFormSpec()
+					m.modalManager.OpenForm(formSpec)
+					return m, nil
+				}
+
+			case "new_ticket":
+				// Open New Ticket form in Project tab only
+				if m.listTabs.ActiveIndex == 1 {
+					var projectName string
+					if m.projectInfo != nil {
+						projectName = m.projectInfo.RepoName
+					}
+					formSpec := modal.NewTicketFormSpec(projectName)
+					m.modalManager.OpenForm(formSpec)
+					return m, nil
+				}
+
+			case "toggle_filter":
+				m.showAll = !m.showAll
+				return m, loadAgentsCmd(m.data.Agents)
+
+			case "continue_session":
+				agent := m.SelectedAgent()
+				if agent == nil {
+					m.statusMsg = "No agent selected"
+					return m, nil
+				}
+				if m.claudePath == "" {
+					m.statusMsg = "Claude binary not found"
+					return m, nil
+				}
+				return m, ResumeSession(m.claudePath, string(agent.ID))
+
+			case "start_session":
+				agent := m.SelectedAgent()
+				if agent == nil {
+					m.statusMsg = "No agent selected"
+					return m, nil
+				}
+				if m.claudePath == "" {
+					m.statusMsg = "Claude binary not found"
+					return m, nil
+				}
+				return m, StartSession(m.claudePath, string(agent.ID))
+
+			case "go_to_window":
+				agent := m.SelectedAgent()
+				if agent == nil {
+					m.statusMsg = "No agent selected"
+					return m, nil
+				}
+				if agent.WindowID == "" {
+					m.statusMsg = "No window ID for agent"
+					return m, nil
+				}
+				return m, util.FocusWindowCmd(m.windowFocuser, agent.WindowID, agent.TerminalApplication)
+
+			case "archive":
+				agent := m.SelectedAgent()
+				if agent == nil {
+					m.statusMsg = "No agent selected"
+					return m, nil
+				}
+				return m, m.archiveAgentCmd(string(agent.ID))
+			}
 		}
 	}
 
-	// Navigation for Overview tab (tab 0)
-	// Allow j/k and arrow keys for non-overview tabs to work with their handlers
-	if m.listTabs.ActiveIndex == 0 {
-		keyStr := msg.String()
+	// Navigation for Overview tab (tab 0) using resolver
+	if m.listTabs.ActiveIndex == 0 && m.keybindResolver != nil {
+		action, found := m.keybindResolver.Resolve(msg, false)
+		debugf("Overview: Key: %s, Action: %s, Found: %v", msg.String(), action, found)
+		if found {
+			switch action {
+			case "down":
+				debugf("[Overview] Moving down (index %d → %d of %d)", m.selectedIndex, m.selectedIndex+1, len(m.agents))
+				if m.selectedIndex < len(m.agents)-1 {
+					m.selectedIndex++
+					m.adjustListScroll()
+				}
+				return m, nil
 
-		// Navigate down: j or down arrow
-		if keyStr == "j" || keyStr == "down" {
-			if m.selectedIndex < len(m.agents)-1 {
-				m.selectedIndex++
-				m.adjustListScroll()
-			}
-			return m, nil
-		}
+			case "up":
+				debugf("[Overview] Moving up (index %d → %d)", m.selectedIndex, m.selectedIndex-1)
+				if m.selectedIndex > 0 {
+					m.selectedIndex--
+					m.adjustListScroll()
+				}
+				return m, nil
 
-		// Navigate up: k or up arrow
-		if keyStr == "k" || keyStr == "up" {
-			if m.selectedIndex > 0 {
-				m.selectedIndex--
-				m.adjustListScroll()
+			case "select":
+				// Switch to detail view - load details with command
+				if m.selectedIndex >= 0 && m.selectedIndex < len(m.agents) {
+					m.selectedAgent = &m.agents[m.selectedIndex]
+					m.currentView = ViewDetail
+					m.detailOffset = 0
+					// Set active tab to Overview (index 1, since 0 is back arrow)
+					m.tabs.Set(1)
+					return m, loadAgentDetailsCmd(m.data, m.selectedAgent.ID)
+				}
+				return m, nil
 			}
-			return m, nil
-		}
-
-		// Select: enter
-		if keyStr == "enter" || keyStr == "right" {
-			// Switch to detail view - load details with command
-			if m.selectedIndex >= 0 && m.selectedIndex < len(m.agents) {
-				m.selectedAgent = &m.agents[m.selectedIndex]
-				m.currentView = ViewDetail
-				m.detailOffset = 0
-				// Set active tab to Overview (index 1, since 0 is back arrow)
-				m.tabs.Set(1)
-				return m, loadAgentDetailsCmd(m.data, m.selectedAgent.ID)
-			}
-			return m, nil
 		}
 	}
 
 	// Usage tab scrolling (only when Usage tab is active)
-	if m.listTabs.ActiveIndex == 3 {
-		switch msg.String() {
-		case "up", "k":
-			m.usageViewport.LineUp(1)
-			return m, nil
-		case "down", "j":
-			m.usageViewport.LineDown(1)
-			return m, nil
-		case "pgup":
-			m.usageViewport.HalfViewUp()
-			return m, nil
-		case "pgdown":
-			m.usageViewport.HalfViewDown()
-			return m, nil
+	if m.listTabs.ActiveIndex == 3 && m.keybindResolver != nil {
+		action, found := m.keybindResolver.Resolve(msg, false)
+		if found {
+			switch action {
+			case "down":
+				m.usageViewport.LineDown(1)
+				return m, nil
+			case "up":
+				m.usageViewport.LineUp(1)
+				return m, nil
+			case "page_down":
+				m.usageViewport.HalfViewDown()
+				return m, nil
+			case "page_up":
+				m.usageViewport.HalfViewUp()
+				return m, nil
+			}
 		}
 	}
 
 	// Project tab navigation and scrolling (only when Project tab is active)
 	if m.listTabs.ActiveIndex == 1 {
-		switch msg.String() {
+		keyStr := msg.String()
+
+		// Section switching (direct keys)
+		switch keyStr {
 		case "1":
 			m.projectSelectedSection = 0 // Tasks
 			m.projectTasksIndex = 0
@@ -150,153 +227,224 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.projectSelectedSection = 2 // Markdown files
 			m.projectMDFilesIndex = 0
 			return m, nil
-		case "n":
-			// Open New Ticket form
-			var projectName string
-			if m.projectInfo != nil {
-				projectName = m.projectInfo.RepoName
+		}
+
+		// Use resolver for navigation actions
+		if m.keybindResolver != nil {
+			action, found := m.keybindResolver.Resolve(msg, false)
+			if found {
+				switch action {
+				case "new_ticket":
+					var projectName string
+					if m.projectInfo != nil {
+						projectName = m.projectInfo.RepoName
+					}
+					formSpec := modal.NewTicketFormSpec(projectName)
+					m.modalManager.OpenForm(formSpec)
+					return m, nil
+
+				case "down":
+					// Navigate within section
+					switch m.projectSelectedSection {
+					case 0: // Tasks
+						if m.projectTasksIndex < len(m.projectTasks)-1 {
+							m.projectTasksIndex++
+						}
+					case 2: // Markdown files
+						if m.projectMDFilesIndex < len(m.projectMDFiles)-1 {
+							m.projectMDFilesIndex++
+						}
+					}
+					return m, nil
+
+				case "up":
+					// Navigate within section
+					switch m.projectSelectedSection {
+					case 0: // Tasks
+						if m.projectTasksIndex > 0 {
+							m.projectTasksIndex--
+						}
+					case 2: // Markdown files
+						if m.projectMDFilesIndex > 0 {
+							m.projectMDFilesIndex--
+						}
+					}
+					return m, nil
+				}
 			}
-			formSpec := modal.NewTicketFormSpec(projectName)
-			m.modalManager.OpenForm(formSpec)
-			return m, nil
-		case "j", "down":
-			// Navigate within section
-			switch m.projectSelectedSection {
-			case 0: // Tasks
-				if m.projectTasksIndex < len(m.projectTasks)-1 {
-					m.projectTasksIndex++
-				}
-			case 2: // Markdown files
-				if m.projectMDFilesIndex < len(m.projectMDFiles)-1 {
-					m.projectMDFilesIndex++
-				}
-			}
-			return m, nil
-		case "k", "up":
-			// Navigate within section
-			switch m.projectSelectedSection {
-			case 0: // Tasks
-				if m.projectTasksIndex > 0 {
-					m.projectTasksIndex--
-				}
-			case 2: // Markdown files
-				if m.projectMDFilesIndex > 0 {
-					m.projectMDFilesIndex--
-				}
-			}
-			return m, nil
 		}
 	}
 
 	// Claude tab navigation and operations (only when Claude tab is active)
-	if m.listTabs.ActiveIndex == 2 {
-		switch msg.String() {
-		case "j", "down":
-			// Navigate file list down
-			if !m.claudeShowingContent && m.claudeSelectedIndex < len(m.claudeFiles)-1 {
-				m.claudeSelectedIndex++
+	if m.listTabs.ActiveIndex == 2 && m.keybindResolver != nil {
+		action, found := m.keybindResolver.Resolve(msg, false)
+		if found {
+			switch action {
+			case "down":
+				// Navigate file list down
+				if m.claudeSelectedIndex < len(m.claudeFiles)-1 {
+					m.claudeSelectedIndex++
+					m.claudeFilesViewport.LineDown(1)
+
+					// Auto-load content for selected file or directory
+					if m.claudeSelectedIndex < len(m.claudeFiles) {
+						selectedFile := m.claudeFiles[m.claudeSelectedIndex]
+						if !selectedFile.IsParent {
+							if selectedFile.IsDir {
+								return m, m.loadClaudeDirectoryContentCmd(selectedFile.Path)
+							} else {
+								return m, loadClaudeFileContentCmd(selectedFile.Path)
+							}
+						}
+					}
+				}
 				return m, nil
-			} else if m.claudeShowingContent {
-				// Scroll content viewport down
-				m.claudeViewport.LineDown(1)
+
+			case "up":
+				// Navigate file list up
+				if m.claudeSelectedIndex > 0 {
+					m.claudeSelectedIndex--
+					m.claudeFilesViewport.LineUp(1)
+
+					// Auto-load content for selected file or directory
+					if m.claudeSelectedIndex < len(m.claudeFiles) {
+						selectedFile := m.claudeFiles[m.claudeSelectedIndex]
+						if !selectedFile.IsParent {
+							if selectedFile.IsDir {
+								return m, m.loadClaudeDirectoryContentCmd(selectedFile.Path)
+							} else {
+								return m, loadClaudeFileContentCmd(selectedFile.Path)
+							}
+						}
+					}
+				}
 				return m, nil
-			}
-			return m, nil
-		case "k", "up":
-			// Navigate file list up
-			if !m.claudeShowingContent && m.claudeSelectedIndex > 0 {
-				m.claudeSelectedIndex--
-				return m, nil
-			} else if m.claudeShowingContent {
-				// Scroll content viewport up
-				m.claudeViewport.LineUp(1)
-				return m, nil
-			}
-			return m, nil
-		case "enter":
-			// Load selected file
-			if m.claudeSelectedIndex >= 0 && m.claudeSelectedIndex < len(m.claudeFiles) {
-				selectedFile := m.claudeFiles[m.claudeSelectedIndex]
-				if !selectedFile.IsDir {
+
+			case "open":
+				// Handle file/directory selection
+				if m.claudeSelectedIndex >= 0 && m.claudeSelectedIndex < len(m.claudeFiles) {
+					selectedFile := m.claudeFiles[m.claudeSelectedIndex]
+
+					// Handle parent directory (..)
+					if selectedFile.IsParent {
+						// Navigate up one level
+						if m.claudeCurrentPath != "" {
+							// Remove last path component
+							m.claudeCurrentPath = filepath.Dir(m.claudeCurrentPath)
+							if m.claudeCurrentPath == "." {
+								m.claudeCurrentPath = ""
+							}
+						}
+						m.claudeShowingContent = false
+						m.claudeContent = ""
+						m.claudeSelectedIndex = 0
+						m.statusMsg = "Navigated up"
+						return m, m.loadClaudeFilesCmd()
+					}
+
+					// Handle directories
+					if selectedFile.IsDir {
+						// Navigate into directory
+						if m.claudeCurrentPath != "" {
+							m.claudeCurrentPath = filepath.Join(m.claudeCurrentPath, selectedFile.Name)
+						} else {
+							m.claudeCurrentPath = selectedFile.Name
+						}
+						m.claudeShowingContent = false
+						m.claudeContent = ""
+						m.claudeSelectedIndex = 0
+						m.statusMsg = "Entered directory"
+						return m, m.loadClaudeFilesCmd()
+					}
+
+					// Handle files
 					m.claudeShowingContent = true
 					return m, loadClaudeFileContentCmd(selectedFile.Path)
 				}
-			}
-			return m, nil
-		case "v":
-			// Validate JSON
-			if m.claudeShowingContent && m.claudeContent != "" {
-				return m, validateClaudeFileCmd(m.claudeContent)
-			}
-			return m, nil
-		case "e":
-			// Open in editor (only for files, not directories)
-			if m.claudeSelectedIndex >= 0 && m.claudeSelectedIndex < len(m.claudeFiles) {
-				selectedFile := m.claudeFiles[m.claudeSelectedIndex]
-				if !selectedFile.IsDir {
-					return m, openClaudeFileInEditor(selectedFile.Path)
+				return m, nil
+
+			case "validate":
+				// Validate JSON
+				if m.claudeShowingContent && m.claudeContent != "" {
+					return m, validateClaudeFileCmd(m.claudeContent)
 				}
+				return m, nil
+
+			case "edit":
+				// Open in editor (only for files, not directories)
+				if m.claudeSelectedIndex >= 0 && m.claudeSelectedIndex < len(m.claudeFiles) {
+					selectedFile := m.claudeFiles[m.claudeSelectedIndex]
+					if !selectedFile.IsDir {
+						return m, openClaudeFileInEditor(selectedFile.Path)
+					}
+				}
+				return m, nil
+
+			case "refresh":
+				// Refresh file list
+				m.statusMsg = "Refreshing Claude config files..."
+				return m, m.loadClaudeFilesCmd()
+
+			case "page_down":
+				if m.claudeShowingContent {
+					var cmd tea.Cmd
+					m.claudeViewport, cmd = m.claudeViewport.Update(msg)
+					return m, cmd
+				}
+				return m, nil
+
+			case "page_up":
+				if m.claudeShowingContent {
+					var cmd tea.Cmd
+					m.claudeViewport, cmd = m.claudeViewport.Update(msg)
+					return m, cmd
+				}
+				return m, nil
 			}
-			return m, nil
-		case "r":
-			// Refresh file list
-			m.statusMsg = "Refreshing Claude config files..."
-			return m, m.loadClaudeFilesCmd()
-		case "esc", "q":
-			// Back to file list from content view
+		}
+
+		// Handle esc/q to go back from content view (direct keys)
+		if msg.String() == "esc" || msg.String() == "q" {
 			if m.claudeShowingContent {
 				m.claudeShowingContent = false
 				m.claudeContent = ""
-				// Note: claudeValidStatus persists (sticky) until next validation or file load
 				return m, nil
-			}
-			return m, nil
-		case "pgup":
-			if m.claudeShowingContent {
-				var cmd tea.Cmd
-				m.claudeViewport, cmd = m.claudeViewport.Update(msg)
-				return m, cmd
-			}
-			return m, nil
-		case "pgdown":
-			if m.claudeShowingContent {
-				var cmd tea.Cmd
-				m.claudeViewport, cmd = m.claudeViewport.Update(msg)
-				return m, cmd
 			}
 			return m, nil
 		}
 	}
 
 	// Config tab navigation and operations (only when Config tab is active)
-	if m.listTabs.ActiveIndex == 4 {
-		switch msg.String() {
-		case "e", "E":
+	if m.listTabs.ActiveIndex == 4 && m.keybindResolver != nil {
+		keyStr := msg.String()
+
+		// Direct key handling for edit mode toggle and special keys
+		if keyStr == "e" || keyStr == "E" {
 			// Toggle edit mode
 			if !m.keybindingsEditing {
-				// Enter edit mode
 				m.keybindingsEditing = true
 				m.keybindingsEditBuf = m.keybindingsYAML
 				m.keybindingsModified = false
 				m.statusMsg = "Edit mode on. Press Ctrl+S to save, Esc to cancel."
 			} else {
-				// Exit edit mode without saving
 				m.keybindingsEditing = false
 				m.keybindingsEditBuf = ""
 				m.keybindingsModified = false
 				m.statusMsg = "Edit mode cancelled."
 			}
 			return m, nil
+		}
 
-		case "ctrl+s":
+		if keyStr == "ctrl+s" {
 			// Save changes
 			if m.keybindingsEditing && m.keybindingsModified {
 				return m, m.saveKeybindingsCmd(m.keybindingsEditBuf)
 			}
 			m.statusMsg = "No changes to save."
 			return m, nil
+		}
 
-		case "esc":
+		if keyStr == "esc" {
 			// Cancel edit mode
 			if m.keybindingsEditing {
 				m.keybindingsEditing = false
@@ -306,164 +454,89 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			return m, nil
+		}
 
-		case "r", "R":
-			// Reload keybindings from file
-			if !m.keybindingsEditing {
-				return m, m.reloadKeybindingsCmd()
-			}
-			m.statusMsg = "Cannot reload while editing. Save or cancel first."
-			return m, nil
+		// Use resolver for navigation actions when not in edit mode
+		if !m.keybindingsEditing {
+			action, found := m.keybindResolver.Resolve(msg, false)
+			if found {
+				switch action {
+				case "refresh":
+					// Reload keybindings from file
+					return m, m.reloadKeybindingsCmd()
 
-		case "j", "down":
-			// Scroll down when not in edit mode
-			if !m.keybindingsEditing {
-				var cmd tea.Cmd
-				m.keybindingsViewport, cmd = m.keybindingsViewport.Update(msg)
-				return m, cmd
-			}
-			return m, nil
+				case "down":
+					// Scroll down
+					var cmd tea.Cmd
+					m.keybindingsViewport, cmd = m.keybindingsViewport.Update(msg)
+					return m, cmd
 
-		case "k", "up":
-			// Scroll up when not in edit mode
-			if !m.keybindingsEditing {
-				var cmd tea.Cmd
-				m.keybindingsViewport, cmd = m.keybindingsViewport.Update(msg)
-				return m, cmd
-			}
-			return m, nil
+				case "up":
+					// Scroll up
+					var cmd tea.Cmd
+					m.keybindingsViewport, cmd = m.keybindingsViewport.Update(msg)
+					return m, cmd
 
-		case "pgup":
-			// Page up when not in edit mode
-			if !m.keybindingsEditing {
-				var cmd tea.Cmd
-				m.keybindingsViewport, cmd = m.keybindingsViewport.Update(msg)
-				return m, cmd
-			}
-			return m, nil
+				case "page_down":
+					// Page down
+					var cmd tea.Cmd
+					m.keybindingsViewport, cmd = m.keybindingsViewport.Update(msg)
+					return m, cmd
 
-		case "pgdown":
-			// Page down when not in edit mode
-			if !m.keybindingsEditing {
-				var cmd tea.Cmd
-				m.keybindingsViewport, cmd = m.keybindingsViewport.Update(msg)
-				return m, cmd
-			}
-			return m, nil
-
-		default:
-			// In edit mode, handle text input
-			if m.keybindingsEditing {
-				// Handle character input
-				if len(msg.String()) == 1 && msg.Runes[0] >= 32 && msg.Runes[0] <= 126 {
-					// Printable character
-					m.keybindingsEditBuf += msg.String()
-					m.keybindingsModified = true
-					return m, nil
-				}
-
-				// Handle special keys
-				switch msg.String() {
-				case "enter":
-					m.keybindingsEditBuf += "\n"
-					m.keybindingsModified = true
-					return m, nil
-				case "backspace":
-					if len(m.keybindingsEditBuf) > 0 {
-						m.keybindingsEditBuf = m.keybindingsEditBuf[:len(m.keybindingsEditBuf)-1]
-						m.keybindingsModified = true
-					}
-					return m, nil
-				case "tab":
-					m.keybindingsEditBuf += "\t"
-					m.keybindingsModified = true
-					return m, nil
+				case "page_up":
+					// Page up
+					var cmd tea.Cmd
+					m.keybindingsViewport, cmd = m.keybindingsViewport.Update(msg)
+					return m, cmd
 				}
 			}
 		}
+
+		// In edit mode, handle text input
+		if m.keybindingsEditing {
+			// Handle character input
+			if len(msg.String()) == 1 && msg.Runes[0] >= 32 && msg.Runes[0] <= 126 {
+				// Printable character
+				m.keybindingsEditBuf += msg.String()
+				m.keybindingsModified = true
+				return m, nil
+			}
+
+			// Handle special keys
+			switch msg.String() {
+			case "enter":
+				m.keybindingsEditBuf += "\n"
+				m.keybindingsModified = true
+				return m, nil
+			case "backspace":
+				if len(m.keybindingsEditBuf) > 0 {
+					m.keybindingsEditBuf = m.keybindingsEditBuf[:len(m.keybindingsEditBuf)-1]
+					m.keybindingsModified = true
+				}
+				return m, nil
+			case "tab":
+				m.keybindingsEditBuf += "\t"
+				m.keybindingsModified = true
+				return m, nil
+			}
+		}
 	}
 
-	if msg.String() == "a" {
-		// Toggle show all agents
-		m.showAll = !m.showAll
-		return m, loadAgentsCmd(m.data.Agents)
-	}
-
-	if msg.String() == "n" {
-		debugf("NewSession key detected: %v, claudePath: %s", msg.String(), m.claudePath)
-		// Always set a status message so we know the key was detected
-		if m.claudePath == "" {
-			m.statusMsg = "ERROR: Claude binary not found in PATH"
-			m.err = nil // Clear any previous errors
-			debugf("Claude path is empty")
+	// Fallback keys for agent list navigation (not in resolver yet)
+	if m.listTabs.ActiveIndex == 0 {
+		switch msg.String() {
+		case "g":
+			// Go to top
+			m.selectedIndex = 0
+			m.listOffset = 0
 			return m, nil
-		}
-		m.statusMsg = "Creating new session..."
-		m.err = nil // Clear any previous errors
-		debugf("Launching new session...")
-		return m, NewSession(m.claudePath, m.config.DefaultTerminal)
-	}
-
-	if msg.String() == "c" {
-		agent := m.SelectedAgent()
-		if agent == nil {
-			m.statusMsg = "No agent selected"
+		case "G":
+			// Go to bottom
+			if len(m.agents) > 0 {
+				m.selectedIndex = len(m.agents) - 1
+				m.adjustListScroll()
+			}
 			return m, nil
-		}
-		if m.claudePath == "" {
-			m.statusMsg = "Claude binary not found"
-			return m, nil
-		}
-		// Use agent ID as session ID for now
-		return m, ResumeSession(m.claudePath, string(agent.ID))
-	}
-
-	if msg.String() == "s" {
-		agent := m.SelectedAgent()
-		if agent == nil {
-			m.statusMsg = "No agent selected"
-			return m, nil
-		}
-		if m.claudePath == "" {
-			m.statusMsg = "Claude binary not found"
-			return m, nil
-		}
-		return m, StartSession(m.claudePath, string(agent.ID))
-	}
-
-	if msg.String() == "w" {
-		agent := m.SelectedAgent()
-		if agent == nil {
-			m.statusMsg = "No agent selected"
-			return m, nil
-		}
-		if agent.WindowID == "" {
-			m.statusMsg = "No window ID for agent"
-			return m, nil
-		}
-		return m, util.FocusWindowCmd(m.windowFocuser, agent.WindowID, agent.TerminalApplication)
-	}
-
-	if msg.String() == "D" {
-		agent := m.SelectedAgent()
-		if agent == nil {
-			m.statusMsg = "No agent selected"
-			return m, nil
-		}
-		return m, m.archiveAgentCmd(string(agent.ID))
-	}
-
-	// Fallback keys (temporary)
-	switch msg.String() {
-	case "g":
-		// Go to top
-		m.selectedIndex = 0
-		m.listOffset = 0
-	case "G":
-		// Go to bottom
-		if len(m.agents) > 0 {
-			m.selectedIndex = len(m.agents) - 1
-			m.adjustListScroll()
 		}
 	}
 

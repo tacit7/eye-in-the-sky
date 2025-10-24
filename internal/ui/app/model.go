@@ -207,11 +207,13 @@ type Model struct {
 	lastRenderWidth    int
 
 	// Claude tab state
-	claudeFiles         []ClaudeFile
-	claudeSelectedIndex int
-	claudeContent       string
-	claudeViewport      viewport.Model
-	claudeValidStatus   string
+	claudeCurrentPath    string         // Current directory path in ~/.claude
+	claudeFiles          []ClaudeFile
+	claudeSelectedIndex  int
+	claudeFilesViewport  viewport.Model // Scrollable file list viewport
+	claudeContent        string
+	claudeViewport       viewport.Model
+	claudeValidStatus    string
 	claudeShowingContent bool
 
 	// Modal system
@@ -224,6 +226,7 @@ type Model struct {
 	keybindingsModified bool   // Has content changed?
 	keybindingsEditBuf  string // Edit buffer for changes
 	keybindingsViewport viewport.Model
+	keybindingsError    string // Validation error message (empty if valid)
 }
 
 // Type aliases for backward compatibility during migration
@@ -253,10 +256,11 @@ type ProjectFile struct {
 
 // ClaudeFile represents a config file in ~/.claude
 type ClaudeFile struct {
-	Name    string // Filename (e.g., "settings.json")
-	Path    string // Full path
-	IsDir   bool   // True if it's a directory
-	ModTime time.Time
+	Name     string    // Filename (e.g., "settings.json")
+	Path     string    // Full path
+	IsDir    bool      // True if it's a directory
+	IsParent bool      // True if this is a ".." parent directory entry
+	ModTime  time.Time
 }
 
 // TaskAnnotation is kept local as it's referenced by domain.Task
@@ -357,6 +361,7 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 
 	// Create viewport for Claude tab (will be resized on window size updates)
 	claudeViewport := viewport.New(80, 20)
+	claudeFilesViewport := viewport.New(40, 20)
 
 	// Create viewport for Config tab (will be resized on window size updates)
 	keybindingsViewport := viewport.New(80, 20)
@@ -364,12 +369,16 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 	// Create usage service with system clock
 	usageSvc := services.NewUsageService(services.SystemClock{})
 
-	// Load keybindings and initialize resolver
+	// Load keybindings - use defaults from code, skip YAML file for now
 	var keybindResolver *keybindings.Resolver
-	resolver, err := keybindings.LoadKeybindings()
+	var keybindingsError string
+	resolver, err := keybindings.LoadKeybindingsDefaults()
 	if err != nil {
-		log.Printf("Warning: Failed to load keybindings: %v, using defaults\n", err)
+		log.Printf("Warning: Failed to load default keybindings: %v\n", err)
 		resolver = &keybindings.Resolver{}
+		keybindingsError = err.Error()
+	} else {
+		keybindingsError = "" // No error if defaults loaded successfully
 	}
 	keybindResolver = resolver
 
@@ -391,6 +400,7 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 		listTabs:       listTabs,
 		usageViewport:  usageViewport,
 		claudeViewport: claudeViewport,
+		claudeFilesViewport: claudeFilesViewport,
 		keybindingsViewport: keybindingsViewport,
 		currentView:    ViewList,
 		showAll:        config.ShowAllAgents,
@@ -403,6 +413,7 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 		claudeShowingContent: false,
 		modalManager: modalManager,
 		keybindResolver: keybindResolver,
+		keybindingsError: keybindingsError,
 	}
 
 	// Initialize view renderers map

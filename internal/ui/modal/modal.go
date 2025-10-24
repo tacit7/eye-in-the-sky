@@ -2,15 +2,17 @@ package modal
 
 import (
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 // New creates a new Modal
 func New() *Modal {
 	return &Modal{
-		Active: false,
-		Type:   ModalNone,
-		Inputs: []textinput.Model{},
+		Active:       false,
+		Type:         ModalNone,
+		Inputs:       []textinput.Model{},
+		helpViewport: viewport.New(80, 20), // Initialize with default dimensions
 	}
 }
 
@@ -162,6 +164,28 @@ func (m *Modal) handleKey(key tea.KeyMsg) tea.Cmd {
 			}
 		}
 		return nil
+
+	// Help modal scrolling
+	case "j", "down":
+		if m.Type == ModalHelp {
+			m.HandleHelpScroll("down")
+		}
+		return nil
+	case "k", "up":
+		if m.Type == ModalHelp {
+			m.HandleHelpScroll("up")
+		}
+		return nil
+	case "pgdown":
+		if m.Type == ModalHelp {
+			m.HandleHelpScroll("page_down")
+		}
+		return nil
+	case "pgup":
+		if m.Type == ModalHelp {
+			m.HandleHelpScroll("page_up")
+		}
+		return nil
 	}
 
 	return nil
@@ -207,7 +231,12 @@ func (m *Modal) viewError() string {
 	return m.Title + "\n\n" + m.Content + "\n\n[Esc] Close"
 }
 
-// viewHelp renders a help modal
+// viewHelp renders a help modal with scrollable viewport
 func (m *Modal) viewHelp() string {
+	// Render viewport content if available
+	if m.helpViewport.Width > 0 {
+		return m.Title + "\n\n" + m.helpViewport.View()
+	}
+	// Fallback if viewport not initialized
 	return m.Title + "\n\n" + m.Content + "\n\n[Esc] Close"
 }

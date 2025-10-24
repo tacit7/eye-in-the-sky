@@ -6,52 +6,51 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tacit7/eye-in-the-sky/internal/todo/db"
+	"github.com/google/uuid"
+	"github.com/tacit7/eye-in-the-sky/internal/database"
 	"github.com/tacit7/eye-in-the-sky/internal/todo/models"
 )
 
 // TaskRepo handles task-related database operations.
 type TaskRepo struct {
-	db *db.DB
+	db *database.DB
 }
 
 // NewTaskRepo creates a new TaskRepo.
-func NewTaskRepo(database *db.DB) *TaskRepo {
+func NewTaskRepo(database *database.DB) *TaskRepo {
 	return &TaskRepo{db: database}
 }
 
 // CreateTask creates a new task in a project.
-func (tr *TaskRepo) CreateTask(projectID int, input models.CreateTaskInput) (*models.Task, error) {
+func (tr *TaskRepo) CreateTask(projectID string, input models.CreateTaskInput) (*models.Task, error) {
 	// Validate input
-	if strings.TrimSpace(input.Description) == "" {
-		return nil, fmt.Errorf("description cannot be empty")
+	if strings.TrimSpace(input.Title) == "" {
+		return nil, fmt.Errorf("title cannot be empty")
 	}
 
-	result, err := tr.db.Exec(
-		`INSERT INTO tasks (project_id, description, parent_id, state_code, priority, weight, session_id, agent_id, position)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM tasks WHERE project_id = ?))`,
-		projectID, input.Description, input.ParentID, input.StateCode, input.Priority, input.Weight, input.SessionID, input.AgentID, projectID,
+	// Generate UUID for task ID
+	taskID := uuid.New().String()
+
+	_, err := tr.db.Exec(
+		`INSERT INTO tasks (id, project_id, title, description, state_id, priority, due_at, session_id, agent_id, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		taskID, projectID, input.Title, input.Description, input.StateID, input.Priority, input.DueAt, input.SessionID, input.AgentID, time.Now(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to insert task: %w", err)
 	}
 
-	id, err := result.LastInsertId()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get last insert id: %w", err)
-	}
-
-	return tr.FindByID(int(id))
+	return tr.FindByID(taskID)
 }
 
 // FindByID retrieves a task by ID with all related data.
-func (tr *TaskRepo) FindByID(id int) (*models.Task, error) {
+func (tr *TaskRepo) FindByID(id string) (*models.Task, error) {
 	task := &models.Task{}
 	err := tr.db.QueryRow(
-		`SELECT id, project_id, description, state_code, parent_id, priority, weight, position, due_date, session_id, agent_id, created_at, updated_at, archived_at
+		`SELECT id, project_id, title, description, state_id, priority, due_at, completed_at, session_id, agent_id, created_at, updated_at, archived
 		 FROM tasks WHERE id = ?`,
 		id,
-	).Scan(&task.ID, &task.ProjectID, &task.Description, &task.StateCode, &task.ParentID, &task.Priority, &task.Weight, &task.Position, &task.DueDate, &task.SessionID, &task.AgentID, &task.CreatedAt, &task.UpdatedAt, &task.ArchivedAt)
+	).Scan(&task.ID, &task.ProjectID, &task.Title, &task.Description, &task.StateID, &task.Priority, &task.DueAt, &task.CompletedAt, &task.SessionID, &task.AgentID, &task.CreatedAt, &task.UpdatedAt, &task.Archived)
 
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("task not found")
@@ -73,7 +72,7 @@ func (tr *TaskRepo) FindByID(id int) (*models.Task, error) {
 func (tr *TaskRepo) loadTaskRelations(task *models.Task) error {
 	// Load notes
 	rows, err := tr.db.Query(
-		"SELECT id, task_id, body_markdown, created_at FROM task_notes WHERE task_id = ? ORDER BY created_at DESC",
+		"SELECT id, task_id, author, body, created_at FROM task_notes WHERE task_id = ? ORDER BY created_at DESC",
 		task.ID,
 	)
 	if err != nil {
@@ -83,7 +82,7 @@ func (tr *TaskRepo) loadTaskRelations(task *models.Task) error {
 
 	for rows.Next() {
 		note := models.Note{}
-		if err := rows.Scan(&note.ID, &note.TaskID, &note.BodyMarkdown, &note.CreatedAt); err != nil {
+		if err := rows.Scan(&note.ID, &note.TaskID, &note.Author, &note.Body, &note.CreatedAt); err != nil {
 			return fmt.Errorf("failed to scan note: %w", err)
 		}
 		task.Notes = append(task.Notes, note)
@@ -91,7 +90,7 @@ func (tr *TaskRepo) loadTaskRelations(task *models.Task) error {
 
 	// Load tags
 	rows, err = tr.db.Query(
-		`SELECT t.id, t.name, t.created_at FROM tags t
+		`SELECT t.id, t.name, t.color FROM tags t
 		 JOIN task_tags tt ON t.id = tt.tag_id
 		 WHERE tt.task_id = ? ORDER BY t.name`,
 		task.ID,
@@ -103,7 +102,7 @@ func (tr *TaskRepo) loadTaskRelations(task *models.Task) error {
 
 	for rows.Next() {
 		tag := models.Tag{}
-		if err := rows.Scan(&tag.ID, &tag.Name, &tag.CreatedAt); err != nil {
+		if err := rows.Scan(&tag.ID, &tag.Name, &tag.Color); err != nil {
 			return fmt.Errorf("failed to scan tag: %w", err)
 		}
 		task.Tags = append(task.Tags, tag)
@@ -112,28 +111,69 @@ func (tr *TaskRepo) loadTaskRelations(task *models.Task) error {
 	return nil
 }
 
-// UpdateDescription updates a task's description.
-func (tr *TaskRepo) UpdateDescription(taskID int, description string) (*models.Task, error) {
-	if strings.TrimSpace(description) == "" {
-		return nil, fmt.Errorf("description cannot be empty")
+// Update updates a task's fields.
+func (tr *TaskRepo) Update(taskID string, input models.UpdateTaskInput) (*models.Task, error) {
+	updates := []string{}
+	args := []interface{}{}
+
+	if input.Title != nil {
+		updates = append(updates, "title = ?")
+		args = append(args, *input.Title)
 	}
 
-	_, err := tr.db.Exec(
-		"UPDATE tasks SET description = ? WHERE id = ?",
-		description, taskID,
-	)
+	if input.Description != nil {
+		updates = append(updates, "description = ?")
+		args = append(args, *input.Description)
+	}
+
+	if input.StateID != nil {
+		updates = append(updates, "state_id = ?")
+		args = append(args, *input.StateID)
+	}
+
+	if input.Priority != nil {
+		updates = append(updates, "priority = ?")
+		args = append(args, *input.Priority)
+	}
+
+	if input.DueAt != nil {
+		updates = append(updates, "due_at = ?")
+		args = append(args, *input.DueAt)
+	}
+
+	if input.CompletedAt != nil {
+		updates = append(updates, "completed_at = ?")
+		args = append(args, *input.CompletedAt)
+	}
+
+	if input.Archived != nil {
+		updates = append(updates, "archived = ?")
+		args = append(args, *input.Archived)
+	}
+
+	if len(updates) == 0 {
+		return tr.FindByID(taskID)
+	}
+
+	updates = append(updates, "updated_at = ?")
+	args = append(args, time.Now())
+	args = append(args, taskID)
+
+	query := fmt.Sprintf("UPDATE tasks SET %s WHERE id = ?", strings.Join(updates, ", "))
+
+	_, err := tr.db.Exec(query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to update description: %w", err)
+		return nil, fmt.Errorf("failed to update task: %w", err)
 	}
 
 	return tr.FindByID(taskID)
 }
 
-// AddNote adds a markdown note to a task.
-func (tr *TaskRepo) AddNote(taskID int, bodyMarkdown string) (*models.Note, error) {
+// AddNote adds a note to a task.
+func (tr *TaskRepo) AddNote(taskID string, body string) (*models.Note, error) {
 	result, err := tr.db.Exec(
-		"INSERT INTO task_notes (task_id, body_markdown) VALUES (?, ?)",
-		taskID, bodyMarkdown,
+		"INSERT INTO task_notes (task_id, body) VALUES (?, ?)",
+		taskID, body,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to insert note: %w", err)
@@ -145,10 +185,10 @@ func (tr *TaskRepo) AddNote(taskID int, bodyMarkdown string) (*models.Note, erro
 	}
 
 	note := &models.Note{
-		ID:           int(id),
-		TaskID:       taskID,
-		BodyMarkdown: bodyMarkdown,
-		CreatedAt:    time.Now(),
+		ID:        int(id),
+		TaskID:    taskID,
+		Body:      body,
+		CreatedAt: time.Now(),
 	}
 
 	return note, nil
@@ -164,7 +204,7 @@ func (tr *TaskRepo) DeleteNote(noteID int) error {
 }
 
 // AddTag adds a tag to a task.
-func (tr *TaskRepo) AddTag(taskID int, tagName string) (*models.Tag, error) {
+func (tr *TaskRepo) AddTag(taskID string, tagName string) (*models.Tag, error) {
 	tagName = strings.TrimSpace(tagName)
 	if tagName == "" || len(tagName) > 64 {
 		return nil, fmt.Errorf("invalid tag name")
@@ -206,16 +246,15 @@ func (tr *TaskRepo) AddTag(taskID int, tagName string) (*models.Tag, error) {
 	}
 
 	tag := &models.Tag{
-		ID:        tagID,
-		Name:      tagName,
-		CreatedAt: time.Now(),
+		ID:   tagID,
+		Name: tagName,
 	}
 
 	return tag, nil
 }
 
 // RemoveTag removes a tag from a task.
-func (tr *TaskRepo) RemoveTag(taskID int, tagName string) error {
+func (tr *TaskRepo) RemoveTag(taskID string, tagName string) error {
 	_, err := tr.db.Exec(
 		`DELETE FROM task_tags WHERE task_id = ? AND tag_id = (SELECT id FROM tags WHERE name = ?)`,
 		taskID, tagName,
@@ -227,10 +266,10 @@ func (tr *TaskRepo) RemoveTag(taskID int, tagName string) error {
 }
 
 // MoveToState updates a task's workflow state.
-func (tr *TaskRepo) MoveToState(taskID int, stateCode string) (*models.Task, error) {
+func (tr *TaskRepo) MoveToState(taskID string, stateID int) (*models.Task, error) {
 	_, err := tr.db.Exec(
-		"UPDATE tasks SET state_code = ? WHERE id = ?",
-		stateCode, taskID,
+		"UPDATE tasks SET state_id = ?, updated_at = ? WHERE id = ?",
+		stateID, time.Now(), taskID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update state: %w", err)
@@ -238,116 +277,21 @@ func (tr *TaskRepo) MoveToState(taskID int, stateCode string) (*models.Task, err
 	return tr.FindByID(taskID)
 }
 
-// SetDue sets the due date for a task.
-func (tr *TaskRepo) SetDue(taskID int, due *time.Time) (*models.Task, error) {
-	_, err := tr.db.Exec(
-		"UPDATE tasks SET due_date = ? WHERE id = ?",
-		due, taskID,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to set due date: %w", err)
-	}
-	return tr.FindByID(taskID)
-}
-
-// SetPriority sets the priority (1-5) for a task.
-func (tr *TaskRepo) SetPriority(taskID int, priority *int) (*models.Task, error) {
-	if priority != nil && (*priority < 1 || *priority > 5) {
-		return nil, fmt.Errorf("priority must be between 1 and 5")
-	}
-
-	_, err := tr.db.Exec(
-		"UPDATE tasks SET priority = ? WHERE id = ?",
-		priority, taskID,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to set priority: %w", err)
-	}
-	return tr.FindByID(taskID)
-}
-
-// SetWeight sets the weight for a task.
-func (tr *TaskRepo) SetWeight(taskID int, weight *int) (*models.Task, error) {
-	_, err := tr.db.Exec(
-		"UPDATE tasks SET weight = ? WHERE id = ?",
-		weight, taskID,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to set weight: %w", err)
-	}
-	return tr.FindByID(taskID)
-}
-
-// SetParent sets the parent task, preventing cycles and depth limits.
-func (tr *TaskRepo) SetParent(childID int, parentID *int) (*models.Task, error) {
-	if parentID != nil && *parentID == childID {
-		return nil, fmt.Errorf("cannot set task as its own parent")
-	}
-
-	// Check depth to prevent deep nesting
-	if parentID != nil {
-		depth := 0
-		currentID := *parentID
-		for currentID != 0 && depth < 32 {
-			var nextParentID *int
-			err := tr.db.QueryRow(
-				"SELECT parent_id FROM tasks WHERE id = ?",
-				currentID,
-			).Scan(&nextParentID)
-
-			if err != nil {
-				return nil, fmt.Errorf("failed to check depth: %w", err)
-			}
-
-			if nextParentID == nil {
-				break
-			}
-			currentID = *nextParentID
-			depth++
-		}
-
-		if depth >= 32 {
-			return nil, fmt.Errorf("parent depth exceeds maximum of 32")
-		}
-	}
-
-	_, err := tr.db.Exec(
-		"UPDATE tasks SET parent_id = ? WHERE id = ?",
-		parentID, childID,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to set parent: %w", err)
-	}
-	return tr.FindByID(childID)
-}
-
-// Reorder changes the position of a task.
-func (tr *TaskRepo) Reorder(taskID int, newPosition int) (*models.Task, error) {
-	_, err := tr.db.Exec(
-		"UPDATE tasks SET position = ? WHERE id = ?",
-		newPosition, taskID,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to reorder: %w", err)
-	}
-	return tr.FindByID(taskID)
-}
-
 // List retrieves tasks for a project with filters and ordering.
-func (tr *TaskRepo) List(projectID int, filters models.Filters, sortBy models.SortOrder) ([]models.Task, error) {
-	query := `SELECT id, project_id, description, state_code, parent_id, priority, weight, position, due_date, session_id, agent_id, created_at, updated_at, archived_at
+func (tr *TaskRepo) List(projectID string, filters models.Filters, sortBy models.SortOrder) ([]models.Task, error) {
+	query := `SELECT id, project_id, title, description, state_id, priority, due_at, completed_at, session_id, agent_id, created_at, updated_at, archived
 	          FROM tasks WHERE project_id = ?`
 
 	args := []interface{}{projectID}
 
 	// Apply filters
-	if filters.StateCode != nil {
-		query += " AND state_code = ?"
-		args = append(args, *filters.StateCode)
+	if filters.StateID != nil {
+		query += " AND state_id = ?"
+		args = append(args, *filters.StateID)
 	}
 
 	if filters.IsActive {
-		query += " AND archived_at IS NULL"
+		query += " AND archived = 0"
 	}
 
 	if filters.Priority != nil {
@@ -356,12 +300,12 @@ func (tr *TaskRepo) List(projectID int, filters models.Filters, sortBy models.So
 	}
 
 	if filters.DueBefore != nil {
-		query += " AND due_date <= ?"
+		query += " AND due_at <= ?"
 		args = append(args, *filters.DueBefore)
 	}
 
 	if filters.DueAfter != nil {
-		query += " AND due_date >= ?"
+		query += " AND due_at >= ?"
 		args = append(args, *filters.DueAfter)
 	}
 
@@ -381,15 +325,15 @@ func (tr *TaskRepo) List(projectID int, filters models.Filters, sortBy models.So
 	// Apply sorting
 	switch sortBy {
 	case models.SortByDue:
-		query += " ORDER BY due_date ASC, position ASC"
+		query += " ORDER BY due_at ASC, created_at ASC"
 	case models.SortByPriority:
-		query += " ORDER BY priority DESC, position ASC"
+		query += " ORDER BY priority DESC, created_at ASC"
 	case models.SortByCreated:
 		query += " ORDER BY created_at DESC"
 	case models.SortByUpdated:
 		query += " ORDER BY updated_at DESC"
 	default:
-		query += " ORDER BY position ASC"
+		query += " ORDER BY created_at ASC"
 	}
 
 	rows, err := tr.db.Query(query, args...)
@@ -401,7 +345,7 @@ func (tr *TaskRepo) List(projectID int, filters models.Filters, sortBy models.So
 	var tasks []models.Task
 	for rows.Next() {
 		task := models.Task{}
-		if err := rows.Scan(&task.ID, &task.ProjectID, &task.Description, &task.StateCode, &task.ParentID, &task.Priority, &task.Weight, &task.Position, &task.DueDate, &task.SessionID, &task.AgentID, &task.CreatedAt, &task.UpdatedAt, &task.ArchivedAt); err != nil {
+		if err := rows.Scan(&task.ID, &task.ProjectID, &task.Title, &task.Description, &task.StateID, &task.Priority, &task.DueAt, &task.CompletedAt, &task.SessionID, &task.AgentID, &task.CreatedAt, &task.UpdatedAt, &task.Archived); err != nil {
 			return nil, fmt.Errorf("failed to scan task: %w", err)
 		}
 		if err := tr.loadTaskRelations(&task); err != nil {
@@ -413,16 +357,20 @@ func (tr *TaskRepo) List(projectID int, filters models.Filters, sortBy models.So
 	return tasks, rows.Err()
 }
 
-// Search performs full-text search on tasks.
-func (tr *TaskRepo) Search(projectID int, query string, limit, offset int) ([]models.SearchResult, error) {
+// Search performs full-text search on tasks using FTS5.
+func (tr *TaskRepo) Search(projectID string, searchQuery string, limit, offset int) ([]models.SearchResult, error) {
+	// Use CTE to get FTS5 results with rank, then join with tasks
 	rows, err := tr.db.Query(
-		`SELECT t.id, t.project_id, t.description, t.state_code, t.parent_id, t.priority, t.weight, t.position, t.due_date, t.session_id, t.agent_id, t.created_at, t.updated_at, t.archived_at, s.rank
-		 FROM task_search s
-		 JOIN tasks t ON s.rowid = t.id
-		 WHERE t.project_id = ? AND s MATCH ?
-		 ORDER BY s.rank ASC
-		 LIMIT ? OFFSET ?`,
-		projectID, query, limit, offset,
+		`WITH fts_results AS (
+			SELECT task_id, rank FROM task_search WHERE task_search MATCH ?
+		)
+		SELECT t.id, t.project_id, t.title, t.description, t.state_id, t.priority, t.due_at, t.completed_at, t.session_id, t.agent_id, t.created_at, t.updated_at, t.archived, fts_results.rank
+		FROM fts_results
+		JOIN tasks t ON t.id = fts_results.task_id
+		WHERE t.project_id = ?
+		ORDER BY fts_results.rank DESC
+		LIMIT ? OFFSET ?`,
+		searchQuery, projectID, limit, offset,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to search tasks: %w", err)
@@ -433,9 +381,11 @@ func (tr *TaskRepo) Search(projectID int, query string, limit, offset int) ([]mo
 	for rows.Next() {
 		result := models.SearchResult{}
 		task := models.Task{}
-		if err := rows.Scan(&task.ID, &task.ProjectID, &task.Description, &task.StateCode, &task.ParentID, &task.Priority, &task.Weight, &task.Position, &task.DueDate, &task.SessionID, &task.AgentID, &task.CreatedAt, &task.UpdatedAt, &task.ArchivedAt, &result.Rank); err != nil {
+		var rank float64
+		if err := rows.Scan(&task.ID, &task.ProjectID, &task.Title, &task.Description, &task.StateID, &task.Priority, &task.DueAt, &task.CompletedAt, &task.SessionID, &task.AgentID, &task.CreatedAt, &task.UpdatedAt, &task.Archived, &rank); err != nil {
 			return nil, fmt.Errorf("failed to scan search result: %w", err)
 		}
+		result.Rank = rank
 		if err := tr.loadTaskRelations(&task); err != nil {
 			return nil, err
 		}
@@ -446,52 +396,23 @@ func (tr *TaskRepo) Search(projectID int, query string, limit, offset int) ([]mo
 	return results, rows.Err()
 }
 
-// Delete soft-deletes a task and all its children recursively.
-func (tr *TaskRepo) Delete(taskID int) error {
-	// Get all child IDs recursively
-	var childIDs []int
-	if err := tr.getChildTaskIDs(taskID, &childIDs); err != nil {
-		return err
-	}
-
-	// Add the task itself
-	childIDs = append(childIDs, taskID)
-
-	// Soft delete all (could also use hard delete if preferred)
-	for _, id := range childIDs {
-		_, err := tr.db.Exec(
-			"UPDATE tasks SET archived_at = CURRENT_TIMESTAMP WHERE id = ?",
-			id,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to delete task: %w", err)
-		}
-	}
-
-	return nil
-}
-
-// getChildTaskIDs recursively gets all child task IDs.
-func (tr *TaskRepo) getChildTaskIDs(parentID int, childIDs *[]int) error {
-	rows, err := tr.db.Query(
-		"SELECT id FROM tasks WHERE parent_id = ?",
-		parentID,
+// Archive soft-deletes a task.
+func (tr *TaskRepo) Archive(taskID string) (*models.Task, error) {
+	_, err := tr.db.Exec(
+		"UPDATE tasks SET archived = 1, updated_at = ? WHERE id = ?",
+		time.Now(), taskID,
 	)
 	if err != nil {
-		return fmt.Errorf("failed to query child tasks: %w", err)
+		return nil, fmt.Errorf("failed to archive task: %w", err)
 	}
-	defer rows.Close()
+	return tr.FindByID(taskID)
+}
 
-	for rows.Next() {
-		var childID int
-		if err := rows.Scan(&childID); err != nil {
-			return fmt.Errorf("failed to scan child id: %w", err)
-		}
-		*childIDs = append(*childIDs, childID)
-		if err := tr.getChildTaskIDs(childID, childIDs); err != nil {
-			return err
-		}
+// HardDelete permanently deletes a task.
+func (tr *TaskRepo) HardDelete(taskID string) error {
+	_, err := tr.db.Exec("DELETE FROM tasks WHERE id = ?", taskID)
+	if err != nil {
+		return fmt.Errorf("failed to delete task: %w", err)
 	}
-
 	return nil
 }

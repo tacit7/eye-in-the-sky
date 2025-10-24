@@ -1,10 +1,7 @@
 package todo
 
 import (
-	"database/sql"
-	"time"
-
-	"github.com/tacit7/eye-in-the-sky/internal/todo/db"
+	"github.com/tacit7/eye-in-the-sky/internal/database"
 	"github.com/tacit7/eye-in-the-sky/internal/todo/models"
 	"github.com/tacit7/eye-in-the-sky/internal/todo/repository"
 	"github.com/tacit7/eye-in-the-sky/internal/todo/util"
@@ -12,14 +9,14 @@ import (
 
 // Service provides high-level operations for the todo backend.
 type Service struct {
-	db        *db.DB
+	db        *database.DB
 	projects  *repository.ProjectRepo
 	tasks     *repository.TaskRepo
 	notes     *repository.NoteRepo
 }
 
 // NewService creates a new TodoService.
-func NewService(database *db.DB) *Service {
+func NewService(database *database.DB) *Service {
 	return &Service{
 		db:       database,
 		projects: repository.NewProjectRepo(database),
@@ -28,18 +25,19 @@ func NewService(database *db.DB) *Service {
 	}
 }
 
-// Close closes the service and database connection.
+// Close closes the service (note: does not close the database as it's managed externally).
 func (s *Service) Close() error {
-	return s.db.Close()
+	// Database is managed externally; do nothing
+	return nil
 }
 
 // Conn returns the underlying database connection for transaction management.
-func (s *Service) Conn() *db.DB {
+func (s *Service) Conn() *database.DB {
 	return s.db
 }
 
 // GetDB returns the underlying database for direct access (for MCP handlers).
-func (s *Service) GetDB() *db.DB {
+func (s *Service) GetDB() *database.DB {
 	return s.db
 }
 
@@ -71,7 +69,7 @@ func (s *Service) CreateProject(uuid, name string) (*models.Project, error) {
 }
 
 // GetProject retrieves a project by ID.
-func (s *Service) GetProject(projectID int) (*models.Project, error) {
+func (s *Service) GetProject(projectID string) (*models.Project, error) {
 	return s.projects.GetProjectByID(projectID)
 }
 
@@ -80,51 +78,18 @@ func (s *Service) ListProjects() ([]models.Project, error) {
 	return s.projects.ListProjects()
 }
 
-// UpdateProject updates a project's name.
-func (s *Service) UpdateProject(projectID int, name string) (*models.Project, error) {
-	if err := util.ValidateProjectName(name); err != nil {
-		return nil, err
-	}
-	return s.projects.UpdateProject(projectID, name)
-}
-
-// DeleteProject marks a project as archived.
-func (s *Service) DeleteProject(projectID int) error {
-	return s.projects.SoftDeleteProject(projectID)
-}
-
-// GetOrCreateProjectFromRepo finds or creates a project by git repo slug.
-func (s *Service) GetOrCreateProjectFromRepo(repoSlug, uuid string) (*models.Project, error) {
-	return s.projects.CreateOrGetProjectByGitRepo(repoSlug, uuid)
+// UpdateProject updates a project's metadata.
+func (s *Service) UpdateProject(projectID string, updates map[string]interface{}) (*models.Project, error) {
+	return s.projects.UpdateProject(projectID, updates)
 }
 
 // ============================================================================
 // Workflow Operations
 // ============================================================================
 
-// GetWorkflow returns the workflow states for a project.
-func (s *Service) GetWorkflow(projectID int) ([]models.WorkflowState, error) {
-	return s.projects.GetWorkflowStates(projectID)
-}
-
-// SyncWorkflowFromYAML syncs workflow states from parsed YAML.
-func (s *Service) SyncWorkflowFromYAML(projectID int, yamlData []byte) error {
-	wf, err := util.ParseWorkflowYAML(yamlData)
-	if err != nil {
-		return err
-	}
-
-	states := make([]struct {
-		Code        string
-		DisplayName string
-	}, len(wf.Workflow))
-
-	for i, state := range wf.Workflow {
-		states[i].Code = state.Code
-		states[i].DisplayName = state.Label
-	}
-
-	return s.projects.SyncWorkflowFromYAML(projectID, states)
+// GetWorkflow returns all global workflow states.
+func (s *Service) GetWorkflow() ([]models.WorkflowState, error) {
+	return s.projects.GetWorkflowStates()
 }
 
 // ============================================================================
@@ -132,164 +97,48 @@ func (s *Service) SyncWorkflowFromYAML(projectID int, yamlData []byte) error {
 // ============================================================================
 
 // CreateTask creates a new task in a project.
-func (s *Service) CreateTask(projectID int, description string, parentID *int) (*models.Task, error) {
-	if err := util.ValidateDescription(description); err != nil {
+func (s *Service) CreateTask(projectID string, title string) (*models.Task, error) {
+	if err := util.ValidateDescription(title); err != nil {
 		return nil, err
 	}
 
 	input := models.CreateTaskInput{
-		Description: description,
-		ParentID:    parentID,
+		Title: title,
 	}
 
 	return s.tasks.CreateTask(projectID, input)
 }
 
 // GetTask retrieves a task by ID.
-func (s *Service) GetTask(taskID int) (*models.Task, error) {
+func (s *Service) GetTask(taskID string) (*models.Task, error) {
 	return s.tasks.FindByID(taskID)
 }
 
 // ListTasks retrieves tasks for a project with optional filters.
-func (s *Service) ListTasks(projectID int, filters *models.Filters) ([]models.Task, error) {
+func (s *Service) ListTasks(projectID string, filters *models.Filters) ([]models.Task, error) {
 	if filters == nil {
 		filters = &models.Filters{IsActive: true}
 	}
-	return s.tasks.List(projectID, *filters, models.SortByPosition)
+	return s.tasks.List(projectID, *filters, models.SortByCreated)
 }
 
 // ListTasksWithSort retrieves tasks for a project sorted by a specific field.
-func (s *Service) ListTasksWithSort(projectID int, filters models.Filters, sortBy models.SortOrder) ([]models.Task, error) {
+func (s *Service) ListTasksWithSort(projectID string, filters models.Filters, sortBy models.SortOrder) ([]models.Task, error) {
 	return s.tasks.List(projectID, filters, sortBy)
 }
 
-// UpdateTaskDescription updates a task's description.
-func (s *Service) UpdateTaskDescription(taskID int, description string) (*models.Task, error) {
-	if err := util.ValidateDescription(description); err != nil {
-		return nil, err
-	}
-	return s.tasks.UpdateDescription(taskID, description)
-}
-
 // SetTaskState changes a task's workflow state.
-func (s *Service) SetTaskState(taskID int, stateCode string) (*models.Task, error) {
-	return s.tasks.MoveToState(taskID, stateCode)
+func (s *Service) SetTaskState(taskID string, stateID int) (*models.Task, error) {
+	return s.tasks.MoveToState(taskID, stateID)
 }
 
-// SetTaskPriority sets a task's priority (1-5).
-func (s *Service) SetTaskPriority(taskID int, priority *int) (*models.Task, error) {
-	if err := util.ValidatePriority(priority); err != nil {
-		return nil, err
-	}
-	return s.tasks.SetPriority(taskID, priority)
-}
-
-// SetTaskWeight sets a task's weight.
-func (s *Service) SetTaskWeight(taskID int, weight *int) (*models.Task, error) {
-	if err := util.ValidateWeight(weight); err != nil {
-		return nil, err
-	}
-	return s.tasks.SetWeight(taskID, weight)
-}
-
-// SetTaskDueDate sets a task's due date.
-func (s *Service) SetTaskDueDate(taskID int, dueDate *time.Time) (*models.Task, error) {
-	if err := util.ValidateDueDate(dueDate); err != nil {
-		return nil, err
-	}
-	return s.tasks.SetDue(taskID, dueDate)
-}
-
-// SetTaskParent sets a task's parent task.
-func (s *Service) SetTaskParent(taskID int, parentID *int) (*models.Task, error) {
-	if err := util.ValidateParentID(taskID, parentID); err != nil {
-		return nil, err
-	}
-	return s.tasks.SetParent(taskID, parentID)
-}
-
-// ReorderTask changes a task's position.
-func (s *Service) ReorderTask(taskID int, newPosition int) (*models.Task, error) {
-	return s.tasks.Reorder(taskID, newPosition)
-}
-
-// DeleteTask marks a task and its children as archived.
-func (s *Service) DeleteTask(taskID int) error {
-	return s.tasks.Delete(taskID)
-}
-
-// HardDeleteTask permanently removes a task and its children from the database.
-func (s *Service) HardDeleteTask(taskID int) error {
-	// For hard delete, we need direct database access to handle cascades
-	// Start a transaction
-	tx, err := s.db.BeginTx()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	// Recursively delete children first
-	var childIDs []int
-	rows, err := tx.Query("SELECT id FROM tasks WHERE parent_id = ?", taskID)
-	if err != nil {
-		return err
-	}
-	for rows.Next() {
-		var cID int
-		if err := rows.Scan(&cID); err != nil {
-			return err
-		}
-		childIDs = append(childIDs, cID)
-	}
-	rows.Close()
-
-	// Recursively delete children
-	for _, cID := range childIDs {
-		if err := deleteTaskAndDescendants(tx, cID); err != nil {
-			return err
-		}
-	}
-
-	// Delete the task itself
-	if err := deleteTaskAndDescendants(tx, taskID); err != nil {
-		return err
-	}
-
-	return tx.Commit()
-}
-
-// Helper function to delete a task and all its notes/tags
-func deleteTaskAndDescendants(tx *sql.Tx, taskID int) error {
-	// Delete task notes
-	if _, err := tx.Exec("DELETE FROM task_notes WHERE task_id = ?", taskID); err != nil {
-		return err
-	}
-
-	// Delete task tags
-	if _, err := tx.Exec("DELETE FROM task_tags WHERE task_id = ?", taskID); err != nil {
-		return err
-	}
-
-	// Delete task events
-	if _, err := tx.Exec("DELETE FROM task_events WHERE task_id = ?", taskID); err != nil {
-		return err
-	}
-
-	// Delete from FTS index
-	if _, err := tx.Exec("DELETE FROM task_search WHERE rowid = ?", taskID); err != nil {
-		return err
-	}
-
-	// Delete the task
-	if _, err := tx.Exec("DELETE FROM tasks WHERE id = ?", taskID); err != nil {
-		return err
-	}
-
-	return nil
+// HardDeleteTask permanently removes a task from the database.
+func (s *Service) HardDeleteTask(taskID string) error {
+	return s.tasks.HardDelete(taskID)
 }
 
 // SearchTasks performs full-text search on tasks.
-func (s *Service) SearchTasks(projectID int, query string, limit, offset int) ([]models.SearchResult, error) {
+func (s *Service) SearchTasks(projectID string, query string, limit, offset int) ([]models.SearchResult, error) {
 	if err := util.ValidateSearchQuery(query); err != nil {
 		return nil, err
 	}
@@ -304,7 +153,7 @@ func (s *Service) SearchTasks(projectID int, query string, limit, offset int) ([
 // ============================================================================
 
 // AddTaskTag adds a tag to a task.
-func (s *Service) AddTaskTag(taskID int, tagName string) (*models.Tag, error) {
+func (s *Service) AddTaskTag(taskID string, tagName string) (*models.Tag, error) {
 	if err := util.ValidateTagName(tagName); err != nil {
 		return nil, err
 	}
@@ -312,7 +161,7 @@ func (s *Service) AddTaskTag(taskID int, tagName string) (*models.Tag, error) {
 }
 
 // RemoveTaskTag removes a tag from a task.
-func (s *Service) RemoveTaskTag(taskID int, tagName string) error {
+func (s *Service) RemoveTaskTag(taskID string, tagName string) error {
 	return s.tasks.RemoveTag(taskID, tagName)
 }
 
@@ -320,30 +169,30 @@ func (s *Service) RemoveTaskTag(taskID int, tagName string) error {
 // Note Operations
 // ============================================================================
 
-// AddTaskNote adds a markdown note to a task.
-func (s *Service) AddTaskNote(taskID int, bodyMarkdown string) (*models.Note, error) {
-	if err := util.ValidateNoteContent(bodyMarkdown); err != nil {
+// AddTaskNote adds a note to a task.
+func (s *Service) AddTaskNote(taskID string, body string) (*models.Note, error) {
+	if err := util.ValidateNoteContent(body); err != nil {
 		return nil, err
 	}
-	return s.tasks.AddNote(taskID, bodyMarkdown)
+	return s.tasks.AddNote(taskID, body)
 }
 
 // GetNotesByTask retrieves all notes for a task.
-func (s *Service) GetNotesByTask(taskID int) ([]models.Note, error) {
+func (s *Service) GetNotesByTask(taskID string) ([]models.Note, error) {
 	return s.notes.GetNotesByTaskID(taskID)
 }
 
 // GetLatestNoteForTask retrieves the most recent note for a task.
-func (s *Service) GetLatestNoteForTask(taskID int) (*models.Note, error) {
+func (s *Service) GetLatestNoteForTask(taskID string) (*models.Note, error) {
 	return s.notes.GetLatestNoteByTaskID(taskID)
 }
 
 // UpdateNote updates a note's content.
-func (s *Service) UpdateNote(noteID int, bodyMarkdown string) (*models.Note, error) {
-	if err := util.ValidateNoteContent(bodyMarkdown); err != nil {
+func (s *Service) UpdateNote(noteID int, body string) (*models.Note, error) {
+	if err := util.ValidateNoteContent(body); err != nil {
 		return nil, err
 	}
-	return s.notes.UpdateNoteContent(noteID, bodyMarkdown)
+	return s.notes.UpdateNoteContent(noteID, body)
 }
 
 // DeleteNote removes a note.
@@ -352,7 +201,7 @@ func (s *Service) DeleteNote(noteID int) error {
 }
 
 // GetProjectNoteStats returns note statistics for a project.
-func (s *Service) GetProjectNoteStats(projectID int) (*repository.NoteStats, error) {
+func (s *Service) GetProjectNoteStats(projectID string) (*repository.NoteStats, error) {
 	return s.notes.GetProjectNoteStats(projectID)
 }
 

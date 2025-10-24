@@ -52,8 +52,12 @@ func (m *Model) renderClaudeTab() string {
 func (m *Model) renderClaudeFileList() string {
 	var lines []string
 
-	// Title
-	title := m.styles.SectionTitle.Render("📁 ~/.claude")
+	// Title with breadcrumb
+	breadcrumb := "~/.claude"
+	if m.claudeCurrentPath != "" {
+		breadcrumb = "~/.claude/" + m.claudeCurrentPath
+	}
+	title := m.styles.SectionTitle.Render("📁 " + breadcrumb)
 	lines = append(lines, title)
 	lines = append(lines, "")
 
@@ -65,14 +69,18 @@ func (m *Model) renderClaudeFileList() string {
 		if i == m.claudeSelectedIndex {
 			// Selected file
 			icon := "📄"
-			if file.IsDir {
+			if file.IsParent {
+				icon = "↩️ "
+			} else if file.IsDir {
 				icon = "📁"
 			}
 			line = m.styles.Selected.Render(fmt.Sprintf(" %s %s", icon, file.Name))
 		} else {
 			// Unselected file
 			icon := "  "
-			if file.IsDir {
+			if file.IsParent {
+				icon = "↩️ "
+			} else if file.IsDir {
 				icon = "📁"
 			} else {
 				icon = "📄"
@@ -83,13 +91,16 @@ func (m *Model) renderClaudeFileList() string {
 		lines = append(lines, line)
 	}
 
-	return strings.Join(lines, "\n")
+	// Set viewport content and return it
+	content := strings.Join(lines, "\n")
+	m.claudeFilesViewport.SetContent(content)
+	return m.claudeFilesViewport.View()
 }
 
 // renderClaudeContentViewer renders the content viewer on the right pane
 func (m *Model) renderClaudeContentViewer() string {
 	if !m.claudeShowingContent || m.claudeContent == "" {
-		return m.renderClaudeInstructions()
+		return ""
 	}
 
 	// Show validation status if available

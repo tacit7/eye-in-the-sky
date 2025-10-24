@@ -163,6 +163,12 @@ func (m *Model) renderConfigTab() string {
 	b.WriteString(m.styles.SectionTitle.Render(title))
 	b.WriteString("\n")
 
+	// Display validation error if present
+	if m.keybindingsError != "" {
+		b.WriteString(m.styles.Error.Render("⚠️  Invalid keybindings.yaml: " + m.keybindingsError))
+		b.WriteString("\n\n")
+	}
+
 	// Display content or edit buffer
 	if m.keybindingsEditing {
 		// In edit mode, show the buffer with instructions

@@ -153,17 +153,31 @@ func (m *Modal) OpenHelpForScope(scope string, bindings map[string][]string) {
 
 // UpdateHelpViewport updates the help modal viewport with current dimensions
 func (m *Modal) UpdateHelpViewport(width int, height int) {
-	// Reserve space for title and footer
-	availHeight := height - 6
+	// Reserve space for borders, title, and footer
+	availWidth := width - 4  // Account for left/right borders
+	availHeight := height - 6 // Account for title + footer + padding
 	if availHeight < 5 {
 		availHeight = 5
 	}
+	if availWidth < 40 {
+		availWidth = 40
+	}
 
-	// Not currently using viewport in Modal; could enhance with this
+	m.helpViewport.Width = availWidth
+	m.helpViewport.Height = availHeight
+	m.helpViewport.SetContent(m.Content)
 }
 
 // HandleHelpScroll handles scrolling within help modal
 func (m *Modal) HandleHelpScroll(direction string) {
-	// To be implemented when we add viewport to Modal
-	// Currently the help modal just shows the content
+	switch direction {
+	case "down", "j":
+		m.helpViewport.LineDown(1)
+	case "up", "k":
+		m.helpViewport.LineUp(1)
+	case "page_down":
+		m.helpViewport.HalfPageDown()
+	case "page_up":
+		m.helpViewport.HalfPageUp()
+	}
 }

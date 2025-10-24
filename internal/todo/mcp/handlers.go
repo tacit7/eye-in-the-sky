@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/tacit7/eye-in-the-sky/internal/todo/models"
 	"github.com/tacit7/eye-in-the-sky/internal/todo/util"
@@ -11,24 +12,24 @@ import (
 
 // TaskResponse is the standard response format for task operations.
 type TaskResponse struct {
-	TaskID      int    `json:"task_id"`
+	TaskID      string `json:"task_id"`
 	Description string `json:"description"`
 	UUIDShort   string `json:"uuid_short"`
 }
 
 // ListTaskResponse includes task details in list operations.
 type ListTaskResponse struct {
-	ID          int      `json:"id"`
-	Description string   `json:"description"`
-	Priority    *int     `json:"priority,omitempty"`
-	State       *string  `json:"state,omitempty"`
+	ID          string   `json:"id"`
+	Title       string   `json:"title"`
+	Priority    int      `json:"priority"`
+	StateID     *int     `json:"state_id,omitempty"`
 	Tags        []string `json:"tags,omitempty"`
 }
 
 // SearchTaskResponse includes ranking for search results.
 type SearchTaskResponse struct {
-	TaskID      int     `json:"task_id"`
-	Description string  `json:"description"`
+	TaskID      string  `json:"task_id"`
+	Title       string  `json:"title"`
 	Rank        float64 `json:"rank"`
 }
 
@@ -37,13 +38,13 @@ type SearchTaskResponse struct {
 // ============================================================================
 
 type CreateRequest struct {
-	ProjectID   int      `json:"project_id"`
-	Description string   `json:"description"`
+	ProjectID   string   `json:"project_id"`
+	Title       string   `json:"title"`
+	Description *string  `json:"description,omitempty"`
 	Priority    *int     `json:"priority,omitempty"`
 	Tags        []string `json:"tags,omitempty"`
-	ParentID    *int     `json:"parent_id,omitempty"`
-	SessionID   *string  `json:"session_id,omitempty"`
-	AgentID     *string  `json:"agent_id,omitempty"`
+	StateID     *int     `json:"state_id,omitempty"`
+	DueAt       *string  `json:"due_at,omitempty"` // ISO 8601 timestamp
 }
 
 func (h *Handler) HandleCreate(ctx context.Context, args json.RawMessage) (interface{}, error) {
@@ -53,15 +54,25 @@ func (h *Handler) HandleCreate(ctx context.Context, args json.RawMessage) (inter
 	}
 
 	// Validate inputs
-	if err := util.ValidateDescription(req.Description); err != nil {
+	if err := util.ValidateDescription(req.Title); err != nil {
 		return nil, err
 	}
 	if err := util.ValidatePriority(req.Priority); err != nil {
 		return nil, err
 	}
 
+	// Parse due date if provided
+	var dueAt *time.Time
+	if req.DueAt != nil {
+		t, err := time.Parse(time.RFC3339, *req.DueAt)
+		if err != nil {
+			return nil, fmt.Errorf("invalid due_at format: %w", err)
+		}
+		dueAt = &t
+	}
+
 	// Start transaction for write operation
-	tx, err := h.svc.GetDB().BeginTx()
+	tx, err := h.svc.GetDB().BeginTx(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start transaction: %w", err)
 	}
@@ -69,12 +80,11 @@ func (h *Handler) HandleCreate(ctx context.Context, args json.RawMessage) (inter
 
 	// Create task
 	input := models.CreateTaskInput{
+		Title:       req.Title,
 		Description: req.Description,
-		ParentID:    req.ParentID,
 		Priority:    req.Priority,
-		StateCode:   stringPtr("todo"),
-		SessionID:   req.SessionID,
-		AgentID:     req.AgentID,
+		StateID:     req.StateID,
+		DueAt:       dueAt,
 	}
 
 	task, err := h.svc.GetTasksRepo().CreateTask(req.ProjectID, input)
@@ -99,7 +109,7 @@ func (h *Handler) HandleCreate(ctx context.Context, args json.RawMessage) (inter
 
 	return TaskResponse{
 		TaskID:      task.ID,
-		Description: task.Description,
+		Description: task.Title,
 		UUIDShort:   generateUUIDShort(task.ID),
 	}, nil
 }
@@ -109,7 +119,7 @@ func (h *Handler) HandleCreate(ctx context.Context, args json.RawMessage) (inter
 // ============================================================================
 
 type AnnotateRequest struct {
-	TaskID int    `json:"task_id"`
+	TaskID string `json:"task_id"`
 	Body   string `json:"body"`
 }
 
@@ -124,7 +134,7 @@ func (h *Handler) HandleAnnotate(ctx context.Context, args json.RawMessage) (int
 	}
 
 	// Start transaction
-	tx, err := h.svc.GetDB().BeginTx()
+	tx, err := h.svc.GetDB().BeginTx(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start transaction: %w", err)
 	}
@@ -148,7 +158,7 @@ func (h *Handler) HandleAnnotate(ctx context.Context, args json.RawMessage) (int
 
 	return TaskResponse{
 		TaskID:      task.ID,
-		Description: task.Description,
+		Description: task.Title,
 		UUIDShort:   generateUUIDShort(task.ID),
 	}, nil
 }
@@ -158,7 +168,7 @@ func (h *Handler) HandleAnnotate(ctx context.Context, args json.RawMessage) (int
 // ============================================================================
 
 type StateChangeRequest struct {
-	TaskID int `json:"task_id"`
+	TaskID string `json:"task_id"`
 }
 
 func (h *Handler) HandleStart(ctx context.Context, args json.RawMessage) (interface{}, error) {
@@ -167,15 +177,16 @@ func (h *Handler) HandleStart(ctx context.Context, args json.RawMessage) (interf
 		return nil, fmt.Errorf("invalid start request: %w", err)
 	}
 
-	tx, err := h.svc.GetDB().BeginTx()
+	tx, err := h.svc.GetDB().BeginTx(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start transaction: %w", err)
 	}
 	defer tx.Rollback()
 
-	task, err := h.svc.GetTasksRepo().MoveToState(req.TaskID, "doing")
+	// State ID 2 = "in_progress" (from migration defaults)
+	task, err := h.svc.GetTasksRepo().MoveToState(req.TaskID, 2)
 	if err != nil {
-		return nil, fmt.Errorf("failed to move task to doing: %w", err)
+		return nil, fmt.Errorf("failed to move task to in_progress: %w", err)
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -184,7 +195,7 @@ func (h *Handler) HandleStart(ctx context.Context, args json.RawMessage) (interf
 
 	return TaskResponse{
 		TaskID:      task.ID,
-		Description: task.Description,
+		Description: task.Title,
 		UUIDShort:   generateUUIDShort(task.ID),
 	}, nil
 }
@@ -199,13 +210,14 @@ func (h *Handler) HandleDone(ctx context.Context, args json.RawMessage) (interfa
 		return nil, fmt.Errorf("invalid done request: %w", err)
 	}
 
-	tx, err := h.svc.GetDB().BeginTx()
+	tx, err := h.svc.GetDB().BeginTx(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start transaction: %w", err)
 	}
 	defer tx.Rollback()
 
-	task, err := h.svc.GetTasksRepo().MoveToState(req.TaskID, "done")
+	// State ID 3 = "done" (from migration defaults)
+	task, err := h.svc.GetTasksRepo().MoveToState(req.TaskID, 3)
 	if err != nil {
 		return nil, fmt.Errorf("failed to move task to done: %w", err)
 	}
@@ -216,7 +228,7 @@ func (h *Handler) HandleDone(ctx context.Context, args json.RawMessage) (interfa
 
 	return TaskResponse{
 		TaskID:      task.ID,
-		Description: task.Description,
+		Description: task.Title,
 		UUIDShort:   generateUUIDShort(task.ID),
 	}, nil
 }
@@ -226,8 +238,8 @@ func (h *Handler) HandleDone(ctx context.Context, args json.RawMessage) (interfa
 // ============================================================================
 
 type StatusRequest struct {
-	TaskID int    `json:"task_id"`
-	State  string `json:"state"`
+	TaskID  string `json:"task_id"`
+	StateID int    `json:"state_id"`
 }
 
 func (h *Handler) HandleStatus(ctx context.Context, args json.RawMessage) (interface{}, error) {
@@ -236,15 +248,15 @@ func (h *Handler) HandleStatus(ctx context.Context, args json.RawMessage) (inter
 		return nil, fmt.Errorf("invalid status request: %w", err)
 	}
 
-	tx, err := h.svc.GetDB().BeginTx()
+	tx, err := h.svc.GetDB().BeginTx(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start transaction: %w", err)
 	}
 	defer tx.Rollback()
 
-	task, err := h.svc.GetTasksRepo().MoveToState(req.TaskID, req.State)
+	task, err := h.svc.GetTasksRepo().MoveToState(req.TaskID, req.StateID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to move task to state %s: %w", req.State, err)
+		return nil, fmt.Errorf("failed to move task to state %d: %w", req.StateID, err)
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -253,7 +265,7 @@ func (h *Handler) HandleStatus(ctx context.Context, args json.RawMessage) (inter
 
 	return TaskResponse{
 		TaskID:      task.ID,
-		Description: task.Description,
+		Description: task.Title,
 		UUIDShort:   generateUUIDShort(task.ID),
 	}, nil
 }
@@ -263,7 +275,7 @@ func (h *Handler) HandleStatus(ctx context.Context, args json.RawMessage) (inter
 // ============================================================================
 
 type TagRequest struct {
-	TaskID int      `json:"task_id"`
+	TaskID string   `json:"task_id"`
 	Add    []string `json:"add,omitempty"`
 	Remove []string `json:"remove,omitempty"`
 }
@@ -274,7 +286,7 @@ func (h *Handler) HandleTag(ctx context.Context, args json.RawMessage) (interfac
 		return nil, fmt.Errorf("invalid tag request: %w", err)
 	}
 
-	tx, err := h.svc.GetDB().BeginTx()
+	tx, err := h.svc.GetDB().BeginTx(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start transaction: %w", err)
 	}
@@ -308,7 +320,7 @@ func (h *Handler) HandleTag(ctx context.Context, args json.RawMessage) (interfac
 
 	return TaskResponse{
 		TaskID:      task.ID,
-		Description: task.Description,
+		Description: task.Title,
 		UUIDShort:   generateUUIDShort(task.ID),
 	}, nil
 }
@@ -318,13 +330,13 @@ func (h *Handler) HandleTag(ctx context.Context, args json.RawMessage) (interfac
 // ============================================================================
 
 type ListRequest struct {
-	ProjectID int       `json:"project_id"`
+	ProjectID string    `json:"project_id"`
 	Filters   *Filters  `json:"filters,omitempty"`
 	Limit     int       `json:"limit,omitempty"`
 }
 
 type Filters struct {
-	State    *string  `json:"state,omitempty"`
+	StateID  *int     `json:"state_id,omitempty"`
 	Tags     []string `json:"tags,omitempty"`
 	Priority *int     `json:"priority,omitempty"`
 	Active   bool     `json:"active,omitempty"`
@@ -350,12 +362,12 @@ func (h *Handler) HandleList(ctx context.Context, args json.RawMessage) (interfa
 	}
 
 	if req.Filters != nil {
-		filters.StateCode = req.Filters.State
+		filters.StateID = req.Filters.StateID
 		filters.Tags = req.Filters.Tags
 		filters.Priority = req.Filters.Priority
 	}
 
-	tasks, err := h.svc.GetTasksRepo().List(req.ProjectID, filters, models.SortByPosition)
+	tasks, err := h.svc.GetTasksRepo().List(req.ProjectID, filters, models.SortByCreated)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list tasks: %w", err)
 	}
@@ -367,11 +379,11 @@ func (h *Handler) HandleList(ctx context.Context, args json.RawMessage) (interfa
 			tagNames[i] = tag.Name
 		}
 		response.Tasks = append(response.Tasks, ListTaskResponse{
-			ID:          task.ID,
-			Description: task.Description,
-			Priority:    task.Priority,
-			State:       task.StateCode,
-			Tags:        tagNames,
+			ID:       task.ID,
+			Title:    task.Title,
+			Priority: task.Priority,
+			StateID:  task.StateID,
+			Tags:     tagNames,
 		})
 	}
 
@@ -383,7 +395,7 @@ func (h *Handler) HandleList(ctx context.Context, args json.RawMessage) (interfa
 // ============================================================================
 
 type SearchRequest struct {
-	ProjectID int    `json:"project_id"`
+	ProjectID string `json:"project_id"`
 	Query     string `json:"query"`
 	Limit     int    `json:"limit,omitempty"`
 }
@@ -414,9 +426,9 @@ func (h *Handler) HandleSearch(ctx context.Context, args json.RawMessage) (inter
 	response := SearchResponse{Results: make([]SearchTaskResponse, 0, len(results))}
 	for _, result := range results {
 		response.Results = append(response.Results, SearchTaskResponse{
-			TaskID:      result.Task.ID,
-			Description: result.Task.Description,
-			Rank:        result.Rank,
+			TaskID: result.Task.ID,
+			Title:  result.Task.Title,
+			Rank:   result.Rank,
 		})
 	}
 
@@ -428,7 +440,7 @@ func (h *Handler) HandleSearch(ctx context.Context, args json.RawMessage) (inter
 // ============================================================================
 
 type DeleteRequest struct {
-	TaskID int `json:"task_id"`
+	TaskID string `json:"task_id"`
 }
 
 type OKResponse struct {
@@ -441,7 +453,7 @@ func (h *Handler) HandleDelete(ctx context.Context, args json.RawMessage) (inter
 		return nil, fmt.Errorf("invalid delete request: %w", err)
 	}
 
-	tx, err := h.svc.GetDB().BeginTx()
+	tx, err := h.svc.GetDB().BeginTx(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start transaction: %w", err)
 	}
@@ -462,6 +474,8 @@ func (h *Handler) HandleDelete(ctx context.Context, args json.RawMessage) (inter
 // todo.reindex - Rebuild FTS5 index
 // ============================================================================
 
+type ReindexRequest struct{}
+
 func (h *Handler) HandleReindex(ctx context.Context, args json.RawMessage) (interface{}, error) {
 	if err := h.svc.Reindex(); err != nil {
 		return nil, fmt.Errorf("failed to reindex: %w", err)
@@ -472,6 +486,8 @@ func (h *Handler) HandleReindex(ctx context.Context, args json.RawMessage) (inte
 // ============================================================================
 // todo.vacuum - Database maintenance
 // ============================================================================
+
+type VacuumRequest struct{}
 
 func (h *Handler) HandleVacuum(ctx context.Context, args json.RawMessage) (interface{}, error) {
 	if err := h.svc.Vacuum(); err != nil {
@@ -485,7 +501,7 @@ func (h *Handler) HandleVacuum(ctx context.Context, args json.RawMessage) (inter
 // ============================================================================
 
 type ProjectSyncRequest struct {
-	ProjectID int    `json:"project_id"`
+	ProjectID string `json:"project_id"`
 	YAML      string `json:"yaml"`
 }
 
@@ -495,20 +511,8 @@ func (h *Handler) HandleProjectSync(ctx context.Context, args json.RawMessage) (
 		return nil, fmt.Errorf("invalid project sync request: %w", err)
 	}
 
-	tx, err := h.svc.GetDB().BeginTx()
-	if err != nil {
-		return nil, fmt.Errorf("failed to start transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	if err := h.svc.SyncWorkflowFromYAML(req.ProjectID, []byte(req.YAML)); err != nil {
-		return nil, fmt.Errorf("failed to sync workflow: %w", err)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
+	// Workflows are now global, not per-project
+	// This endpoint is kept for backward compatibility but does nothing
 	return OKResponse{OK: true}, nil
 }
 
@@ -517,11 +521,12 @@ func (h *Handler) HandleProjectSync(ctx context.Context, args json.RawMessage) (
 // ============================================================================
 
 // generateUUIDShort generates a short UUID-like string from a task ID.
-func generateUUIDShort(taskID int) string {
-	// Generate a deterministic 6-character string from task ID
-	// This is a simple hash for demonstration; in production, store actual UUIDs
-	hash := fmt.Sprintf("%06d", taskID%1000000)
-	return hash
+func generateUUIDShort(taskID string) string {
+	// Return first 8 characters of UUID
+	if len(taskID) >= 8 {
+		return taskID[:8]
+	}
+	return taskID
 }
 
 // stringPtr creates a pointer to a string.

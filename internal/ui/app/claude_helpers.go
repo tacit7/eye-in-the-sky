@@ -8,20 +8,22 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/alecthomas/chroma/v2/formatters"
 	"github.com/alecthomas/chroma/v2/lexers"
 	"github.com/alecthomas/chroma/v2/styles"
 )
 
-// scanClaudeDir scans ~/.claude directory for config files
-func scanClaudeDir() ([]ClaudeFile, error) {
+// scanClaudeDir scans a directory for config files
+// pathSuffix is the subdirectory within ~/.claude (e.g., "", "hooks", "agents")
+func scanClaudeDir(pathSuffix string) ([]ClaudeFile, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get home directory: %w", err)
 	}
 
-	claudeDir := filepath.Join(homeDir, ".claude")
+	claudeDir := filepath.Join(homeDir, ".claude", pathSuffix)
 
 	// Check if directory exists
 	if _, err := os.Stat(claudeDir); os.IsNotExist(err) {
@@ -30,10 +32,26 @@ func scanClaudeDir() ([]ClaudeFile, error) {
 
 	var files []ClaudeFile
 
+	// Add parent directory (..) if not at root
+	if pathSuffix != "" {
+		parentPath := filepath.Join(homeDir, ".claude")
+		parentSuffix := filepath.Dir(pathSuffix)
+		if parentSuffix == "." {
+			parentSuffix = ""
+		}
+		files = append(files, ClaudeFile{
+			Name:     "..",
+			Path:     parentPath,
+			IsDir:    true,
+			IsParent: true,
+			ModTime:  time.Now(),
+		})
+	}
+
 	// Scan top-level files and immediate subdirectories
 	entries, err := os.ReadDir(claudeDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read .claude directory: %w", err)
+		return nil, fmt.Errorf("failed to read directory: %w", err)
 	}
 
 	for _, entry := range entries {
@@ -46,19 +64,41 @@ func scanClaudeDir() ([]ClaudeFile, error) {
 		// Include .json, .md files and directories like hooks/, agents/
 		if entry.IsDir() || strings.HasSuffix(entry.Name(), ".json") || strings.HasSuffix(entry.Name(), ".md") {
 			files = append(files, ClaudeFile{
-				Name:    entry.Name(),
-				Path:    fullPath,
-				IsDir:   entry.IsDir(),
-				ModTime: info.ModTime(),
+				Name:     entry.Name(),
+				Path:     fullPath,
+				IsDir:    entry.IsDir(),
+				IsParent: false,
+				ModTime:  info.ModTime(),
 			})
 		}
 	}
 
-	// Sort: directories first, then by name
+	// Sort: parent at top, then files first, then directories
 	sort.Slice(files, func(i, j int) bool {
-		if files[i].IsDir != files[j].IsDir {
-			return files[i].IsDir
+		// Keep parent directory at top
+		if files[i].IsParent {
+			return true
 		}
+		if files[j].IsParent {
+			return false
+		}
+
+		// Files come before directories
+		if files[i].IsDir != files[j].IsDir {
+			return !files[i].IsDir // files first (IsDir=false before IsDir=true)
+		}
+
+		// Within files/dirs, special handling for CLAUDE file
+		if !files[i].IsDir && !files[j].IsDir {
+			if files[i].Name == "CLAUDE.md" {
+				return true
+			}
+			if files[j].Name == "CLAUDE.md" {
+				return false
+			}
+		}
+
+		// Alphabetical sort
 		return files[i].Name < files[j].Name
 	})
 

@@ -47,7 +47,8 @@
       "Read(//Users/urielmaldonado/.claude/**)",
       "Bash(task 45 start:*)",
       "Bash(task 48 start:*)",
-      "Bash(task 52 info:*)"
+      "Bash(task 52 info:*)",
+      "Bash(timeout 5 ./bin/eye-in-the-sky:*)"
     ],
     "deny": [],
     "ask": [],

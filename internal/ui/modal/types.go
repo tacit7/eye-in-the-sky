@@ -2,6 +2,7 @@ package modal
 
 import (
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
 )
 
 // ModalType represents the type of modal currently displayed
@@ -45,6 +46,9 @@ type Modal struct {
 	FormSpec FormSpec
 	Inputs   []textinput.Model
 	FocusIdx int
+
+	// Help modal viewport for scrolling
+	helpViewport viewport.Model
 
 	// Dimensions for rendering
 	Width  int

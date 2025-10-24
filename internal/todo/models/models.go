@@ -6,76 +6,76 @@ import (
 
 // Project represents a project with tasks and workflow states.
 type Project struct {
-	ID          int        `json:"id"`
-	UUID        string     `json:"uuid"`
-	Name        string     `json:"name"`
-	RepoSlug    *string    `json:"repo_slug,omitempty"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
-	ArchivedAt  *time.Time `json:"archived_at,omitempty"`
+	ID            string     `json:"id"`
+	Name          string     `json:"name"`
+	Path          *string    `json:"path,omitempty"`
+	RemoteURL     *string    `json:"remote_url,omitempty"`
+	Subpath       *string    `json:"subpath,omitempty"`
+	Module        *string    `json:"module,omitempty"`
+	Salt          *string    `json:"salt,omitempty"`
+	IDAlgorithm   string     `json:"id_algorithm"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
+	LastCommit    *string    `json:"last_commit,omitempty"`
+	Active        bool       `json:"active"`
 }
 
-// WorkflowState represents a state in a project's workflow (e.g., "todo", "doing", "done").
+// WorkflowState represents a state in the workflow (e.g., "todo", "in_progress", "done").
 type WorkflowState struct {
-	ID          int       `json:"id"`
-	ProjectID   int       `json:"project_id"`
-	Code        string    `json:"code"`
-	DisplayName string    `json:"display_name"`
-	Position    int       `json:"position"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID       int     `json:"id"`
+	Name     string  `json:"name"`
+	Position *int    `json:"position,omitempty"`
+	Color    *string `json:"color,omitempty"`
 }
 
-// Task represents a single task or subtask.
+// Task represents a single task.
 type Task struct {
-	ID          int        `json:"id"`
-	ProjectID   int        `json:"project_id"`
-	Description string     `json:"description"`
-	StateCode   *string    `json:"state_code,omitempty"`
-	ParentID    *int       `json:"parent_id,omitempty"`
-	Priority    *int       `json:"priority,omitempty"` // 1-5
-	Weight      *int       `json:"weight,omitempty"`
-	Position    int        `json:"position"`
-	DueDate     *time.Time `json:"due_date,omitempty"`
+	ID          string     `json:"id"`
+	Title       string     `json:"title"`
+	Description *string    `json:"description,omitempty"`
+	StateID     *int       `json:"state_id,omitempty"`
+	ProjectID   string     `json:"project_id"`
+	Priority    int        `json:"priority"`
+	DueAt       *time.Time `json:"due_at,omitempty"`
+	CompletedAt *time.Time `json:"completed_at,omitempty"`
 	SessionID   *string    `json:"session_id,omitempty"` // Eye-in-the-Sky session ID
 	AgentID     *string    `json:"agent_id,omitempty"`   // Eye-in-the-Sky agent ID
 	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
-	ArchivedAt  *time.Time `json:"archived_at,omitempty"`
+	UpdatedAt   *time.Time `json:"updated_at,omitempty"`
+	Archived    bool       `json:"archived"`
 	Notes       []Note     `json:"notes,omitempty"`
 	Tags        []Tag      `json:"tags,omitempty"`
 }
 
-// Note represents a markdown note attached to a task.
+// Note represents a note attached to a task.
 type Note struct {
-	ID            int       `json:"id"`
-	TaskID        int       `json:"task_id"`
-	BodyMarkdown  string    `json:"body_markdown"`
-	CreatedAt     time.Time `json:"created_at"`
+	ID        int       `json:"id"`
+	TaskID    string    `json:"task_id"`
+	Author    *string   `json:"author,omitempty"`
+	Body      string    `json:"body"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // Tag represents a global tag that can be applied to tasks.
 type Tag struct {
-	ID        int       `json:"id"`
-	Name      string    `json:"name"`
-	CreatedAt time.Time `json:"created_at"`
+	ID    int     `json:"id"`
+	Name  string  `json:"name"`
+	Color *string `json:"color,omitempty"`
 }
 
 // TaskTag represents the association between a task and a tag.
 type TaskTag struct {
-	ID        int       `json:"id"`
-	TaskID    int       `json:"task_id"`
-	TagID     int       `json:"tag_id"`
-	CreatedAt time.Time `json:"created_at"`
+	TaskID string `json:"task_id"`
+	TagID  int    `json:"tag_id"`
 }
 
 // TaskEvent represents an audit event for task changes.
 type TaskEvent struct {
 	ID        int        `json:"id"`
-	TaskID    int        `json:"task_id"`
+	TaskID    string     `json:"task_id"`
 	EventType string     `json:"event_type"`
-	OldValue  *string    `json:"old_value,omitempty"`
-	NewValue  *string    `json:"new_value,omitempty"`
+	Payload   *string    `json:"payload,omitempty"` // JSON string
+	Actor     *string    `json:"actor,omitempty"`
 	CreatedAt time.Time  `json:"created_at"`
 }
 
@@ -87,13 +87,13 @@ type SearchResult struct {
 
 // Filters for task queries.
 type Filters struct {
-	StateCode *string
-	Tags      []string
+	StateID  *int
+	Tags     []string
 	DueBefore *time.Time
 	DueAfter  *time.Time
 	Priority  *int
 	HasNote   bool
-	IsActive  bool // archived_at IS NULL
+	IsActive  bool // archived = 0
 }
 
 // SortOrder for task queries.
@@ -109,20 +109,22 @@ const (
 
 // CreateTaskInput is the input for creating a new task.
 type CreateTaskInput struct {
-	Description string
-	ParentID    *int
-	StateCode   *string
+	Title       string
+	Description *string
+	StateID     *int
 	Priority    *int
-	Weight      *int
+	DueAt       *time.Time
 	SessionID   *string // Eye-in-the-Sky session ID
 	AgentID     *string // Eye-in-the-Sky agent ID
 }
 
 // UpdateTaskInput is the input for updating a task.
 type UpdateTaskInput struct {
+	Title       *string
 	Description *string
-	StateCode   *string
+	StateID     *int
 	Priority    *int
-	Weight      *int
-	DueDate     *time.Time
+	DueAt       *time.Time
+	CompletedAt *time.Time
+	Archived    *bool
 }

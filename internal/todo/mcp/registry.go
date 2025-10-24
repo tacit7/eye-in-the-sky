@@ -30,18 +30,18 @@ type Registry struct {
 func NewRegistry(handler *Handler) *Registry {
 	return &Registry{
 		handlers: map[string]CommandHandler{
-			"todo.create":       handler.HandleCreate,
-			"todo.annotate":     handler.HandleAnnotate,
-			"todo.start":        handler.HandleStart,
-			"todo.done":         handler.HandleDone,
-			"todo.status":       handler.HandleStatus,
-			"todo.tag":          handler.HandleTag,
-			"todo.list":         handler.HandleList,
-			"todo.search":       handler.HandleSearch,
-			"todo.delete":       handler.HandleDelete,
-			"todo.reindex":      handler.HandleReindex,
-			"todo.vacuum":       handler.HandleVacuum,
-			"todo.project.sync": handler.HandleProjectSync,
+			"i-todo-create":       handler.HandleCreate,
+			"i-todo-annotate":     handler.HandleAnnotate,
+			"i-todo-start":        handler.HandleStart,
+			"i-todo-done":         handler.HandleDone,
+			"i-todo-status":       handler.HandleStatus,
+			"i-todo-tag":          handler.HandleTag,
+			"i-todo-list":         handler.HandleList,
+			"i-todo-search":       handler.HandleSearch,
+			"i-todo-delete":       handler.HandleDelete,
+			"i-todo-reindex":      handler.HandleReindex,
+			"i-todo-vacuum":       handler.HandleVacuum,
+			"i-todo-project-sync": handler.HandleProjectSync,
 		},
 	}
 }

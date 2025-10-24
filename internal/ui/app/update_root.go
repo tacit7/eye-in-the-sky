@@ -23,6 +23,8 @@ var viewHandlers = map[ViewType]ViewHandler{
 
 // Update handles messages and updates the model
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// DEBUG: Verify Update is being called
+	debugf("Update() called with message type %T", msg)
 	// Modal gate: if modal is active, route all messages through modal
 	if m.modalManager.IsActive() {
 		switch msg := msg.(type) {
@@ -80,7 +82,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
     if m.currentView == ViewList && m.listTabs.ActiveIndex == 2 {
         const headerHeight = 2  // Header + tabs
         const footerHeight = 1  // Footer hints
-        const leftPaneWidth = 30  // Approximate file list width
+        leftPaneWidth := (msg.Width - 6) / 3
+        if leftPaneWidth < 25 {
+            leftPaneWidth = 25
+        }
 
         available := msg.Height - headerHeight - footerHeight - 1
         if available < 10 {
@@ -92,6 +97,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
             rightPaneWidth = 40
         }
 
+        m.claudeFilesViewport.Width = leftPaneWidth - 2
+        m.claudeFilesViewport.Height = available
         m.claudeViewport.Width = rightPaneWidth
         m.claudeViewport.Height = available
     }
@@ -247,7 +254,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.claudeContent = msg.content
-		m.claudeViewport.SetContent(msg.content)
+		m.claudeShowingContent = true
+		// Apply syntax highlighting for JSON files
+		contentToDisplay := msg.content
+		if len(msg.path) >= 5 && (msg.path[len(msg.path)-5:] == ".json" || msg.path[len(msg.path)-3:] == ".md") {
+			if highlighted, err := m.syntaxHighlight(msg.content, msg.path); err == nil {
+				contentToDisplay = highlighted
+			}
+		}
+		m.claudeViewport.SetContent(contentToDisplay)
 		m.claudeViewport.GotoTop()
 		m.claudeValidStatus = "" // Clear validation status on new file load
 		m.statusMsg = fmt.Sprintf("Loaded %s", msg.path)
@@ -280,12 +295,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.err = msg.err
 			m.statusMsg = fmt.Sprintf("Failed to save keybindings: %v", msg.err)
+			m.keybindingsError = msg.err.Error()
 		} else {
 			m.keybindingsYAML = m.keybindingsEditBuf
 			m.keybindingsViewport.SetContent(m.keybindingsEditBuf)
 			m.keybindingsEditing = false
 			m.keybindingsEditBuf = ""
 			m.keybindingsModified = false
+			m.keybindingsError = "" // Clear error on successful save
 			m.statusMsg = "Keybindings saved successfully"
 		}
 		return m, nil
@@ -295,12 +312,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.err = msg.err
 			m.statusMsg = fmt.Sprintf("Failed to reload keybindings: %v", msg.err)
+			m.keybindingsError = msg.err.Error()
 		} else {
 			m.keybindingsYAML = msg.content
 			m.keybindingsViewport.SetContent(msg.content)
 			m.keybindingsViewport.GotoTop()
 			m.keybindingsEditBuf = ""
 			m.keybindingsModified = false
+			m.keybindingsError = "" // Clear error on successful reload
 			m.statusMsg = "Keybindings reloaded from file"
 		}
 		return m, nil
@@ -400,6 +419,9 @@ type errMsg struct {
 
 // handleKeyPress processes keyboard input by routing to view-specific or global handlers
 func (m *Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// DEBUG: Verify handleKeyPress is being called
+	debugf("handleKeyPress() called with key: %s", msg.String())
+
 	// Try global keys first
 	if newModel, cmd := m.handleGlobalKeys(msg); cmd != nil || newModel != m {
 		return newModel, cmd
@@ -415,26 +437,42 @@ func (m *Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleGlobalKeys handles keys that work across all views
 func (m *Model) handleGlobalKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	keyStr := msg.String()
-
-	// Quit: ctrl+c or shift+q
-	if keyStr == "ctrl+c" || keyStr == "shift+q" {
-		return m, tea.Quit
-	}
-
-	// Refresh: R
-	if keyStr == "R" {
-		m.statusMsg = "Refreshing..."
-		return m, loadAgentsCmd(m.data.Agents)
-	}
-
-	// Help: ? or shift+h
-	if keyStr == "?" || keyStr == "shift+h" {
+	// Hardcoded Ctrl+H for help - always available regardless of YAML config
+	if msg.String() == "ctrl+h" {
 		m.openContextualHelp()
 		return m, nil
 	}
 
-	return m, nil
+	if m.keybindResolver == nil {
+		debugf("keybindResolver is NIL in handleGlobalKeys!")
+		return m, nil
+	}
+
+	action, found := m.keybindResolver.Resolve(msg, m.modalManager.IsActive())
+	if found {
+		debugf("RESOLVED: key '%s' -> action '%s'", msg.String(), action)
+	} else {
+		debugf("NO RESOLVE: key '%s' not found in resolver", msg.String())
+	}
+	if !found {
+		return m, nil
+	}
+
+	switch action {
+	case "quit":
+		return m, tea.Quit
+
+	case "help":
+		m.openContextualHelp()
+		return m, nil
+
+	case "refresh":
+		m.statusMsg = "Refreshing..."
+		return m, loadAgentsCmd(m.data.Agents)
+
+	default:
+		return m, nil
+	}
 }
 
 // openContextualHelp opens the help modal with keybindings for the current context
@@ -502,4 +540,36 @@ func (m *Model) openContextualHelp() {
 	}
 
 	m.modalManager.OpenHelpForScope(scope, bindings)
+
+	// Initialize viewport with current dimensions
+	m.modalManager.UpdateHelpViewport(m.width, m.height)
+}
+
+// syntaxHighlight applies syntax highlighting to file content using glamour
+func (m *Model) syntaxHighlight(content string, filePath string) (string, error) {
+	if m.mdRenderer == nil {
+		// If no renderer, return content as-is
+		return content, nil
+	}
+
+	// Detect language from file extension
+	var language string
+	if len(filePath) > 5 && filePath[len(filePath)-5:] == ".json" {
+		language = "json"
+	} else if len(filePath) > 3 && filePath[len(filePath)-3:] == ".md" {
+		language = "markdown"
+	} else {
+		language = "text"
+	}
+
+	// Wrap in markdown code block for glamour to process
+	mdContent := fmt.Sprintf("```%s\n%s\n```", language, content)
+
+	// Render with glamour
+	highlighted, err := m.mdRenderer.Render(mdContent)
+	if err != nil {
+		return content, err
+	}
+
+	return highlighted, nil
 }
