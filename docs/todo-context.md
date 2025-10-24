@@ -7,40 +7,46 @@ Complete documentation for the Todo Management Backend used by Eye-in-the-Sky fo
 The Todo Backend is a SQLite-based task management system integrated with Eye-in-the-Sky MCP (Model Context Protocol) tools. It allows agents to create, manage, and track tasks with full session and agent provenance tracking.
 
 **Key Features:**
-- SQLite database at `~/.config/eye-in-the-sky/todo.db`
+- Consolidated SQLite database at `~/.config/eye-in-the-sky/agents.db` (shared with Eye-in-the-Sky)
 - 12 MCP commands for full CRUD operations (scoped as `i-todo-*`)
-- FTS5 full-text search on tasks
+- FTS5 full-text search on tasks (indexed and auto-synced)
 - Multi-agent coordination via session/agent IDs
-- Hierarchical tasks (subtasks with recursive delete)
-- Workflow state management (todo, doing, review, done)
-- Tags, priorities, weights, and due dates
+- Workflow state management (global: todo, in_progress, done)
+- Tags, priorities, and due dates
 - Automatic weekly reindex and maintenance
 - Full integration with Eye-in-the-Sky agent system
+- Transaction-based writes with rollback on error
 
 ## Architecture
 
 ### Directory Structure
 
 ```
-internal/todo/
-├── db/
-│   ├── db.go           # Database connection and initialization
-│   ├── migrate.go      # Schema migrations
-│   └── maintenance.go  # FTS5 reindex and vacuum
-├── models/
-│   └── models.go       # Data structures (Task, Project, Note, Tag, etc.)
-├── repository/
-│   ├── project_repo.go # Project CRUD operations
-│   ├── task_repo.go    # Task CRUD and search
-│   └── note_repo.go    # Note operations
-├── mcp/
-│   ├── handlers.go     # MCP command handlers (12 commands)
-│   └── registry.go     # Command routing and registration
-├── util/
-│   ├── validation.go   # Input validation
-│   └── yaml_workflow.go # Workflow YAML parsing
-└── service.go          # High-level service layer
+internal/
+├── database/
+│   ├── db.go                                    # Main DB connection and methods
+│   ├── migrations/
+│   │   ├── 0028_create_todo_tables.sql        # Todo schema (projects, tasks, FTS5)
+│   │   └── *.sql                               # Other migrations
+│   └── queries.go                              # Database queries
+├── todo/
+│   ├── models/
+│   │   └── models.go                           # Data structures (Task, Project, Note, Tag)
+│   ├── repository/
+│   │   ├── project_repo.go                     # Project CRUD operations
+│   │   ├── task_repo.go                        # Task CRUD and FTS5 search
+│   │   └── note_repo.go                        # Note operations
+│   ├── mcp/
+│   │   ├── handlers.go                         # MCP command handlers (12 commands)
+│   │   └── registry.go                         # Command routing and registration
+│   ├── util/
+│   │   └── validation.go                       # Input validation
+│   └── service.go                              # High-level service layer
+└── mcp/
+    └── server.go                               # MCP server initialization
 ```
+
+**Note:** The todo system is now consolidated into the main database. No separate `internal/todo/db/` package exists.
 
 ### Technology Stack
 
@@ -55,39 +61,46 @@ internal/todo/
 ### Tables
 
 #### projects
-- `id` - Primary key
-- `uuid` - Unique identifier
-- `name` - Project name
-- `repo_slug` - Optional git repo slug
-- `created_at`, `updated_at`, `archived_at` - Timestamps
+- `id` TEXT PRIMARY KEY - UUID identifier
+- `name` TEXT - Project name
+- `path` TEXT - Optional file path (UNIQUE)
+- `remote_url` TEXT - Optional git remote URL
+- `subpath` TEXT - Optional subpath
+- `module` TEXT - Optional module name
+- `salt` TEXT - Optional salt for hashing
+- `id_algorithm` TEXT - ID generation algorithm (e.g., 'uuidv5')
+- `created_at`, `updated_at` DATETIME - Timestamps
+- `last_commit` TEXT - Last commit hash
+- `active` BOOLEAN - Active flag
 
-#### workflow_states
-- `id` - Primary key
-- `project_id` - Foreign key to projects
-- `code` - State code (e.g., "todo", "doing")
-- `display_name` - User-visible name
-- `position` - Display order
-- UNIQUE(project_id, code) - One code per project
+#### workflow_states (GLOBAL)
+- `id` INTEGER PRIMARY KEY - Auto-increment
+- `name` TEXT UNIQUE - State name (e.g., "todo", "in_progress", "done")
+- `position` INTEGER - Display order (optional)
+- `color` TEXT - Display color (optional)
+- `updated_at` TIMESTAMP - Last update
+- **Note:** Global states, not per-project
 
 #### tasks
-- `id` - Primary key
-- `project_id` - Foreign key to projects
-- `description` - Task description (required)
-- `state_code` - Current workflow state
-- `parent_id` - Foreign key to parent task (for subtasks)
-- `priority` - 1-5 (optional)
-- `weight` - Integer weight (optional)
-- `position` - Sort order
-- `due_date` - Due date (optional)
-- `session_id` - Eye-in-the-Sky session ID (optional)
-- `agent_id` - Eye-in-the-Sky agent ID (optional)
-- `created_at`, `updated_at`, `archived_at` - Timestamps
+- `id` TEXT PRIMARY KEY - UUID identifier
+- `title` TEXT NOT NULL - Task title
+- `description` TEXT - Optional description
+- `project_id` TEXT - Foreign key to projects
+- `state_id` INTEGER - Foreign key to workflow_states
+- `priority` INTEGER - 0-5 priority level
+- `due_at` DATETIME - Optional due date
+- `completed_at` DATETIME - Optional completion timestamp
+- `session_id` TEXT - Eye-in-the-Sky session ID (optional)
+- `agent_id` TEXT - Eye-in-the-Sky agent ID (optional)
+- `created_at`, `updated_at` DATETIME - Timestamps
+- `archived` BOOLEAN - Soft delete flag
 
 #### task_notes
-- `id` - Primary key
-- `task_id` - Foreign key to tasks
-- `body_markdown` - Note content (markdown)
-- `created_at` - Timestamp (append-only)
+- `id` INTEGER PRIMARY KEY - Auto-increment
+- `task_id` TEXT - Foreign key to tasks
+- `author` TEXT - Optional author name
+- `body` TEXT - Note content (plain text or markdown)
+- `created_at` DATETIME - Timestamp (append-only)
 
 #### tags
 - `id` - Primary key
@@ -108,10 +121,11 @@ internal/todo/
 - `created_at` - Timestamp
 
 #### task_search (FTS5 virtual table)
-- `rowid` - Links to tasks.id
-- `description` - Full-text indexed
-- `latest_note` - Most recent note (auto-synced)
-- `tags` - Space-separated tag names (auto-synced)
+- `task_id` TEXT UNINDEXED - Links to tasks.id
+- `title` TEXT - Task title (indexed)
+- `description` TEXT - Task description (indexed)
+- **Porter tokenizer** for intelligent word stemming
+- **Auto-synced** via triggers on task insert/update/delete
 
 #### meta
 - `key` - Configuration key
@@ -120,22 +134,21 @@ internal/todo/
 
 ### Triggers
 
-**Automatic Updates:**
+**Automatic Timestamp Updates:**
 - `update_tasks_updated_at` - Set updated_at on task changes
 - `update_projects_updated_at` - Set updated_at on project changes
 - `update_workflow_states_updated_at` - Set updated_at on state changes
 
 **FTS5 Synchronization:**
-- `sync_task_search_insert` - Add to index on task creation
-- `sync_task_search_update` - Update index on task changes
-- `sync_task_search_delete` - Remove from index on deletion
-- `sync_latest_note_on_insert` - Update search snapshot on new note
+- `sync_task_search_insert` - Insert task_id, title, description into FTS5 on task creation
+- `sync_task_search_update` - Update title and description in FTS5 on task changes
+- `sync_task_search_delete` - Remove from FTS5 on task deletion
 
 ## MCP Commands
 
 All 12 commands are exposed as MCP tools following Eye-in-the-Sky naming convention with the `i-todo-` prefix. This follows the same pattern as other Eye-in-the-Sky commands like `i-start-session`, `i-action`, `i-log`, etc.
 
-**Response Format:** All commands return standard format with `task_id`, `description`, and `uuid_short` (6-digit zero-padded identifier derived from task ID, e.g., "000042").
+**Response Format:** Most commands return standard format with `task_id` (UUID), `description` (task title), and `uuid_short` (first 8 characters of UUID). List and search commands return arrays of tasks or results.
 
 ### 1. i-todo-create
 
@@ -144,12 +157,12 @@ All 12 commands are exposed as MCP tools following Eye-in-the-Sky naming convent
 **Input:**
 ```json
 {
-  "project_id": 1,
-  "description": "Task description",
+  "project_id": "test-project-001",
+  "title": "Task description",
+  "description": "Detailed description (optional)",
   "priority": 3,
   "tags": ["feature", "backend"],
-  "parent_id": null,
-  "session_id": "580AD2D7-6385-449C-B960-2C40DC726ACD",
+  "session_id": "a745298e-2081-498a-85db-62954f4dbc05",
   "agent_id": "50cea2e9-3049-4ae1-a861-e8547132f9c8"
 }
 ```
@@ -157,16 +170,19 @@ All 12 commands are exposed as MCP tools following Eye-in-the-Sky naming convent
 **Output:**
 ```json
 {
-  "task_id": 42,
+  "task_id": "3ff1d4c2-ebdc-4bfe-9f01-2eb8a67eb590",
   "description": "Task description",
-  "uuid_short": "000042"
+  "uuid_short": "3ff1d4c2"
 }
 ```
 
 **Behavior:**
-- Creates task with default state "todo"
-- Adds all specified tags
+- Creates task with default state "todo" (state_id = 1)
+- Generates UUID for task ID
+- Adds all specified tags (auto-creates tags if needed)
 - Tracks session and agent IDs for provenance
+- Auto-syncs to FTS5 search index
+- Wrapped in transaction with rollback on error
 - Returns immediately with task info
 
 ### 2. i-todo-annotate
@@ -252,11 +268,11 @@ All 12 commands are exposed as MCP tools following Eye-in-the-Sky naming convent
 **Input:**
 ```json
 {
-  "project_id": 1,
+  "project_id": "test-project-001",
   "filters": {
-    "state": "doing",
+    "state_id": 2,
     "tags": ["feature"],
-    "priority": 5,
+    "priority": 3,
     "active": true
   },
   "limit": 50
@@ -268,10 +284,10 @@ All 12 commands are exposed as MCP tools following Eye-in-the-Sky naming convent
 {
   "tasks": [
     {
-      "id": 42,
-      "description": "Task description",
-      "priority": 5,
-      "state": "doing",
+      "id": "3ff1d4c2-ebdc-4bfe-9f01-2eb8a67eb590",
+      "title": "Task description",
+      "priority": 3,
+      "state_id": 2,
       "tags": ["feature", "urgent"]
     }
   ]
@@ -279,9 +295,9 @@ All 12 commands are exposed as MCP tools following Eye-in-the-Sky naming convent
 ```
 
 **Filters (all optional):**
-- `state` - Workflow state code
+- `state_id` - Workflow state ID (1=todo, 2=in_progress, 3=done)
 - `tags` - Array of tags (AND logic)
-- `priority` - Integer 1-5
+- `priority` - Integer 0-5
 - `active` - Only non-archived (default: false)
 
 ### 8. i-todo-search
@@ -291,7 +307,7 @@ All 12 commands are exposed as MCP tools following Eye-in-the-Sky naming convent
 **Input:**
 ```json
 {
-  "project_id": 1,
+  "project_id": "test-project-001",
   "query": "feature implementation",
   "limit": 10
 }
@@ -302,19 +318,20 @@ All 12 commands are exposed as MCP tools following Eye-in-the-Sky naming convent
 {
   "results": [
     {
-      "task_id": 42,
-      "description": "Implement new feature",
-      "rank": 0.95
+      "task_id": "3ff1d4c2-ebdc-4bfe-9f01-2eb8a67eb590",
+      "title": "Implement new feature",
+      "rank": 0.75
     }
   ]
 }
 ```
 
 **Behavior:**
-- Uses FTS5 indexed search
-- Searches description, notes, and tags
-- Results ranked by relevance
+- Uses FTS5 indexed search with Porter tokenizer
+- Searches title and description fields
+- Results ranked by FTS5 relevance score
 - Project-scoped
+- Pagination support via limit and offset
 
 ### 9. i-todo-delete
 
@@ -577,14 +594,14 @@ result, err := callMCPTool("i-todo-create", map[string]interface{}{
 
 The database is created automatically on first use:
 
-1. `OpenDB()` opens/creates `~/.config/eye-in-the-sky/todo.db`
+1. `database.New(dbPath)` opens/creates `~/.config/eye-in-the-sky/agents.db`
 2. Enables WAL mode for concurrent access
 3. Enables foreign key constraints
-4. Runs all migrations (CREATE TABLE statements)
-5. Sets up triggers for automatic synchronization
-6. Checks if weekly reindex is needed
+4. Runs all migrations in order (including `0028_create_todo_tables.sql`)
+5. Sets up triggers for automatic FTS5 synchronization
+6. Checks if weekly FTS5 reindex is needed
 
-Existing databases are updated with new columns via ALTER TABLE in migrations.
+The todo system is fully consolidated into the main database, with no separate initialization needed.
 
 ## Performance Considerations
 
@@ -596,96 +613,100 @@ Existing databases are updated with new columns via ALTER TABLE in migrations.
 
 ## Development Commands
 
-### Build
+### Build (with FTS5 support)
 ```bash
-go build -o bin/eye-in-the-sky ./cmd/server
+go build -tags "sqlite_fts5" -o bin/eye-in-the-sky ./cmd/server
 ```
 
 ### Test
 ```bash
-go test ./internal/todo/...
+go test -tags "sqlite_fts5" ./internal/todo/...
 ```
 
 ### Database
-The database file is automatically created at:
+The consolidated database file is automatically created at:
 ```
-~/.config/eye-in-the-sky/todo.db
+~/.config/eye-in-the-sky/agents.db
 ```
 
-To reset:
+To reset (clears all Eye-in-the-Sky and todo data):
 ```bash
-rm ~/.config/eye-in-the-sky/todo.db
+rm ~/.config/eye-in-the-sky/agents.db
+```
+
+### View Database
+```bash
+sqlite3 ~/.config/eye-in-the-sky/agents.db
+sqlite> SELECT * FROM tasks;
+sqlite> SELECT * FROM task_search WHERE task_search MATCH 'search term';
 ```
 
 ## Examples
 
-### Create a Project
+### Create a Task
 ```json
 {
   "command": "i-todo-create",
   "args": {
-    "project_id": 1,
-    "description": "Setup CI/CD pipeline",
+    "project_id": "eye-in-the-sky",
+    "title": "Setup CI/CD pipeline",
     "priority": 5,
     "tags": ["infra", "critical"],
-    "session_id": "580AD2D7-6385-449C-B960-2C40DC726ACD",
+    "session_id": "a745298e-2081-498a-85db-62954f4dbc05",
     "agent_id": "50cea2e9-3049-4ae1-a861-e8547132f9c8"
   }
 }
 ```
 
-### Create a Subtask
-```json
-{
-  "command": "todo.create",
-  "args": {
-    "project_id": 1,
-    "description": "Configure GitHub Actions",
-    "parent_id": 5,
-    "priority": 4
-  }
-}
-```
-
-### Search for Urgent Tasks
+### Search for Tasks
 ```json
 {
   "command": "i-todo-search",
   "args": {
-    "project_id": 1,
-    "query": "urgent critical"
+    "project_id": "eye-in-the-sky",
+    "query": "setup ci/cd"
   }
 }
 ```
 
-### Move Task to Review
+### Move Task to In-Progress
+```json
+{
+  "command": "i-todo-start",
+  "args": {
+    "task_id": "3ff1d4c2-ebdc-4bfe-9f01-2eb8a67eb590"
+  }
+}
+```
+
+### Change Task State (by ID)
 ```json
 {
   "command": "i-todo-status",
   "args": {
-    "task_id": 42,
-    "state": "review"
+    "task_id": "3ff1d4c2-ebdc-4bfe-9f01-2eb8a67eb590",
+    "state_id": 2
   }
 }
 ```
 
-### Add Notes and Complete
+### Add Notes to Task
 ```json
 {
   "command": "i-todo-annotate",
   "args": {
-    "task_id": 42,
-    "body": "# Completed\n\nFeature is ready for review. All tests pass."
+    "task_id": "3ff1d4c2-ebdc-4bfe-9f01-2eb8a67eb590",
+    "body": "Progress: Completed initial setup and GitHub Actions configuration.\nNext: Add tests and security scanning."
   }
 }
 ```
 
-Then:
+### Complete a Task
 ```json
 {
   "command": "i-todo-done",
   "args": {
-    "task_id": 42
+    "task_id": "3ff1d4c2-ebdc-4bfe-9f01-2eb8a67eb590"
   }
 }
 ```
