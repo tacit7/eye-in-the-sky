@@ -80,33 +80,42 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	if Matches(msg, m.keys.NavigateDown) {
-		if m.selectedIndex < len(m.agents)-1 {
-			m.selectedIndex++
-			m.adjustListScroll()
-		}
-		return m, nil
-	}
+	// Navigation for Overview tab (tab 0)
+	// Allow j/k and arrow keys for non-overview tabs to work with their handlers
+	if m.listTabs.ActiveIndex == 0 {
+		keyStr := msg.String()
 
-	if Matches(msg, m.keys.NavigateUp) {
-		if m.selectedIndex > 0 {
-			m.selectedIndex--
-			m.adjustListScroll()
+		// Navigate down: j or down arrow
+		if keyStr == "j" || keyStr == "down" {
+			if m.selectedIndex < len(m.agents)-1 {
+				m.selectedIndex++
+				m.adjustListScroll()
+			}
+			return m, nil
 		}
-		return m, nil
-	}
 
-	if Matches(msg, m.keys.Select) {
-		// Switch to detail view - load details with command
-		if m.selectedIndex >= 0 && m.selectedIndex < len(m.agents) {
-			m.selectedAgent = &m.agents[m.selectedIndex]
-			m.currentView = ViewDetail
-			m.detailOffset = 0
-			// Set active tab to Overview (index 1, since 0 is back arrow)
-			m.tabs.Set(1)
-			return m, loadAgentDetailsCmd(m.data, m.selectedAgent.ID)
+		// Navigate up: k or up arrow
+		if keyStr == "k" || keyStr == "up" {
+			if m.selectedIndex > 0 {
+				m.selectedIndex--
+				m.adjustListScroll()
+			}
+			return m, nil
 		}
-		return m, nil
+
+		// Select: enter
+		if keyStr == "enter" || keyStr == "right" {
+			// Switch to detail view - load details with command
+			if m.selectedIndex >= 0 && m.selectedIndex < len(m.agents) {
+				m.selectedAgent = &m.agents[m.selectedIndex]
+				m.currentView = ViewDetail
+				m.detailOffset = 0
+				// Set active tab to Overview (index 1, since 0 is back arrow)
+				m.tabs.Set(1)
+				return m, loadAgentDetailsCmd(m.data, m.selectedAgent.ID)
+			}
+			return m, nil
+		}
 	}
 
 	// Usage tab scrolling (only when Usage tab is active)
@@ -374,13 +383,13 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	if Matches(msg, m.keys.ToggleFilter) {
+	if msg.String() == "a" {
 		// Toggle show all agents
 		m.showAll = !m.showAll
 		return m, loadAgentsCmd(m.data.Agents)
 	}
 
-	if Matches(msg, m.keys.NewSession) {
+	if msg.String() == "n" {
 		debugf("NewSession key detected: %v, claudePath: %s", msg.String(), m.claudePath)
 		// Always set a status message so we know the key was detected
 		if m.claudePath == "" {
@@ -395,7 +404,7 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, NewSession(m.claudePath, m.config.DefaultTerminal)
 	}
 
-	if Matches(msg, m.keys.ContinueSession) {
+	if msg.String() == "c" {
 		agent := m.SelectedAgent()
 		if agent == nil {
 			m.statusMsg = "No agent selected"
@@ -409,7 +418,7 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, ResumeSession(m.claudePath, string(agent.ID))
 	}
 
-	if Matches(msg, m.keys.StartSession) {
+	if msg.String() == "s" {
 		agent := m.SelectedAgent()
 		if agent == nil {
 			m.statusMsg = "No agent selected"
@@ -422,7 +431,7 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, StartSession(m.claudePath, string(agent.ID))
 	}
 
-	if Matches(msg, m.keys.GoToWindow) {
+	if msg.String() == "w" {
 		agent := m.SelectedAgent()
 		if agent == nil {
 			m.statusMsg = "No agent selected"
@@ -435,7 +444,7 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, util.FocusWindowCmd(m.windowFocuser, agent.WindowID, agent.TerminalApplication)
 	}
 
-	if Matches(msg, m.keys.Archive) {
+	if msg.String() == "D" {
 		agent := m.SelectedAgent()
 		if agent == nil {
 			m.statusMsg = "No agent selected"

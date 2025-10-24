@@ -119,6 +119,11 @@ func createDefaultKeybindings(path string) error {
   global:
     quit: ["ctrl+c", "shift+q"]
     help: ["?", "shift+h"]
+    toggle_filter: ["a"]
+    continue_session: ["c"]
+    start_session: ["s"]
+    go_to_window: ["w"]
+    archive: ["D"]
 
   list:
     overview:

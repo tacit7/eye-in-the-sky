@@ -1,6 +1,7 @@
 package todo
 
 import (
+	"database/sql"
 	"time"
 
 	"github.com/tacit7/eye-in-the-sky/internal/todo/db"
@@ -30,6 +31,31 @@ func NewService(database *db.DB) *Service {
 // Close closes the service and database connection.
 func (s *Service) Close() error {
 	return s.db.Close()
+}
+
+// Conn returns the underlying database connection for transaction management.
+func (s *Service) Conn() *db.DB {
+	return s.db
+}
+
+// GetDB returns the underlying database for direct access (for MCP handlers).
+func (s *Service) GetDB() *db.DB {
+	return s.db
+}
+
+// GetTasksRepo returns the task repository for direct access.
+func (s *Service) GetTasksRepo() *repository.TaskRepo {
+	return s.tasks
+}
+
+// GetProjectsRepo returns the project repository for direct access.
+func (s *Service) GetProjectsRepo() *repository.ProjectRepo {
+	return s.projects
+}
+
+// GetNotesRepo returns the notes repository for direct access.
+func (s *Service) GetNotesRepo() *repository.NoteRepo {
+	return s.notes
 }
 
 // ============================================================================
@@ -190,6 +216,76 @@ func (s *Service) ReorderTask(taskID int, newPosition int) (*models.Task, error)
 // DeleteTask marks a task and its children as archived.
 func (s *Service) DeleteTask(taskID int) error {
 	return s.tasks.Delete(taskID)
+}
+
+// HardDeleteTask permanently removes a task and its children from the database.
+func (s *Service) HardDeleteTask(taskID int) error {
+	// For hard delete, we need direct database access to handle cascades
+	// Start a transaction
+	tx, err := s.db.BeginTx()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// Recursively delete children first
+	var childIDs []int
+	rows, err := tx.Query("SELECT id FROM tasks WHERE parent_id = ?", taskID)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var cID int
+		if err := rows.Scan(&cID); err != nil {
+			return err
+		}
+		childIDs = append(childIDs, cID)
+	}
+	rows.Close()
+
+	// Recursively delete children
+	for _, cID := range childIDs {
+		if err := deleteTaskAndDescendants(tx, cID); err != nil {
+			return err
+		}
+	}
+
+	// Delete the task itself
+	if err := deleteTaskAndDescendants(tx, taskID); err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+// Helper function to delete a task and all its notes/tags
+func deleteTaskAndDescendants(tx *sql.Tx, taskID int) error {
+	// Delete task notes
+	if _, err := tx.Exec("DELETE FROM task_notes WHERE task_id = ?", taskID); err != nil {
+		return err
+	}
+
+	// Delete task tags
+	if _, err := tx.Exec("DELETE FROM task_tags WHERE task_id = ?", taskID); err != nil {
+		return err
+	}
+
+	// Delete task events
+	if _, err := tx.Exec("DELETE FROM task_events WHERE task_id = ?", taskID); err != nil {
+		return err
+	}
+
+	// Delete from FTS index
+	if _, err := tx.Exec("DELETE FROM task_search WHERE rowid = ?", taskID); err != nil {
+		return err
+	}
+
+	// Delete the task
+	if _, err := tx.Exec("DELETE FROM tasks WHERE id = ?", taskID); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // SearchTasks performs full-text search on tasks.

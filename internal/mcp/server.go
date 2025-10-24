@@ -9,13 +9,17 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/tacit7/eye-in-the-sky/internal/database"
+	"github.com/tacit7/eye-in-the-sky/internal/todo"
+	todo_mcp "github.com/tacit7/eye-in-the-sky/internal/todo/mcp"
 )
 
 // Server represents the MCP server
 type Server struct {
-	db    *database.DB
-	tools *Tools
-	mcp   *mcp.Server
+	db          *database.DB
+	tools       *Tools
+	mcp         *mcp.Server
+	todoService *todo.Service
+	todoRegistry *todo_mcp.Registry
 }
 
 // NewServer creates a new MCP server instance
@@ -25,6 +29,19 @@ func NewServer(db *database.DB) *Server {
 
 	tools := NewTools(db)
 
+	// Initialize todo service and registry
+	var todoService *todo.Service
+	var todoRegistry *todo_mcp.Registry
+
+	todoDb, err := db.OpenTodoDB()
+	if err != nil {
+		log.Printf("Warning: Failed to initialize todo database: %v\n", err)
+	} else {
+		todoService = todo.NewService(todoDb)
+		handler := todo_mcp.NewHandler(todoService)
+		todoRegistry = todo_mcp.NewRegistry(handler)
+	}
+
 	// Create MCP server with implementation
 	mcpServer := mcp.NewServer(&mcp.Implementation{
 		Name:    "eits",
@@ -32,9 +49,11 @@ func NewServer(db *database.DB) *Server {
 	}, nil)
 
 	s := &Server{
-		db:    db,
-		tools: tools,
-		mcp:   mcpServer,
+		db:           db,
+		tools:        tools,
+		mcp:          mcpServer,
+		todoService:  todoService,
+		todoRegistry: todoRegistry,
 	}
 
 	// Register all tools
@@ -139,6 +158,69 @@ func (s *Server) registerTools() {
 
 	// NOTE: i-persona-get and i-persona-list kept internal-only
 	// Available via HandleTool() for dashboard/internal use
+
+	// Todo Management Tools
+	if s.todoRegistry != nil {
+		mcp.AddTool(s.mcp, &mcp.Tool{
+			Name:        "todo.create",
+			Description: "Create a new task with optional priority and tags",
+		}, s.handleTodoCreate)
+
+		mcp.AddTool(s.mcp, &mcp.Tool{
+			Name:        "todo.annotate",
+			Description: "Add a markdown note to a task",
+		}, s.handleTodoAnnotate)
+
+		mcp.AddTool(s.mcp, &mcp.Tool{
+			Name:        "todo.start",
+			Description: "Move a task to doing state",
+		}, s.handleTodoStart)
+
+		mcp.AddTool(s.mcp, &mcp.Tool{
+			Name:        "todo.done",
+			Description: "Move a task to done state",
+		}, s.handleTodoDone)
+
+		mcp.AddTool(s.mcp, &mcp.Tool{
+			Name:        "todo.status",
+			Description: "Move a task to any workflow state",
+		}, s.handleTodoStatus)
+
+		mcp.AddTool(s.mcp, &mcp.Tool{
+			Name:        "todo.tag",
+			Description: "Add or remove tags from a task",
+		}, s.handleTodoTag)
+
+		mcp.AddTool(s.mcp, &mcp.Tool{
+			Name:        "todo.list",
+			Description: "Retrieve tasks with optional filters",
+		}, s.handleTodoList)
+
+		mcp.AddTool(s.mcp, &mcp.Tool{
+			Name:        "todo.search",
+			Description: "Perform full-text search on tasks",
+		}, s.handleTodoSearch)
+
+		mcp.AddTool(s.mcp, &mcp.Tool{
+			Name:        "todo.delete",
+			Description: "Permanently delete a task",
+		}, s.handleTodoDelete)
+
+		mcp.AddTool(s.mcp, &mcp.Tool{
+			Name:        "todo.reindex",
+			Description: "Rebuild the FTS5 search index",
+		}, s.handleTodoReindex)
+
+		mcp.AddTool(s.mcp, &mcp.Tool{
+			Name:        "todo.vacuum",
+			Description: "Run database maintenance (VACUUM and ANALYZE)",
+		}, s.handleTodoVacuum)
+
+		mcp.AddTool(s.mcp, &mcp.Tool{
+			Name:        "todo.project.sync",
+			Description: "Sync workflow states from YAML definition",
+		}, s.handleTodoProjectSync)
+	}
 }
 
 // Tool handlers using the generic AddTool pattern

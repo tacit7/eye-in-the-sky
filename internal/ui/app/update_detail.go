@@ -13,7 +13,7 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// In detail view, q/esc go back to list instead of quitting
-	if Matches(msg, m.keys.Back) || Matches(msg, m.keys.Quit) {
+	if msg.String() == "q" || msg.String() == "esc" {
 		// Go back to list view, preserving selection
 		m.currentView = ViewList
 		m.detailOffset = 0
@@ -216,27 +216,15 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	if Matches(msg, m.keys.ScrollDown) {
-		// Scroll down
-		m.detailOffset++
-		return m, nil
-	}
+	// Note: ScrollDown/ScrollUp are already handled above via j/k switch cases
 
-	if Matches(msg, m.keys.ScrollUp) {
-		// Scroll up
-		if m.detailOffset > 0 {
-			m.detailOffset--
-		}
-		return m, nil
-	}
-
-	if Matches(msg, m.keys.PageDown) {
+	if msg.String() == "pgdown" {
 		// Page down
 		m.detailOffset += 10
 		return m, nil
 	}
 
-	if Matches(msg, m.keys.PageUp) {
+	if msg.String() == "pgup" {
 		// Page up
 		m.detailOffset -= 10
 		if m.detailOffset < 0 {

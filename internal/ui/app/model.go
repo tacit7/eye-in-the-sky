@@ -72,10 +72,9 @@ type Model struct {
 	data *DataClient
 
 	// Configuration
-	config      Config
-	keys        KeyBindings
-	theme       Theme
-	styles      Styles
+	config Config
+	theme  Theme
+	styles Styles
 
 	// View renderers map
 	renderers map[ViewType]ViewRenderer
@@ -307,11 +306,6 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 		return nil, err
 	}
 
-	keys, err := LoadKeyBindings()
-	if err != nil {
-		return nil, err
-	}
-
 	theme, err := LoadTheme(config.Theme)
 	if err != nil {
 		return nil, err
@@ -384,12 +378,11 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 	modalManager := modal.New()
 
 	m := &Model{
-		data:          NewDataClient(db),
-		ccusageDB:     ccusageDB,
-		config:        config,
-		keys:          keys,
-		theme:         theme,
-		styles:        styles,
+		data:      NewDataClient(db),
+		ccusageDB: ccusageDB,
+		config:    config,
+		theme:     theme,
+		styles:    styles,
 		help:          helpModel,
 		showHelp:      false,
 		windowFocuser: windowFocuser,

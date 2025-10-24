@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	_ "github.com/mattn/go-sqlite3"
+	todoDb "github.com/tacit7/eye-in-the-sky/internal/todo/db"
 )
 
 //go:embed schema.sql
@@ -39,6 +40,11 @@ func New(dbPath string) (*DB, error) {
 
 func (db *DB) Close() error {
 	return db.conn.Close()
+}
+
+// OpenTodoDB opens the separate todo database.
+func (db *DB) OpenTodoDB() (*todoDb.DB, error) {
+	return todoDb.OpenDB()
 }
 
 func (db *DB) initSchema() error {

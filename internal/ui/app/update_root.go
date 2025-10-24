@@ -415,16 +415,21 @@ func (m *Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleGlobalKeys handles keys that work across all views
 func (m *Model) handleGlobalKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if Matches(msg, m.keys.Quit) {
+	keyStr := msg.String()
+
+	// Quit: ctrl+c or shift+q
+	if keyStr == "ctrl+c" || keyStr == "shift+q" {
 		return m, tea.Quit
 	}
 
-	if Matches(msg, m.keys.Refresh) {
+	// Refresh: R
+	if keyStr == "R" {
 		m.statusMsg = "Refreshing..."
 		return m, loadAgentsCmd(m.data.Agents)
 	}
 
-	if Matches(msg, m.keys.HelpToggle) {
+	// Help: ? or shift+h
+	if keyStr == "?" || keyStr == "shift+h" {
 		m.openContextualHelp()
 		return m, nil
 	}
