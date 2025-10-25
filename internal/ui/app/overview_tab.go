@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/tacit7/eye-in-the-sky/internal/domain"
+	"github.com/tacit7/eye-in-the-sky/internal/ui/presenters"
 )
 
 const (
@@ -14,111 +15,124 @@ const (
 )
 
 // renderOverviewTab renders the overview tab content
+// Separates business logic (presenter) from rendering (this function)
 func (m *Model) renderOverviewTab() string {
 	if m.selectedAgent == nil {
 		return "No agent selected"
 	}
 
-	agent := *m.selectedAgent
+	// Build preprocessed data using presenter layer
+	data := presenters.BuildOverviewData(
+		m.selectedAgent,
+		m.commits,
+		m.notes,
+		m.tasks,
+		m.actions,
+	)
+
+	// Render each section with clean data
 	sections := []string{
-		m.renderAgentInfo(agent),
-		m.renderTiming(agent),
-		m.renderCommitsSection(),
-		m.renderNotesSection(),
-		m.renderTasksSection(),
-		m.renderActionsSection(),
+		renderAgentInfo(data.AgentInfo, m.styles),
+		renderTiming(data.AgentInfo, m.styles),
+		renderCommitsSection(data.Commits, m.styles),
+		renderNotesSection(data.Notes, m.styles),
+		renderTasksSection(data.TaskCounts, m.styles),
+		renderActionsSection(data.Actions, m.styles),
 	}
 
 	return strings.Join(filterNonEmpty(sections), "\n")
 }
 
 // renderAgentInfo renders agent identification information
-func (m *Model) renderAgentInfo(agent domain.Agent) string {
+// Pure function - no Model dependency
+func renderAgentInfo(agent domain.Agent, styles Styles) string {
 	var sb strings.Builder
-	sb.WriteString(m.styles.SectionTitle.Render("📋 Agent Information"))
+	sb.WriteString(styles.SectionTitle.Render("📋 Agent Information"))
 	sb.WriteString("\n\n")
 
-	sb.WriteString(renderLabelValue("Agent ID:", string(agent.ID), m.styles.Value, m.styles.Label))
-	sb.WriteString(renderLabelValue("Status:", agent.Status, GetStatusStyle(agent.Status, m.styles), m.styles.Label))
+	sb.WriteString(renderLabelValue("Agent ID:", string(agent.ID), styles.Value, styles.Label))
+	sb.WriteString(renderLabelValue("Status:", agent.Status, GetStatusStyle(agent.Status, styles), styles.Label))
 
 	if agent.FeatureDesc != "" {
-		sb.WriteString(renderLabelValue("Description:", agent.FeatureDesc, m.styles.Value, m.styles.Label))
+		sb.WriteString(renderLabelValue("Description:", agent.FeatureDesc, styles.Value, styles.Label))
 	}
 	if agent.ProjectName != "" {
-		sb.WriteString(renderLabelValue("Project:", agent.ProjectName, m.styles.Value, m.styles.Label))
+		sb.WriteString(renderLabelValue("Project:", agent.ProjectName, styles.Value, styles.Label))
 	}
 	if agent.CurrentTask != "" {
-		sb.WriteString(renderLabelValue("Current Task:", agent.CurrentTask, m.styles.Value, m.styles.Label))
+		sb.WriteString(renderLabelValue("Current Task:", agent.CurrentTask, styles.Value, styles.Label))
 	}
 
-	sb.WriteString(renderLabelValue("Source:", agent.Source, m.styles.Value, m.styles.Label))
+	sb.WriteString(renderLabelValue("Source:", agent.Source, styles.Value, styles.Label))
 
 	if agent.GitWorktreePath != "" {
-		sb.WriteString(renderLabelValue("Worktree:", agent.GitWorktreePath, m.styles.Value, m.styles.Label))
+		sb.WriteString(renderLabelValue("Worktree:", agent.GitWorktreePath, styles.Value, styles.Label))
 	}
 	if agent.SessionID != "" {
-		sb.WriteString(renderLabelValue("Session ID:", agent.SessionID, m.styles.Value, m.styles.Label))
+		sb.WriteString(renderLabelValue("Session ID:", agent.SessionID, styles.Value, styles.Label))
 	}
 	if agent.ParentSessionID != "" {
-		sb.WriteString(renderLabelValue("Parent Session:", agent.ParentSessionID, m.styles.Value, m.styles.Label))
+		sb.WriteString(renderLabelValue("Parent Session:", agent.ParentSessionID, styles.Value, styles.Label))
 	}
 	if agent.ParentAgentID != "" {
-		sb.WriteString(renderLabelValue("Parent Agent:", string(agent.ParentAgentID), m.styles.Value, m.styles.Label))
+		sb.WriteString(renderLabelValue("Parent Agent:", string(agent.ParentAgentID), styles.Value, styles.Label))
 	}
 	if agent.WindowID != "" {
-		sb.WriteString(renderLabelValue("Window ID:", agent.WindowID, m.styles.Value, m.styles.Label))
+		sb.WriteString(renderLabelValue("Window ID:", agent.WindowID, styles.Value, styles.Label))
 	}
 
 	return sb.String()
 }
 
 // renderTiming renders timing information section
-func (m *Model) renderTiming(agent domain.Agent) string {
+// Pure function - no Model dependency
+func renderTiming(agent domain.Agent, styles Styles) string {
 	var sb strings.Builder
-	sb.WriteString(m.styles.SectionTitle.Render("⏱️ Timing"))
+	sb.WriteString(styles.SectionTitle.Render("⏱️ Timing"))
 	sb.WriteString("\n\n")
 
-	sb.WriteString(renderLabelValue("Created:", formatTimestamp(agent.CreatedAt), m.styles.Value, m.styles.Label))
-	sb.WriteString(renderLabelValue("Updated:", formatTimestamp(agent.UpdatedAt), m.styles.Value, m.styles.Label))
+	sb.WriteString(renderLabelValue("Created:", formatTimestamp(agent.CreatedAt), styles.Value, styles.Label))
+	sb.WriteString(renderLabelValue("Updated:", formatTimestamp(agent.UpdatedAt), styles.Value, styles.Label))
 
 	if !agent.LastActivityAt.IsZero() {
 		elapsed := time.Since(agent.LastActivityAt)
 		activityStr := fmt.Sprintf("%s (%s ago)",
 			formatTime(agent.LastActivityAt),
-			FormatDuration(elapsed))
-		style := activityStyle(elapsed, m.styles)
-		sb.WriteString(renderLabelValue("Last Activity:", activityStr, style, m.styles.Label))
+			presenters.FormatDuration(elapsed))
+		style := activityStyle(elapsed, styles)
+		sb.WriteString(renderLabelValue("Last Activity:", activityStr, style, styles.Label))
 	}
 
-	sb.WriteString(m.renderDuration(agent))
+	sb.WriteString(renderDuration(agent, styles))
 
 	return sb.String()
 }
 
 // renderCommitsSection renders recent commits section
-func (m *Model) renderCommitsSection() string {
-	if len(m.commits) == 0 {
+// Pure function - no Model dependency
+func renderCommitsSection(commits []domain.Commit, styles Styles) string {
+	if len(commits) == 0 {
 		return ""
 	}
 
 	var sb strings.Builder
-	sb.WriteString(m.styles.SectionTitle.Render("📝 Recent Commits"))
+	sb.WriteString(styles.SectionTitle.Render("📝 Recent Commits"))
 	sb.WriteString("\n\n")
 
-	maxCommits := minInt(len(m.commits), maxCommitsToShow)
+	maxCommits := minInt(len(commits), maxCommitsToShow)
 	for i := 0; i < maxCommits; i++ {
-		commit := m.commits[i]
+		commit := commits[i]
 		elapsed := time.Since(commit.Timestamp)
 		commitLine := fmt.Sprintf("  %s %s - %s\n",
-			m.styles.Git.Render(string(commit.Hash)[:8]),
-			m.styles.Subtle.Render(fmt.Sprintf("(%s ago)", FormatDuration(elapsed))),
+			styles.Git.Render(string(commit.Hash)[:8]),
+			styles.Subtle.Render(fmt.Sprintf("(%s ago)", presenters.FormatDuration(elapsed))),
 			commit.Message)
 		sb.WriteString(commitLine)
 	}
 
-	if len(m.commits) > maxCommits {
-		sb.WriteString(m.styles.Subtle.Render(
-			fmt.Sprintf("  ... and %d more commits", len(m.commits)-maxCommits)))
+	if len(commits) > maxCommits {
+		sb.WriteString(styles.Subtle.Render(
+			fmt.Sprintf("  ... and %d more commits", len(commits)-maxCommits)))
 		sb.WriteString("\n")
 	}
 
@@ -126,90 +140,91 @@ func (m *Model) renderCommitsSection() string {
 }
 
 // renderNotesSection renders notes summary section
-func (m *Model) renderNotesSection() string {
-	if len(m.notes) == 0 {
+// Pure function - no Model dependency
+func renderNotesSection(notes []domain.Note, styles Styles) string {
+	if len(notes) == 0 {
 		return ""
 	}
 
 	var sb strings.Builder
-	sb.WriteString(m.styles.SectionTitle.Render("📌 Notes Summary"))
+	sb.WriteString(styles.SectionTitle.Render("📌 Notes Summary"))
 	sb.WriteString("\n\n")
 	sb.WriteString(fmt.Sprintf("  %s %d notes\n",
-		m.styles.Label.Render("Total:"),
-		len(m.notes)))
+		styles.Label.Render("Total:"),
+		len(notes)))
 
-	mostRecent := m.notes[0]
+	mostRecent := notes[0]
 	preview := mostRecent.Content
 	if len(preview) > 100 {
 		preview = preview[:97] + "..."
 	}
 	sb.WriteString(fmt.Sprintf("  %s %s\n",
-		m.styles.Label.Render("Latest:"),
-		m.styles.Subtle.Render(preview)))
+		styles.Label.Render("Latest:"),
+		styles.Subtle.Render(preview)))
 
 	return sb.String()
 }
 
 // renderTasksSection renders task summary section
-func (m *Model) renderTasksSection() string {
-	if len(m.tasks) == 0 {
+// Pure function - no Model dependency
+func renderTasksSection(taskCounts map[string]int, styles Styles) string {
+	if len(taskCounts) == 0 || (taskCounts["todo"] == 0 && taskCounts["inProgress"] == 0 && taskCounts["completed"] == 0 && taskCounts["archived"] == 0) {
 		return ""
 	}
 
 	var sb strings.Builder
-	sb.WriteString(m.styles.SectionTitle.Render("✅ Tasks Summary"))
+	sb.WriteString(styles.SectionTitle.Render("✅ Tasks Summary"))
 	sb.WriteString("\n\n")
 
-	counts := countTasksByState(m.tasks)
-
-	if counts["todo"] > 0 {
+	if taskCounts["todo"] > 0 {
 		sb.WriteString(fmt.Sprintf("  %s %d tasks\n",
-			m.styles.Primary.Render("Todo:"),
-			counts["todo"]))
+			styles.Primary.Render("Todo:"),
+			taskCounts["todo"]))
 	}
-	if counts["inProgress"] > 0 {
+	if taskCounts["inProgress"] > 0 {
 		sb.WriteString(fmt.Sprintf("  %s %d tasks\n",
-			m.styles.Warning.Render("In Progress:"),
-			counts["inProgress"]))
+			styles.Warning.Render("In Progress:"),
+			taskCounts["inProgress"]))
 	}
-	if counts["completed"] > 0 {
+	if taskCounts["completed"] > 0 {
 		sb.WriteString(fmt.Sprintf("  %s %d tasks\n",
-			m.styles.Success.Render("Done:"),
-			counts["completed"]))
+			styles.Success.Render("Done:"),
+			taskCounts["completed"]))
 	}
-	if counts["archived"] > 0 {
+	if taskCounts["archived"] > 0 {
 		sb.WriteString(fmt.Sprintf("  %s %d tasks\n",
-			m.styles.Subtle.Render("Archived:"),
-			counts["archived"]))
+			styles.Subtle.Render("Archived:"),
+			taskCounts["archived"]))
 	}
 
 	return sb.String()
 }
 
 // renderActionsSection renders recent actions section
-func (m *Model) renderActionsSection() string {
-	if len(m.actions) == 0 {
+// Pure function - no Model dependency
+func renderActionsSection(actions []domain.Action, styles Styles) string {
+	if len(actions) == 0 {
 		return ""
 	}
 
 	var sb strings.Builder
-	sb.WriteString(m.styles.SectionTitle.Render("⚡ Recent Actions"))
+	sb.WriteString(styles.SectionTitle.Render("⚡ Recent Actions"))
 	sb.WriteString("\n\n")
 
-	maxActions := minInt(len(m.actions), maxActionsToShow)
+	maxActions := minInt(len(actions), maxActionsToShow)
 	for i := 0; i < maxActions; i++ {
-		action := m.actions[i]
+		action := actions[i]
 		elapsed := time.Since(action.Timestamp)
 		actionLine := fmt.Sprintf("  %s %s - %s\n",
 			GetActionIcon(action.ActionType),
-			m.styles.Subtle.Render(fmt.Sprintf("(%s ago)", FormatDuration(elapsed))),
+			styles.Subtle.Render(fmt.Sprintf("(%s ago)", presenters.FormatDuration(elapsed))),
 			action.Description)
 		sb.WriteString(actionLine)
 	}
 
-	if len(m.actions) > maxActions {
-		sb.WriteString(m.styles.Subtle.Render(
-			fmt.Sprintf("  ... and %d more actions", len(m.actions)-maxActions)))
+	if len(actions) > maxActions {
+		sb.WriteString(styles.Subtle.Render(
+			fmt.Sprintf("  ... and %d more actions", len(actions)-maxActions)))
 		sb.WriteString("\n")
 	}
 
@@ -217,13 +232,14 @@ func (m *Model) renderActionsSection() string {
 }
 
 // renderDuration renders session or total duration
-func (m *Model) renderDuration(agent domain.Agent) string {
+// Pure function - no Model dependency
+func renderDuration(agent domain.Agent, styles Styles) string {
 	if agent.Status != "completed" && agent.Status != "failed" {
 		duration := time.Since(agent.CreatedAt)
-		return renderLabelValue("Session Duration:", FormatDuration(duration), m.styles.Value, m.styles.Label)
+		return renderLabelValue("Session Duration:", presenters.FormatDuration(duration), styles.Value, styles.Label)
 	} else if agent.CompletedAt != nil {
 		duration := agent.CompletedAt.Sub(agent.CreatedAt)
-		return renderLabelValue("Total Duration:", FormatDuration(duration), m.styles.Value, m.styles.Label)
+		return renderLabelValue("Total Duration:", presenters.FormatDuration(duration), styles.Value, styles.Label)
 	}
 	return ""
 }
