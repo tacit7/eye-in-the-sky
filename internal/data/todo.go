@@ -3,6 +3,7 @@ package data
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/tacit7/eye-in-the-sky/internal/domain"
 	"github.com/tacit7/eye-in-the-sky/internal/todo"
@@ -84,52 +85,115 @@ func (s *todoStore) LoadCountsByAgent(ctx context.Context, agents []domain.Agent
 }
 
 // LoadByAgent returns tasks for a specific agent with pagination
-// Filters tasks by session_id or agent_id
+// Filters tasks by agent_id in a single SQL query (no N+1 pattern)
 func (s *todoStore) LoadByAgent(ctx context.Context, agentID domain.AgentID, limit, offset int) ([]domain.Task, error) {
 	// Return empty if service not initialized
 	if s.svc == nil {
 		return []domain.Task{}, nil
 	}
 
-	// Get all projects
-	projects, err := s.svc.ListProjects()
+	// Single SQL query: join tasks, workflow_states, and projects in one round-trip
+	query := `
+		SELECT
+			t.id,
+			t.title,
+			t.description,
+			t.state_id,
+			w.name AS workflow_name,
+			w.color AS workflow_color,
+			p.id AS project_id,
+			p.name AS project_name,
+			t.priority,
+			t.created_at,
+			t.updated_at,
+			t.archived,
+			t.session_id,
+			t.agent_id,
+			t.due_at,
+			t.completed_at
+		FROM tasks t
+		LEFT JOIN workflow_states w ON w.id = t.state_id
+		LEFT JOIN projects p ON p.id = t.project_id
+		WHERE t.agent_id = ?
+		AND t.archived = 0
+		ORDER BY t.priority DESC, t.state_id ASC, t.created_at ASC
+		LIMIT ? OFFSET ?
+	`
+
+	rows, err := s.svc.GetDB().Query(query, string(agentID), limit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list projects: %w", err)
+		return nil, fmt.Errorf("failed to query tasks: %w", err)
 	}
+	defer rows.Close()
 
-	var allTasks []domain.Task
-	for _, project := range projects {
-		// Query tasks for this project
-		filters := models.Filters{
-			IsActive: true, // Only non-archived
+	var tasks []domain.Task
+	for rows.Next() {
+		var (
+			id            string
+			title         string
+			description   *string
+			stateID       int
+			workflowName  *string
+			workflowColor *string
+			projectID     *string
+			projectName   *string
+			priority      int
+			createdAt     string
+			updatedAt     *string
+			archived      bool
+			sessionID     *string
+			agentIDStr    *string
+			dueAt         *string
+			completedAt   *string
+		)
+
+		if err := rows.Scan(&id, &title, &description, &stateID, &workflowName, &workflowColor,
+			&projectID, &projectName, &priority, &createdAt, &updatedAt, &archived, &sessionID, &agentIDStr, &dueAt, &completedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan task row: %w", err)
 		}
 
-		tasks, err := s.svc.GetTasksRepo().List(project.ID, filters, models.SortByCreated)
-		if err != nil {
-			continue // Skip project on error
+		// Parse timestamps
+		createdTime, _ := time.Parse(time.RFC3339, createdAt)
+		var updatedTime time.Time
+		if updatedAt != nil {
+			updatedTime, _ = time.Parse(time.RFC3339, *updatedAt)
+		} else {
+			updatedTime = createdTime
 		}
 
-		// Filter tasks by agent
-		for _, task := range tasks {
-			// Match by session_id or agent_id
-			if (task.SessionID != nil && *task.SessionID == string(agentID)) ||
-				(task.AgentID != nil && *task.AgentID == string(agentID)) {
-				allTasks = append(allTasks, s.toDomainTask(task))
-			}
+		task := domain.Task{
+			ID:               domain.TaskID(id),
+			Title:            title,
+			Description:      derefString(description),
+			StateID:          stateID,
+			WorkflowStatus:   derefString(workflowName),
+			ProjectID:        derefString(projectID),
+			Priority:         priority,
+			CreatedAt:        createdTime,
+			UpdatedAt:        updatedTime,
+			Archived:         archived,
+			SessionID:        derefString(sessionID),
+			AgentID:          derefString(agentIDStr),
 		}
+
+		if dueAt != nil {
+			t, _ := time.Parse(time.RFC3339, *dueAt)
+			task.DueAt = t
+		}
+
+		if completedAt != nil {
+			t, _ := time.Parse(time.RFC3339, *completedAt)
+			task.CompletedAt = t
+		}
+
+		tasks = append(tasks, task)
 	}
 
-	// Apply pagination
-	if offset >= len(allTasks) {
-		return []domain.Task{}, nil
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error reading task rows: %w", err)
 	}
 
-	end := offset + limit
-	if limit <= 0 || end > len(allTasks) {
-		end = len(allTasks)
-	}
-
-	return allTasks[offset:end], nil
+	return tasks, nil
 }
 
 // LoadRecentByAgent returns the most recent tasks for an agent

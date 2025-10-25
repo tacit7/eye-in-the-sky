@@ -131,40 +131,6 @@ BEGIN
 	UPDATE workflow_states SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
 END;
 
--- Triggers for FTS5 sync
--- Insert into FTS5 when a task is created
-CREATE TRIGGER IF NOT EXISTS sync_task_search_insert
-AFTER INSERT ON tasks
-FOR EACH ROW
-BEGIN
-	INSERT INTO task_search(task_id, title, description)
-	VALUES (
-		NEW.id,
-		NEW.title,
-		NEW.description
-	);
-END;
-
--- Update FTS5 when a task is updated
-CREATE TRIGGER IF NOT EXISTS sync_task_search_update
-AFTER UPDATE ON tasks
-FOR EACH ROW
-BEGIN
-	UPDATE task_search
-	SET
-		title = NEW.title,
-		description = NEW.description
-	WHERE task_id = NEW.id;
-END;
-
--- Delete from FTS5 when a task is deleted
-CREATE TRIGGER IF NOT EXISTS sync_task_search_delete
-AFTER DELETE ON tasks
-FOR EACH ROW
-BEGIN
-	DELETE FROM task_search WHERE task_id = OLD.id;
-END;
-
 -- Initialize default workflow states if not present
 INSERT OR IGNORE INTO workflow_states (id, name, position) VALUES
 	(1, 'todo', 1),

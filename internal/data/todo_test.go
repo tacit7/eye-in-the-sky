@@ -5,14 +5,14 @@ import (
 	"database/sql"
 	"testing"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 	"github.com/tacit7/eye-in-the-sky/internal/database"
 	"github.com/tacit7/eye-in-the-sky/internal/domain"
 )
 
 // setupTestDB creates an in-memory database with all necessary schema
 func setupTestDB(t *testing.T) *database.DB {
-	conn, err := sql.Open("sqlite3", ":memory:")
+	conn, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatalf("Failed to open in-memory database: %v", err)
 	}

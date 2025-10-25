@@ -4,12 +4,12 @@ import (
 	"database/sql"
 	"testing"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 // TestDBWrapper tests the DBWrapper struct
 func TestDBWrapper(t *testing.T) {
-	conn, err := sql.Open("sqlite3", ":memory:")
+	conn, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
@@ -29,7 +29,7 @@ func TestDBWrapper(t *testing.T) {
 // TestCreateTodoServiceFromWrapper tests the createTodoServiceFromWrapper function
 func TestCreateTodoServiceFromWrapper(t *testing.T) {
 	// Setup: Create an in-memory SQL database
-	conn, err := sql.Open("sqlite3", ":memory:")
+	conn, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
@@ -110,7 +110,7 @@ func TestCreateTodoServiceFromWrapperNilConnection(t *testing.T) {
 // TestDataClientInitialization tests DataClient creation
 func TestDataClientInitialization(t *testing.T) {
 	// Setup: Create an in-memory SQL database
-	conn, err := sql.Open("sqlite3", ":memory:")
+	conn, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
@@ -188,7 +188,7 @@ func TestDataClientInitialization(t *testing.T) {
 
 // TestDBWrapperQuery tests Query method
 func TestDBWrapperQuery(t *testing.T) {
-	conn, err := sql.Open("sqlite3", ":memory:")
+	conn, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
@@ -227,7 +227,7 @@ func TestDBWrapperQuery(t *testing.T) {
 
 // TestDBWrapperQueryRow tests QueryRow method
 func TestDBWrapperQueryRow(t *testing.T) {
-	conn, err := sql.Open("sqlite3", ":memory:")
+	conn, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
@@ -257,7 +257,7 @@ func TestDBWrapperQueryRow(t *testing.T) {
 
 // TestDBWrapperExec tests Exec method
 func TestDBWrapperExec(t *testing.T) {
-	conn, err := sql.Open("sqlite3", ":memory:")
+	conn, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
@@ -287,7 +287,7 @@ func TestDBWrapperExec(t *testing.T) {
 
 // TestDBWrapperReindex tests Reindex method
 func TestDBWrapperReindex(t *testing.T) {
-	conn, err := sql.Open("sqlite3", ":memory:")
+	conn, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}
@@ -304,7 +304,7 @@ func TestDBWrapperReindex(t *testing.T) {
 
 // TestDBWrapperVacuum tests Vacuum method
 func TestDBWrapperVacuum(t *testing.T) {
-	conn, err := sql.Open("sqlite3", ":memory:")
+	conn, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatalf("Failed to open database: %v", err)
 	}

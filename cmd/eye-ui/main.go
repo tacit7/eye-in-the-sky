@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 
 	tea "github.com/charmbracelet/bubbletea"
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 
 	ccdb "github.com/tacit7/eye-in-the-sky/internal/ccusage/db"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/app"
@@ -57,7 +57,7 @@ func main() {
 	}
 
 	// Open database
-	db, err := sql.Open("sqlite3", config.DatabasePath)
+	db, err := sql.Open("sqlite", "file:"+config.DatabasePath)
 	if err != nil {
 		log.Fatalf("Failed to open database: %v", err)
 	}

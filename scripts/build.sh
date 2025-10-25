@@ -7,10 +7,10 @@ echo "🔨 Building Eye in the Sky..."
 mkdir -p bin
 
 echo "📦 Building MCP server binary..."
-go build -o bin/eye-in-the-sky ./cmd/server
+go build -tags fts5 -o bin/eye-in-the-sky ./cmd/server
 
 echo "📦 Building TUI dashboard binary..."
-go build -o bin/eye-ui ./cmd/eye-ui
+go build -tags fts5 -o bin/eye-ui ./cmd/eye-ui
 
 echo "✅ Build complete!"
 echo ""

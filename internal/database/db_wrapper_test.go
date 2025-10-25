@@ -4,13 +4,13 @@ import (
 	"database/sql"
 	"testing"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 // TestNewFromConnection tests the NewFromConnection wrapper function
 func TestNewFromConnection(t *testing.T) {
 	// Setup: Create an in-memory SQLite database
-	conn, err := sql.Open("sqlite3", ":memory:")
+	conn, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatalf("Failed to open in-memory database: %v", err)
 	}
@@ -41,7 +41,7 @@ func TestNewFromConnectionWithNilInput(t *testing.T) {
 // TestNewFromConnectionExecutesQueries tests that wrapped connection can execute queries
 func TestNewFromConnectionExecutesQueries(t *testing.T) {
 	// Setup
-	conn, err := sql.Open("sqlite3", ":memory:")
+	conn, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatalf("Failed to open in-memory database: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestNewFromConnectionExecutesQueries(t *testing.T) {
 // TestNewFromConnectionReindexAndVacuum tests maintenance operations
 func TestNewFromConnectionReindexAndVacuum(t *testing.T) {
 	// Setup
-	conn, err := sql.Open("sqlite3", ":memory:")
+	conn, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatalf("Failed to open in-memory database: %v", err)
 	}
@@ -110,7 +110,7 @@ func TestNewFromConnectionReindexAndVacuum(t *testing.T) {
 // TestNewFromConnectionMultipleWrappers tests that multiple wrappers can share same connection
 func TestNewFromConnectionMultipleWrappers(t *testing.T) {
 	// Setup: Single connection
-	conn, err := sql.Open("sqlite3", ":memory:")
+	conn, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatalf("Failed to open in-memory database: %v", err)
 	}

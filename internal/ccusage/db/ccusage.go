@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 // CCUsageDB manages the ccusage SQLite database
@@ -16,7 +16,7 @@ type CCUsageDB struct {
 
 // New creates a new CCUsageDB instance and initializes the schema
 func New(dbPath string) (*CCUsageDB, error) {
-	db, err := sql.Open("sqlite3", dbPath+"?cache=shared&mode=rwc&_journal_mode=WAL")
+	db, err := sql.Open("sqlite", "file:"+dbPath+"?cache=shared&mode=rwc&_journal_mode=WAL")
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
