@@ -386,23 +386,4 @@ func BenchmarkRenderTiming(b *testing.B) {
 	}
 }
 
-// Helper functions for tests
-
-// defaultTestOverviewStyles creates a test OverviewStyles with minimal styling
-func defaultTestOverviewStyles() OverviewStyles {
-	return OverviewStyles{
-		SectionTitle: lipgloss.NewStyle(),
-		Label:        lipgloss.NewStyle(),
-		Value:        lipgloss.NewStyle(),
-		Primary:      lipgloss.NewStyle(),
-		Warning:      lipgloss.NewStyle(),
-		Success:      lipgloss.NewStyle(),
-		Error:        lipgloss.NewStyle(),
-		Subtle:       lipgloss.NewStyle(),
-		Git:          lipgloss.NewStyle(),
-		Secondary:    lipgloss.NewStyle(),
-		Danger:       lipgloss.NewStyle(),
-		Info:         lipgloss.NewStyle(),
-		Success2:     lipgloss.NewStyle(),
-	}
-}
+// Note: Test helpers are in test_helpers.go
