@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -13,6 +14,9 @@ func (m *Model) handleTasksMessages(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case TasksLoadedMsg:
 		// Tasks tab
+		now := time.Now().Format("15:04:05.000")
+		log.Printf("[PERF][%s] Message handler received TasksLoadedMsg with %d tasks", now, len(msg.Tasks))
+
 		m.tasks = msg.Tasks
 		m.taskState = TaskLoaded
 		m.tasksIndex = 0

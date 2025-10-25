@@ -764,6 +764,10 @@ func (m *Model) loadTasks() error {
 		return nil
 	}
 
+	start := time.Now()
+	startTime := start.Format("15:04:05.000")
+	log.Printf("[PERF][%s] loadTasks() sync starting for agent %s", startTime, m.selectedAgent.ID)
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -772,6 +776,9 @@ func (m *Model) loadTasks() error {
 		return err
 	}
 
+	elapsed := time.Since(start)
+	endTime := time.Now().Format("15:04:05.000")
+	log.Printf("[PERF][%s] loadTasks() sync complete in %v", endTime, elapsed)
 	m.tasks = tasks
 	return nil
 }

@@ -3,6 +3,7 @@ package data
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/tacit7/eye-in-the-sky/internal/domain"
@@ -92,6 +93,10 @@ func (s *todoStore) LoadByAgent(ctx context.Context, agentID domain.AgentID, lim
 		return []domain.Task{}, nil
 	}
 
+	start := time.Now()
+	startTime := start.Format("15:04:05.000")
+	log.Printf("[PERF][%s] LoadByAgent starting for agent %s", startTime, agentID)
+
 	// Single SQL query: join tasks, workflow_states, and projects in one round-trip
 	query := `
 		SELECT
@@ -121,6 +126,9 @@ func (s *todoStore) LoadByAgent(ctx context.Context, agentID domain.AgentID, lim
 	`
 
 	rows, err := s.svc.GetDB().Query(query, string(agentID), limit, offset)
+	queryTime := time.Since(start)
+	queryEndTime := time.Now().Format("15:04:05.000")
+	log.Printf("[PERF][%s] Task query for agent %s took %v", queryEndTime, agentID, queryTime)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query tasks: %w", err)
 	}

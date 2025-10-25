@@ -3,7 +3,6 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -44,7 +43,7 @@ func main() {
 		defer f.Close()
 		// Use SyncWriter to ensure logs are flushed immediately
 		syncWriter := &SyncWriter{file: f}
-		log.SetOutput(io.MultiWriter(f, syncWriter))
+		log.SetOutput(syncWriter)
 		log.SetFlags(log.LstdFlags | log.Lshortfile)
 	}
 

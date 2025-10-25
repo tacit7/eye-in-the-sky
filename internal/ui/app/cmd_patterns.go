@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"log"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -146,10 +147,23 @@ func loadTasksCmd(store TaskStore, agentID domain.AgentID, limit, offset int) te
 		ctx, cancel := withTimeout()
 		defer cancel()
 
+		cmdStart := time.Now()
+		startTime := cmdStart.Format("15:04:05.000")
+		log.Printf("[PERF][%s] Starting task load for agent %s", startTime, agentID)
+
+		start := time.Now()
 		tasks, err := store.LoadByAgent(ctx, agentID, limit, offset)
+		elapsed := time.Since(start)
+		endTime := time.Now().Format("15:04:05.000")
+		log.Printf("[PERF][%s] LoadByAgent total for agent %s (limit=%d, offset=%d) took %v (loaded %d tasks)", endTime, agentID, limit, offset, elapsed, len(tasks))
+
 		if err != nil {
 			return ErrMsg{Error: err}
 		}
+
+		cmdElapsed := time.Since(cmdStart)
+		cmdEndTime := time.Now().Format("15:04:05.000")
+		log.Printf("[PERF][%s] Task load command complete: total %v", cmdEndTime, cmdElapsed)
 		return TasksLoadedMsg{Tasks: tasks}
 	}
 }

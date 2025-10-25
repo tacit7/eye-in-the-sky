@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -10,6 +11,14 @@ import (
 
 // View renders the current view
 func (m *Model) View() string {
+	start := time.Now()
+	defer func(startTime time.Time) {
+		elapsed := time.Since(startTime)
+		endTime := time.Now().Format("15:04:05.000")
+		if elapsed > 50*time.Millisecond {
+			log.Printf("[PERF][%s] View() complete in %v (currentView=%v)", endTime, elapsed, m.currentView)
+		}
+	}(start)
 	if m.width == 0 {
 		return "Loading..."
 	}

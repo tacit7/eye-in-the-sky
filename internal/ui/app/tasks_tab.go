@@ -2,8 +2,10 @@ package app
 
 import (
 	"fmt"
+	"log"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/tacit7/eye-in-the-sky/internal/domain"
@@ -11,6 +13,10 @@ import (
 
 // renderTasksTabView renders the tasks tab content
 func (m *Model) renderTasksTabView() string {
+	start := time.Now()
+	now := start.Format("15:04:05.000")
+	log.Printf("[PERF][%s] renderTasksTabView called with %d tasks", now, len(m.tasks))
+
 	if len(m.tasks) == 0 {
 		return m.styles.Subtle.Render("\n  No tasks found for this agent\n")
 	}
@@ -48,9 +54,27 @@ func (m *Model) renderTasksTabView() string {
 		return sortedTasks[i].CreatedAt.After(sortedTasks[j].CreatedAt)
 	})
 
-	// Header
-	sb.WriteString(m.styles.Primary.Render(fmt.Sprintf("%-5s %-8s %-10s %-60s %s\n",
-		"ID", "Priority", "Status", "Description", "Created")))
+	// Define column widths for alignment
+	idWidth := 8
+	priorityWidth := 8
+	statusWidth := 12
+	descWidth := 50
+	createdWidth := 17
+
+	// Helper to pad right without extra spacing
+	padRightStyled := func(text string, width int) string {
+		return fmt.Sprintf("%-*s", width, text)
+	}
+
+	// Header - no trailing spaces after each label
+	headerLine := padRightStyled("ID", idWidth) +
+		padRightStyled("Priority", priorityWidth) +
+		padRightStyled("Status", statusWidth) +
+		padRightStyled("Description", descWidth) +
+		fmt.Sprintf("%*s", createdWidth, "Created")
+
+	sb.WriteString(m.styles.Primary.Render(headerLine))
+	sb.WriteString("\n")
 	sb.WriteString(m.styles.Border.Render(strings.Repeat("─", m.width-10)))
 	sb.WriteString("\n")
 
@@ -94,18 +118,20 @@ func (m *Model) renderTasksTabView() string {
 
 		// Truncate description if needed
 		desc := task.Description
-		if len(desc) > 58 {
-			desc = desc[:55] + "..."
+		if len(desc) > descWidth-3 {
+			desc = desc[:descWidth-6] + "..."
 		}
 
-		// Format line
-		line := fmt.Sprintf("%-5s %s %-10s %-60s %s",
-			fmt.Sprintf("%s", string(task.ID)[:8]), // First 8 chars of UUID
-			priStyle.Render(priDisplay),
-			statusStyle.Render(task.WorkflowStatus),
-			desc,
-			task.CreatedAt.Format("Jan 2 15:04"),
-		)
+		// Format line with aligned columns (matching header)
+		// Pad text before applying styles to keep visible width correct
+		taskID := fmt.Sprintf("%s", string(task.ID)[:8])
+		createdStr := task.CreatedAt.Format("Jan 2 15:04")
+
+		line := padRightStyled(taskID, idWidth) +
+			priStyle.Render(fmt.Sprintf("%-*s", priorityWidth, priDisplay)) +
+			statusStyle.Render(fmt.Sprintf("%-*s", statusWidth, task.WorkflowStatus)) +
+			padRightStyled(desc, descWidth) +
+			fmt.Sprintf("%*s", createdWidth, createdStr)
 
 		if selected {
 			sb.WriteString(m.styles.Selected.Render(line))
@@ -124,7 +150,11 @@ func (m *Model) renderTasksTabView() string {
 		sb.WriteString(renderTaskDetails(task, m.styles))
 	}
 
-	return sb.String()
+	result := sb.String()
+	renderTime := time.Since(start)
+	endTime := time.Now().Format("15:04:05.000")
+	log.Printf("[PERF][%s] Task render complete (%d tasks) took %v", endTime, len(sortedTasks), renderTime)
+	return result
 }
 
 // renderTaskDetails renders detailed view of a single task
