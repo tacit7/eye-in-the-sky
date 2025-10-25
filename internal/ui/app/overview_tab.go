@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/tacit7/eye-in-the-sky/internal/domain"
 )
 
@@ -14,323 +15,274 @@ func (m *Model) renderOverviewTab() string {
 		return "No agent selected"
 	}
 
-	var sb strings.Builder
 	agent := *m.selectedAgent
+	sections := []string{
+		m.renderAgentInfo(agent),
+		m.renderTiming(agent),
+		m.renderCommitsSection(),
+		m.renderNotesSection(),
+		m.renderTasksSection(),
+		m.renderActionsSection(),
+	}
 
-	// Basic Information Section
+	return strings.Join(filterNonEmpty(sections), "\n")
+}
+
+// renderAgentInfo renders agent identification information
+func (m *Model) renderAgentInfo(agent domain.Agent) string {
+	var sb strings.Builder
 	sb.WriteString(m.styles.SectionTitle.Render("📋 Agent Information"))
 	sb.WriteString("\n\n")
 
-	// Agent ID and Status
-	sb.WriteString(fmt.Sprintf("  %s %s\n",
-		m.styles.Label.Render("Agent ID:"),
-		m.styles.Value.Render(string(agent.ID))))
+	sb.WriteString(m.renderField("Agent ID:", string(agent.ID), m.styles.Value))
+	sb.WriteString(m.renderField("Status:", agent.Status, GetStatusStyle(agent.Status, m.styles)))
 
-	sb.WriteString(fmt.Sprintf("  %s %s\n",
-		m.styles.Label.Render("Status:"),
-		GetStatusStyle(agent.Status, m.styles).Render(string(agent.Status))))
-
-	// Description
 	if agent.FeatureDesc != "" {
-		sb.WriteString(fmt.Sprintf("  %s %s\n",
-			m.styles.Label.Render("Description:"),
-			m.styles.Value.Render(agent.FeatureDesc)))
+		sb.WriteString(m.renderField("Description:", agent.FeatureDesc, m.styles.Value))
 	}
-
-	// Project (for desktop agents)
 	if agent.ProjectName != "" {
-		sb.WriteString(fmt.Sprintf("  %s %s\n",
-			m.styles.Label.Render("Project:"),
-			m.styles.Value.Render(agent.ProjectName)))
+		sb.WriteString(m.renderField("Project:", agent.ProjectName, m.styles.Value))
 	}
-
-	// Current Task
 	if agent.CurrentTask != "" {
-		sb.WriteString(fmt.Sprintf("  %s %s\n",
-			m.styles.Label.Render("Current Task:"),
-			m.styles.Value.Render(agent.CurrentTask)))
+		sb.WriteString(m.renderField("Current Task:", agent.CurrentTask, m.styles.Value))
 	}
 
-	// Source
-	sb.WriteString(fmt.Sprintf("  %s %s\n",
-		m.styles.Label.Render("Source:"),
-		m.styles.Value.Render(string(agent.Source))))
+	sb.WriteString(m.renderField("Source:", agent.Source, m.styles.Value))
 
-	// Worktree Path (if applicable)
 	if agent.GitWorktreePath != "" {
-		sb.WriteString(fmt.Sprintf("  %s %s\n",
-			m.styles.Label.Render("Worktree:"),
-			m.styles.Value.Render(agent.GitWorktreePath)))
+		sb.WriteString(m.renderField("Worktree:", agent.GitWorktreePath, m.styles.Value))
 	}
-
-	// Session ID
 	if agent.SessionID != "" {
-		sb.WriteString(fmt.Sprintf("  %s %s\n",
-			m.styles.Label.Render("Session ID:"),
-			m.styles.Value.Render(agent.SessionID)))
+		sb.WriteString(m.renderField("Session ID:", agent.SessionID, m.styles.Value))
 	}
-
-	// Parent Session ID (if it's a subagent)
 	if agent.ParentSessionID != "" {
-		sb.WriteString(fmt.Sprintf("  %s %s\n",
-			m.styles.Label.Render("Parent Session:"),
-			m.styles.Value.Render(agent.ParentSessionID)))
+		sb.WriteString(m.renderField("Parent Session:", agent.ParentSessionID, m.styles.Value))
 	}
-
-	// Parent Agent ID (if it's a subagent)
 	if agent.ParentAgentID != "" {
-		sb.WriteString(fmt.Sprintf("  %s %s\n",
-			m.styles.Label.Render("Parent Agent:"),
-			m.styles.Value.Render(string(agent.ParentAgentID))))
+		sb.WriteString(m.renderField("Parent Agent:", string(agent.ParentAgentID), m.styles.Value))
 	}
-
-	// Window ID (for desktop agents)
 	if agent.WindowID != "" {
-		sb.WriteString(fmt.Sprintf("  %s %s\n",
-			m.styles.Label.Render("Window ID:"),
-			m.styles.Value.Render(agent.WindowID)))
+		sb.WriteString(m.renderField("Window ID:", agent.WindowID, m.styles.Value))
 	}
 
-	// Timing Information
-	sb.WriteString("\n")
+	return sb.String()
+}
+
+// renderTiming renders timing information section
+func (m *Model) renderTiming(agent domain.Agent) string {
+	var sb strings.Builder
 	sb.WriteString(m.styles.SectionTitle.Render("⏱️ Timing"))
 	sb.WriteString("\n\n")
 
-	// Created At
-	sb.WriteString(fmt.Sprintf("  %s %s\n",
-		m.styles.Label.Render("Created:"),
-		m.styles.Value.Render(agent.CreatedAt.Format("Jan 2, 2006 15:04:05 MST"))))
+	sb.WriteString(m.renderField("Created:", agent.CreatedAt.Format("Jan 2, 2006 15:04:05 MST"), m.styles.Value))
+	sb.WriteString(m.renderField("Updated:", agent.UpdatedAt.Format("Jan 2, 2006 15:04:05 MST"), m.styles.Value))
 
-	// Updated At
-	sb.WriteString(fmt.Sprintf("  %s %s\n",
-		m.styles.Label.Render("Updated:"),
-		m.styles.Value.Render(agent.UpdatedAt.Format("Jan 2, 2006 15:04:05 MST"))))
-
-	// Last Activity
 	if !agent.LastActivityAt.IsZero() {
 		elapsed := time.Since(agent.LastActivityAt)
 		activityStr := fmt.Sprintf("%s (%s ago)",
 			agent.LastActivityAt.Format("15:04:05"),
 			FormatDuration(elapsed))
-
-		var activityStyle = m.styles.Subtle
-		if elapsed < 5*time.Minute {
-			activityStyle = m.styles.Success
-		} else if elapsed < 30*time.Minute {
-			activityStyle = m.styles.Warning
-		}
-
-		sb.WriteString(fmt.Sprintf("  %s %s\n",
-			m.styles.Label.Render("Last Activity:"),
-			activityStyle.Render(activityStr)))
+		style := m.getActivityStyle(elapsed)
+		sb.WriteString(m.renderField("Last Activity:", activityStr, style))
 	}
 
-	// Session Duration
+	sb.WriteString(m.renderDuration(agent))
+
+	return sb.String()
+}
+
+// renderCommitsSection renders recent commits section
+func (m *Model) renderCommitsSection() string {
+	if len(m.commits) == 0 {
+		return ""
+	}
+
+	var sb strings.Builder
+	sb.WriteString(m.styles.SectionTitle.Render("📝 Recent Commits"))
+	sb.WriteString("\n\n")
+
+	maxCommits := min(len(m.commits), 5)
+	for i := 0; i < maxCommits; i++ {
+		commit := m.commits[i]
+		elapsed := time.Since(commit.Timestamp)
+		commitLine := fmt.Sprintf("  %s %s - %s\n",
+			m.styles.Git.Render(string(commit.Hash)[:8]),
+			m.styles.Subtle.Render(fmt.Sprintf("(%s ago)", FormatDuration(elapsed))),
+			commit.Message)
+		sb.WriteString(commitLine)
+	}
+
+	if len(m.commits) > maxCommits {
+		sb.WriteString(m.styles.Subtle.Render(
+			fmt.Sprintf("  ... and %d more commits", len(m.commits)-maxCommits)))
+		sb.WriteString("\n")
+	}
+
+	return sb.String()
+}
+
+// renderNotesSection renders notes summary section
+func (m *Model) renderNotesSection() string {
+	if len(m.notes) == 0 {
+		return ""
+	}
+
+	var sb strings.Builder
+	sb.WriteString(m.styles.SectionTitle.Render("📌 Notes Summary"))
+	sb.WriteString("\n\n")
+	sb.WriteString(fmt.Sprintf("  %s %d notes\n",
+		m.styles.Label.Render("Total:"),
+		len(m.notes)))
+
+	mostRecent := m.notes[0]
+	preview := mostRecent.Content
+	if len(preview) > 100 {
+		preview = preview[:97] + "..."
+	}
+	sb.WriteString(fmt.Sprintf("  %s %s\n",
+		m.styles.Label.Render("Latest:"),
+		m.styles.Subtle.Render(preview)))
+
+	return sb.String()
+}
+
+// renderTasksSection renders task summary section
+func (m *Model) renderTasksSection() string {
+	if len(m.tasks) == 0 {
+		return ""
+	}
+
+	var sb strings.Builder
+	sb.WriteString(m.styles.SectionTitle.Render("✅ Tasks Summary"))
+	sb.WriteString("\n\n")
+
+	counts := m.countTasksByState()
+
+	if counts["todo"] > 0 {
+		sb.WriteString(fmt.Sprintf("  %s %d tasks\n",
+			m.styles.Primary.Render("Todo:"),
+			counts["todo"]))
+	}
+	if counts["inProgress"] > 0 {
+		sb.WriteString(fmt.Sprintf("  %s %d tasks\n",
+			m.styles.Warning.Render("In Progress:"),
+			counts["inProgress"]))
+	}
+	if counts["completed"] > 0 {
+		sb.WriteString(fmt.Sprintf("  %s %d tasks\n",
+			m.styles.Success.Render("Done:"),
+			counts["completed"]))
+	}
+	if counts["archived"] > 0 {
+		sb.WriteString(fmt.Sprintf("  %s %d tasks\n",
+			m.styles.Subtle.Render("Archived:"),
+			counts["archived"]))
+	}
+
+	return sb.String()
+}
+
+// renderActionsSection renders recent actions section
+func (m *Model) renderActionsSection() string {
+	if len(m.actions) == 0 {
+		return ""
+	}
+
+	var sb strings.Builder
+	sb.WriteString(m.styles.SectionTitle.Render("⚡ Recent Actions"))
+	sb.WriteString("\n\n")
+
+	maxActions := min(len(m.actions), 3)
+	for i := 0; i < maxActions; i++ {
+		action := m.actions[i]
+		elapsed := time.Since(action.Timestamp)
+		actionLine := fmt.Sprintf("  %s %s - %s\n",
+			GetActionIcon(action.ActionType),
+			m.styles.Subtle.Render(fmt.Sprintf("(%s ago)", FormatDuration(elapsed))),
+			action.Description)
+		sb.WriteString(actionLine)
+	}
+
+	if len(m.actions) > maxActions {
+		sb.WriteString(m.styles.Subtle.Render(
+			fmt.Sprintf("  ... and %d more actions", len(m.actions)-maxActions)))
+		sb.WriteString("\n")
+	}
+
+	return sb.String()
+}
+
+// renderField renders a label-value pair
+func (m *Model) renderField(label, value string, style lipgloss.Style) string {
+	return fmt.Sprintf("  %s %s\n",
+		m.styles.Label.Render(label),
+		style.Render(value))
+}
+
+// getActivityStyle returns appropriate style based on elapsed time
+func (m *Model) getActivityStyle(elapsed time.Duration) lipgloss.Style {
+	if elapsed < 5*time.Minute {
+		return m.styles.Success
+	} else if elapsed < 30*time.Minute {
+		return m.styles.Warning
+	}
+	return m.styles.Subtle
+}
+
+// renderDuration renders session or total duration
+func (m *Model) renderDuration(agent domain.Agent) string {
 	if agent.Status != "completed" && agent.Status != "failed" {
 		duration := time.Since(agent.CreatedAt)
-		sb.WriteString(fmt.Sprintf("  %s %s\n",
-			m.styles.Label.Render("Session Duration:"),
-			m.styles.Value.Render(FormatDuration(duration))))
+		return m.renderField("Session Duration:", FormatDuration(duration), m.styles.Value)
 	} else if agent.CompletedAt != nil {
 		duration := agent.CompletedAt.Sub(agent.CreatedAt)
-		sb.WriteString(fmt.Sprintf("  %s %s\n",
-			m.styles.Label.Render("Total Duration:"),
-			m.styles.Value.Render(FormatDuration(duration))))
+		return m.renderField("Total Duration:", FormatDuration(duration), m.styles.Value)
 	}
-
-	// Recent Commits Section
-	if len(m.commits) > 0 {
-		sb.WriteString("\n")
-		sb.WriteString(m.styles.SectionTitle.Render("📝 Recent Commits"))
-		sb.WriteString("\n\n")
-
-		// Show up to 5 most recent commits
-		maxCommits := 5
-		if len(m.commits) < maxCommits {
-			maxCommits = len(m.commits)
-		}
-
-		for i := 0; i < maxCommits; i++ {
-			commit := m.commits[i]
-			// Format: hash (time ago) - message
-			elapsed := time.Since(commit.Timestamp)
-			commitLine := fmt.Sprintf("  %s %s - %s\n",
-				m.styles.Git.Render(string(commit.Hash)[:8]),
-				m.styles.Subtle.Render(fmt.Sprintf("(%s ago)", FormatDuration(elapsed))),
-				commit.Message)
-			sb.WriteString(commitLine)
-		}
-
-		if len(m.commits) > maxCommits {
-			sb.WriteString(m.styles.Subtle.Render(
-				fmt.Sprintf("  ... and %d more commits", len(m.commits)-maxCommits)))
-			sb.WriteString("\n")
-		}
-	}
-
-	// Notes Summary
-	if len(m.notes) > 0 {
-		sb.WriteString("\n")
-		sb.WriteString(m.styles.SectionTitle.Render("📌 Notes Summary"))
-		sb.WriteString("\n\n")
-
-		// Show count and most recent note preview
-		sb.WriteString(fmt.Sprintf("  %s %d notes\n",
-			m.styles.Label.Render("Total:"),
-			len(m.notes)))
-
-		if len(m.notes) > 0 {
-			mostRecent := m.notes[0]
-			preview := mostRecent.Content
-			if len(preview) > 100 {
-				preview = preview[:97] + "..."
-			}
-			sb.WriteString(fmt.Sprintf("  %s %s\n",
-				m.styles.Label.Render("Latest:"),
-				m.styles.Subtle.Render(preview)))
-		}
-	}
-
-	// Task Summary
-	if len(m.tasks) > 0 {
-		sb.WriteString("\n")
-		sb.WriteString(m.styles.SectionTitle.Render("✅ Tasks Summary"))
-		sb.WriteString("\n\n")
-
-		// Count by state and archived status
-		var completed, inProgress, todo, archived int
-		for _, task := range m.tasks {
-			if task.Archived {
-				archived++
-			} else {
-				switch task.StateID {
-				case 3: // done
-					completed++
-				case 2: // in_progress
-					inProgress++
-				case 1: // todo
-					todo++
-				default:
-					todo++
-				}
-			}
-		}
-
-		// Display counts
-		if todo > 0 {
-			sb.WriteString(fmt.Sprintf("  %s %d tasks\n",
-				m.styles.Primary.Render("Todo:"),
-				todo))
-		}
-		if inProgress > 0 {
-			sb.WriteString(fmt.Sprintf("  %s %d tasks\n",
-				m.styles.Warning.Render("In Progress:"),
-				inProgress))
-		}
-		if completed > 0 {
-			sb.WriteString(fmt.Sprintf("  %s %d tasks\n",
-				m.styles.Success.Render("Done:"),
-				completed))
-		}
-		if archived > 0 {
-			sb.WriteString(fmt.Sprintf("  %s %d tasks\n",
-				m.styles.Subtle.Render("Archived:"),
-				archived))
-		}
-	}
-
-	// Actions Summary
-	if len(m.actions) > 0 {
-		sb.WriteString("\n")
-		sb.WriteString(m.styles.SectionTitle.Render("⚡ Recent Actions"))
-		sb.WriteString("\n\n")
-
-		// Show last 3 actions
-		maxActions := 3
-		if len(m.actions) < maxActions {
-			maxActions = len(m.actions)
-		}
-
-		for i := 0; i < maxActions; i++ {
-			action := m.actions[i]
-			elapsed := time.Since(action.Timestamp)
-			actionLine := fmt.Sprintf("  %s %s - %s\n",
-				GetActionIcon(action.ActionType),
-				m.styles.Subtle.Render(fmt.Sprintf("(%s ago)", FormatDuration(elapsed))),
-				action.Description)
-			sb.WriteString(actionLine)
-		}
-
-		if len(m.actions) > maxActions {
-			sb.WriteString(m.styles.Subtle.Render(
-				fmt.Sprintf("  ... and %d more actions", len(m.actions)-maxActions)))
-			sb.WriteString("\n")
-		}
-	}
-
-	return sb.String()
+	return ""
 }
 
-// buildTaskSummary builds a task summary string
-func buildTaskSummary(tasks []domain.Task, styles Styles) string {
-	var sb strings.Builder
+// countTasksByState returns task counts by state
+func (m *Model) countTasksByState() map[string]int {
+	counts := map[string]int{
+		"todo":       0,
+		"inProgress": 0,
+		"completed":  0,
+		"archived":   0,
+	}
 
-	// Count by state
-	var completed, inProgress, todo int
-	for _, task := range tasks {
-		if !task.Archived {
+	for _, task := range m.tasks {
+		if task.Archived {
+			counts["archived"]++
+		} else {
 			switch task.StateID {
 			case 3: // done
-				completed++
+				counts["completed"]++
 			case 2: // in_progress
-				inProgress++
-			case 1: // todo
-				todo++
-			default:
-				todo++
+				counts["inProgress"]++
+			default: // todo
+				counts["todo"]++
 			}
 		}
 	}
 
-	// Display counts
-	if todo > 0 {
-		sb.WriteString(fmt.Sprintf("  %s %d tasks\n",
-			styles.Primary.Render("Todo:"),
-			todo))
-	}
-	if inProgress > 0 {
-		sb.WriteString(fmt.Sprintf("  %s %d tasks\n",
-			styles.Warning.Render("In Progress:"),
-			inProgress))
-	}
-	if completed > 0 {
-		sb.WriteString(fmt.Sprintf("  %s %d tasks\n",
-			styles.Success.Render("Done:"),
-			completed))
-	}
-
-	return sb.String()
+	return counts
 }
 
-// buildNotesSummary builds a notes summary string
-func buildNotesSummary(notes []domain.Note, styles Styles) string {
-	var sb strings.Builder
-
-	// Show count and most recent note preview
-	sb.WriteString(fmt.Sprintf("  %s %d notes\n",
-		styles.Label.Render("Total:"),
-		len(notes)))
-
-	if len(notes) > 0 {
-		mostRecent := notes[0]
-		preview := mostRecent.Content
-		if len(preview) > 100 {
-			preview = preview[:97] + "..."
+// filterNonEmpty removes empty strings from slice
+func filterNonEmpty(sections []string) []string {
+	var result []string
+	for _, s := range sections {
+		if strings.TrimSpace(s) != "" {
+			result = append(result, s)
 		}
-		sb.WriteString(fmt.Sprintf("  %s %s\n",
-			styles.Label.Render("Latest:"),
-			styles.Subtle.Render(preview)))
 	}
+	return result
+}
 
-	return sb.String()
+// min returns the minimum of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
