@@ -1,9 +1,9 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"log"
-	"os/exec"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -119,11 +119,11 @@ func (m *Model) handleTasksKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.adjustTasksScroll()
 		}
 	case "d":
-		// Mark task done and reload asynchronously
+		// Mark task done via the data store
 		if m.tasksIndex >= 0 && m.tasksIndex < len(m.tasks) {
 			task := m.tasks[m.tasksIndex]
-			cmd := exec.Command("task", task.UUID, "done")
-			if err := cmd.Run(); err != nil {
+			err := m.data.Tasks.MarkDone(context.Background(), task.ID)
+			if err != nil {
 				m.err = err
 				m.statusMsg = fmt.Sprintf("Failed to mark task done: %v", err)
 			} else {

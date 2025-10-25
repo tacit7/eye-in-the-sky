@@ -22,33 +22,30 @@ func (m *Model) renderTasksTabView() string {
 	copy(sortedTasks, m.tasks)
 
 	sort.Slice(sortedTasks, func(i, j int) bool {
-		// Deleted tasks go to the bottom
-		if sortedTasks[i].Status == "deleted" && sortedTasks[j].Status != "deleted" {
+		// Archived tasks go to the bottom
+		if sortedTasks[i].Archived && !sortedTasks[j].Archived {
 			return false
 		}
-		if sortedTasks[i].Status != "deleted" && sortedTasks[j].Status == "deleted" {
+		if !sortedTasks[i].Archived && sortedTasks[j].Archived {
 			return true
 		}
 
-		// Priority order: H > M > L > (no priority)
-		iPri := GetPriorityWeight(sortedTasks[i].Priority)
-		jPri := GetPriorityWeight(sortedTasks[j].Priority)
+		// Priority order: higher numbers first (5 > 4 > ... > 0)
+		iPri := sortedTasks[i].Priority
+		jPri := sortedTasks[j].Priority
 		if iPri != jPri {
 			return iPri > jPri
 		}
 
-		// Then by status (pending before completed)
-		if sortedTasks[i].Status != sortedTasks[j].Status {
-			if sortedTasks[i].Status == "pending" {
-				return true
-			}
-			if sortedTasks[j].Status == "pending" {
-				return false
-			}
+		// Then by state (todo before in_progress before done)
+		iState := sortedTasks[i].StateID
+		jState := sortedTasks[j].StateID
+		if iState != jState {
+			return iState < jState // Lower state IDs first (1=todo < 2=in_progress < 3=done)
 		}
 
 		// Finally by creation date (newer first)
-		return sortedTasks[i].Entry.After(sortedTasks[j].Entry)
+		return sortedTasks[i].CreatedAt.After(sortedTasks[j].CreatedAt)
 	})
 
 	// Header
@@ -61,17 +58,20 @@ func (m *Model) renderTasksTabView() string {
 	for i, task := range sortedTasks {
 		selected := i == m.taskIndex
 
-		// Format priority with color
+		// Format priority with color (0-5 scale)
 		var priStyle lipgloss.Style
 		var priDisplay string
 		switch task.Priority {
-		case "H":
+		case 5:
+			priStyle = m.styles.Error
+			priDisplay = "[CRIT]"
+		case 4, 3:
 			priStyle = m.styles.Error
 			priDisplay = "[HIGH]"
-		case "M":
+		case 2:
 			priStyle = m.styles.Warning
 			priDisplay = "[MED]"
-		case "L":
+		case 1:
 			priStyle = m.styles.Subtle
 			priDisplay = "[LOW]"
 		default:
@@ -79,15 +79,15 @@ func (m *Model) renderTasksTabView() string {
 			priDisplay = "[-]"
 		}
 
-		// Format status with color
+		// Format state with color
 		var statusStyle lipgloss.Style
-		switch task.Status {
-		case "completed":
+		switch task.WorkflowStatus {
+		case "done":
 			statusStyle = m.styles.Success
-		case "pending":
+		case "in_progress":
 			statusStyle = m.styles.Warning
-		case "deleted":
-			statusStyle = m.styles.Subtle.Strikethrough(true)
+		case "todo":
+			statusStyle = m.styles.Primary
 		default:
 			statusStyle = m.styles.Subtle
 		}
@@ -100,11 +100,11 @@ func (m *Model) renderTasksTabView() string {
 
 		// Format line
 		line := fmt.Sprintf("%-5s %s %-10s %-60s %s",
-			fmt.Sprintf("%d", task.ID),
+			fmt.Sprintf("%s", string(task.ID)[:8]), // First 8 chars of UUID
 			priStyle.Render(priDisplay),
-			statusStyle.Render(task.Status),
+			statusStyle.Render(task.WorkflowStatus),
 			desc,
-			task.Entry.Format("Jan 2 15:04"),
+			task.CreatedAt.Format("Jan 2 15:04"),
 		)
 
 		if selected {
@@ -134,11 +134,26 @@ func renderTaskDetails(task domain.Task, styles Styles) string {
 	sb.WriteString(styles.SectionTitle.Render("Task Details"))
 	sb.WriteString("\n\n")
 
-	// Task UUID
-	if task.UUID != "" {
+	// Task ID
+	sb.WriteString(fmt.Sprintf("  %s %s\n",
+		styles.Label.Render("ID:"),
+		styles.Value.Render(string(task.ID))))
+
+	// Priority
+	sb.WriteString(fmt.Sprintf("  %s %d\n",
+		styles.Label.Render("Priority:"),
+		task.Priority))
+
+	// State
+	sb.WriteString(fmt.Sprintf("  %s %s\n",
+		styles.Label.Render("State:"),
+		styles.Value.Render(task.WorkflowStatus)))
+
+	// Project
+	if task.ProjectID != "" {
 		sb.WriteString(fmt.Sprintf("  %s %s\n",
-			styles.Label.Render("UUID:"),
-			styles.Value.Render(task.UUID)))
+			styles.Label.Render("Project:"),
+			styles.Value.Render(task.ProjectID)))
 	}
 
 	// Tags
@@ -148,21 +163,26 @@ func renderTaskDetails(task domain.Task, styles Styles) string {
 			styles.Value.Render(strings.Join(task.Tags, ", "))))
 	}
 
-	// Annotations
-	if len(task.Annotations) > 0 {
+	// Notes
+	if len(task.Notes) > 0 {
 		sb.WriteString("\n")
-		sb.WriteString(styles.Label.Render("Annotations:"))
+		sb.WriteString(styles.Label.Render("Notes:"))
 		sb.WriteString("\n")
-		for _, ann := range task.Annotations {
-			sb.WriteString(fmt.Sprintf("  • %s\n", ann.Description))
+		for _, note := range task.Notes {
+			sb.WriteString(fmt.Sprintf("  • %s\n", note.Body))
 		}
 	}
 
-	// Virtual tags (computed)
-	if len(task.VirtualTags) > 0 {
+	// Session/Agent info
+	if task.SessionID != "" {
 		sb.WriteString(fmt.Sprintf("\n  %s %s\n",
-			styles.Label.Render("Virtual Tags:"),
-			styles.Subtle.Render(strings.Join(task.VirtualTags, ", "))))
+			styles.Subtle.Render("Session:"),
+			styles.Subtle.Render(task.SessionID)))
+	}
+	if task.AgentID != "" {
+		sb.WriteString(fmt.Sprintf("  %s %s\n",
+			styles.Subtle.Render("Agent:"),
+			styles.Subtle.Render(task.AgentID)))
 	}
 
 	return sb.String()

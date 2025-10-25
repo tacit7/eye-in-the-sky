@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 
+	"github.com/tacit7/eye-in-the-sky/internal/database"
 	"github.com/tacit7/eye-in-the-sky/internal/todo"
-	"github.com/tacit7/eye-in-the-sky/internal/todo/db"
 )
 
 func main() {
@@ -17,15 +18,21 @@ func main() {
 
 	command := os.Args[1]
 
-	// Initialize database
-	database, err := db.OpenDB()
+	// Initialize database from standard location
+	home, err := os.UserHomeDir()
+	if err != nil {
+		log.Fatalf("Failed to get home directory: %v", err)
+	}
+	dbPath := filepath.Join(home, ".config", "eye-in-the-sky", "agents.db")
+
+	db, err := database.New(dbPath)
 	if err != nil {
 		log.Fatalf("Failed to open database: %v", err)
 	}
-	defer database.Close()
+	defer db.Close()
 
 	// Create service
-	svc := todo.NewService(database)
+	svc := todo.NewService(db)
 	defer svc.Close()
 
 	// Route command

@@ -38,6 +38,13 @@ func New(dbPath string) (*DB, error) {
 	return db, nil
 }
 
+// NewFromConnection wraps an existing sql.DB connection in a DB struct.
+// This is useful when you already have an open connection and want to use it with the database.DB interface.
+// Note: No migrations are run, as they should have already been executed.
+func NewFromConnection(conn *sql.DB) *DB {
+	return &DB{conn: conn}
+}
+
 func (db *DB) Close() error {
 	return db.conn.Close()
 }

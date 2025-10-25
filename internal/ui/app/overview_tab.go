@@ -197,31 +197,45 @@ func (m *Model) renderOverviewTab() string {
 		sb.WriteString(m.styles.SectionTitle.Render("✅ Tasks Summary"))
 		sb.WriteString("\n\n")
 
-		// Count by status
-		statusCounts := make(map[string]int)
+		// Count by state and archived status
+		var completed, inProgress, todo, archived int
 		for _, task := range m.tasks {
-			status := task.Status
-			if status == "" {
-				status = "pending"
+			if task.Archived {
+				archived++
+			} else {
+				switch task.StateID {
+				case 3: // done
+					completed++
+				case 2: // in_progress
+					inProgress++
+				case 1: // todo
+					todo++
+				default:
+					todo++
+				}
 			}
-			statusCounts[status]++
 		}
 
 		// Display counts
-		if count, ok := statusCounts["completed"]; ok && count > 0 {
+		if todo > 0 {
 			sb.WriteString(fmt.Sprintf("  %s %d tasks\n",
-				m.styles.Success.Render("Completed:"),
-				count))
+				m.styles.Primary.Render("Todo:"),
+				todo))
 		}
-		if count, ok := statusCounts["pending"]; ok && count > 0 {
+		if inProgress > 0 {
 			sb.WriteString(fmt.Sprintf("  %s %d tasks\n",
-				m.styles.Warning.Render("Pending:"),
-				count))
+				m.styles.Warning.Render("In Progress:"),
+				inProgress))
 		}
-		if count, ok := statusCounts["deleted"]; ok && count > 0 {
+		if completed > 0 {
 			sb.WriteString(fmt.Sprintf("  %s %d tasks\n",
-				m.styles.Subtle.Render("Deleted:"),
-				count))
+				m.styles.Success.Render("Done:"),
+				completed))
+		}
+		if archived > 0 {
+			sb.WriteString(fmt.Sprintf("  %s %d tasks\n",
+				m.styles.Subtle.Render("Archived:"),
+				archived))
 		}
 	}
 
@@ -261,31 +275,38 @@ func (m *Model) renderOverviewTab() string {
 func buildTaskSummary(tasks []domain.Task, styles Styles) string {
 	var sb strings.Builder
 
-	// Count by status
-	statusCounts := make(map[string]int)
+	// Count by state
+	var completed, inProgress, todo int
 	for _, task := range tasks {
-		status := task.Status
-		if status == "" {
-			status = "pending"
+		if !task.Archived {
+			switch task.StateID {
+			case 3: // done
+				completed++
+			case 2: // in_progress
+				inProgress++
+			case 1: // todo
+				todo++
+			default:
+				todo++
+			}
 		}
-		statusCounts[status]++
 	}
 
 	// Display counts
-	if count, ok := statusCounts["completed"]; ok && count > 0 {
+	if todo > 0 {
 		sb.WriteString(fmt.Sprintf("  %s %d tasks\n",
-			styles.Success.Render("Completed:"),
-			count))
+			styles.Primary.Render("Todo:"),
+			todo))
 	}
-	if count, ok := statusCounts["pending"]; ok && count > 0 {
+	if inProgress > 0 {
 		sb.WriteString(fmt.Sprintf("  %s %d tasks\n",
-			styles.Warning.Render("Pending:"),
-			count))
+			styles.Warning.Render("In Progress:"),
+			inProgress))
 	}
-	if count, ok := statusCounts["deleted"]; ok && count > 0 {
+	if completed > 0 {
 		sb.WriteString(fmt.Sprintf("  %s %d tasks\n",
-			styles.Subtle.Render("Deleted:"),
-			count))
+			styles.Success.Render("Done:"),
+			completed))
 	}
 
 	return sb.String()

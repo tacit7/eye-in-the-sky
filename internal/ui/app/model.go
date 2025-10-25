@@ -263,8 +263,8 @@ type ClaudeFile struct {
 	ModTime  time.Time
 }
 
-// TaskAnnotation is kept local as it's referenced by domain.Task
-type TaskAnnotation = domain.TaskAnnotation
+// TaskNote is kept local as it's referenced by domain.Task
+type TaskNote = domain.TaskNote
 
 // Styles holds all lipgloss styles
 type Styles struct {

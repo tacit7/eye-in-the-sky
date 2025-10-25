@@ -4,17 +4,19 @@ Complete documentation for the Todo Management Backend used by Eye-in-the-Sky fo
 
 ## Overview
 
-The Todo Backend is a SQLite-based task management system integrated with Eye-in-the-Sky MCP (Model Context Protocol) tools. It allows agents to create, manage, and track tasks with full session and agent provenance tracking.
+The Todo Backend is a SQLite-based task management system integrated with Eye-in-the-Sky MCP (Model Context Protocol) tools and the TUI Dashboard. It allows agents to create, manage, and track tasks with full session and agent provenance tracking. The todo system is fully integrated with the Eye-in-the-Sky TUI for real-time task management and visibility.
 
 **Key Features:**
 - Consolidated SQLite database at `~/.config/eye-in-the-sky/agents.db` (shared with Eye-in-the-Sky)
 - 12 MCP commands for full CRUD operations (scoped as `i-todo-*`)
+- TUI integration for task display, sorting, and management
 - FTS5 full-text search on tasks (indexed and auto-synced)
 - Multi-agent coordination via session/agent IDs
 - Workflow state management (global: todo, in_progress, done)
-- Tags, priorities, and due dates
+- Integer priorities (0-5) for flexible priority levels
+- Tags, due dates, and rich notes
 - Automatic weekly reindex and maintenance
-- Full integration with Eye-in-the-Sky agent system
+- Full integration with Eye-in-the-Sky agent system and dashboard
 - Transaction-based writes with rollback on error
 
 ## Architecture
@@ -47,6 +49,27 @@ internal/
 ```
 
 **Note:** The todo system is now consolidated into the main database. No separate `internal/todo/db/` package exists.
+
+### TUI Integration Layer
+
+The TUI Dashboard integrates with the todo backend through:
+
+```
+internal/ui/app/
+├── client.go                   # DataClient with TodoStore integration
+├── tasks_tab.go               # Task display and rendering (Tasks tab #6)
+├── overview_tab.go            # Task summary in overview
+└── update_tasks.go            # Task interactions and state updates
+
+internal/data/
+└── todo.go                    # TodoStore implementing TaskStore interface
+```
+
+**TUI Components:**
+- **Tasks Tab**: Displays all tasks for current agent, sorted by priority/state/date
+- **Task Details**: Shows full task info with notes, tags, project, state
+- **Overview Summary**: Task counts by state (Todo, In Progress, Done)
+- **Mark Done**: `d` key marks task complete via `MarkDone()` method
 
 ### Technology Stack
 
@@ -641,6 +664,51 @@ sqlite> SELECT * FROM tasks;
 sqlite> SELECT * FROM task_search WHERE task_search MATCH 'search term';
 ```
 
+## Domain Model
+
+The internal todo system uses a unified domain model in `internal/domain/task.go`:
+
+```go
+type Task struct {
+    ID              TaskID        // UUID
+    Title           string        // Task title (required)
+    Description     string        // Optional detailed description
+    ProjectID       string        // Project association
+    StateID         int           // 1=todo, 2=in_progress, 3=done
+    Priority        int           // 0-5 scale (5=critical, 0=none)
+    DueAt           time.Time     // Optional due date
+    CompletedAt     time.Time     // Completion timestamp
+    SessionID       string        // Eye-in-the-Sky session ID
+    AgentID         string        // Eye-in-the-Sky agent ID
+    CreatedAt       time.Time     // Creation timestamp
+    UpdatedAt       time.Time     // Last update timestamp
+    Archived        bool          // Soft delete flag
+    Notes           []TaskNote    // Append-only notes
+    Tags            []string      // Associated tags
+    WorkflowStatus  string        // Human-readable state ("todo", "in_progress", "done")
+}
+
+type TaskNote struct {
+    ID        int
+    TaskID    TaskID
+    Author    string
+    Body      string        // Markdown content
+    CreatedAt time.Time
+}
+```
+
+**Priority Scale:**
+- 5: Critical (high urgency)
+- 4-3: High
+- 2: Medium
+- 1: Low
+- 0: None/Unset
+
+**State IDs:**
+- 1: todo
+- 2: in_progress
+- 3: done
+
 ## Examples
 
 ### Create a Task
@@ -727,6 +795,45 @@ sqlite> SELECT * FROM task_search WHERE task_search MATCH 'search term';
 - Check if tasks are archived (use `active: true` filter)
 - Run `todo.vacuum` to clean up database
 
+## TUI Task Management
+
+The Eye-in-the-Sky TUI Dashboard displays and manages tasks in the Tasks tab:
+
+### Display Features
+
+- **Task List**: Shows all tasks for the current agent
+- **Sorting**: Priority (5→0) → State (1→3) → CreatedAt (newest first)
+- **Color Coding**:
+  - Priority: [CRIT] (red), [HIGH] (red), [MED] (yellow), [LOW] (gray), [-] (gray)
+  - State: done (green), in_progress (yellow), todo (primary color)
+- **Pagination**: Loads up to 100 tasks per agent
+
+### Task Details Panel
+
+When a task is selected, shows:
+- Task ID (first 8 chars of UUID)
+- Priority (0-5 integer)
+- State (human-readable: "todo", "in_progress", "done")
+- Project ID
+- Tags
+- Notes with timestamps
+- Session/Agent IDs (for provenance)
+
+### Keyboard Navigation
+
+- `j`/`k`: Navigate task list up/down
+- `g`/`G`: Go to start/end of list
+- `d`: Mark current task as done (triggers MCP MarkDone)
+- `Page Up/Down`: Scroll task list
+- `T`: Switch to Tasks tab
+
+### Integration Points
+
+1. **DataClient**: Initializes TodoStore for task loading
+2. **TaskStore Interface**: Implemented by TodoStore
+3. **Task Model**: Uses unified `internal/domain/task.go`
+4. **MCP Integration**: Mark done calls `Tasks.MarkDone()` which updates database
+
 ## Future Enhancements
 
 Potential improvements:
@@ -737,3 +844,6 @@ Potential improvements:
 - Task dependencies and blocking
 - Time tracking integration
 - Export/import functionality
+- Edit task state/priority from TUI
+- Create new tasks from TUI
+- Annotate tasks from TUI

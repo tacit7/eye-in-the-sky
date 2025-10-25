@@ -15,11 +15,11 @@ func (m *Model) renderClaudeTab() string {
 
 	// Calculate dimensions for two-pane layout
 	// Use simple division, no boxes (parent handles that)
-	leftPaneWidth := (m.width - 6) / 3
+	leftPaneWidth := int(float64(m.width) * 0.22)
 	if leftPaneWidth < 25 {
 		leftPaneWidth = 25
 	}
-	rightPaneWidth := m.width - leftPaneWidth - 10
+	rightPaneWidth := m.width - leftPaneWidth - 6
 
 	// Render left pane (file list)
 	leftPane := m.renderClaudeFileList()
