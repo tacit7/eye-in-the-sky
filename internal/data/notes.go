@@ -18,16 +18,16 @@ func NewNotesStore(db *sql.DB) *notesStore {
 	return &notesStore{db: db}
 }
 
-// LoadByAgent loads notes for a specific agent
-func (s *notesStore) LoadByAgent(ctx context.Context, agentID domain.AgentID) ([]domain.Note, error) {
+// LoadByAgent loads notes for a specific agent's session
+func (s *notesStore) LoadByAgent(ctx context.Context, agentID domain.AgentID, sessionID string) ([]domain.Note, error) {
 	query := `
-		SELECT id, agent_id, content, created_at
+		SELECT id, session_id, content, created_at
 		FROM notes
-		WHERE agent_id = ?
+		WHERE session_id = ?
 		ORDER BY created_at DESC
 	`
 
-	rows, err := s.db.QueryContext(ctx, query, string(agentID))
+	rows, err := s.db.QueryContext(ctx, query, sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("query notes: %w", err)
 	}
@@ -36,20 +36,22 @@ func (s *notesStore) LoadByAgent(ctx context.Context, agentID domain.AgentID) ([
 	var notes []domain.Note
 	for rows.Next() {
 		var n domain.Note
-		err := rows.Scan(&n.ID, &n.AgentID, &n.Content, &n.CreatedAt)
+		var sessionID string
+		err := rows.Scan(&n.ID, &sessionID, &n.Content, &n.CreatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("scan note: %w", err)
 		}
+		n.AgentID = agentID
 		notes = append(notes, n)
 	}
 
 	return notes, nil
 }
 
-// Create creates a new note
+// Create creates a new note (agentID parameter kept for interface compatibility, uses sessionID in query)
 func (s *notesStore) Create(ctx context.Context, agentID domain.AgentID, content string) error {
 	query := `
-		INSERT INTO notes (agent_id, content, created_at)
+		INSERT INTO notes (session_id, content, created_at)
 		VALUES (?, ?, CURRENT_TIMESTAMP)
 	`
 

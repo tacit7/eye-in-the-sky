@@ -45,7 +45,7 @@ type MetricsStore interface {
 
 // NotesStore handles session notes operations
 type NotesStore interface {
-	LoadByAgent(ctx context.Context, agentID domain.AgentID) ([]domain.Note, error)
+	LoadByAgent(ctx context.Context, agentID domain.AgentID, sessionID string) ([]domain.Note, error)
 	Create(ctx context.Context, agentID domain.AgentID, content string) error
 	Delete(ctx context.Context, noteID domain.NoteID) error
 }

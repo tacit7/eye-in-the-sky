@@ -578,9 +578,9 @@ func (m *Model) loadAgentDetails() error {
 	}
 	m.commits = commits
 
-	// Load notes for current agent
+	// Load notes for current agent's session
 	ctx3, cancel3 := context.WithTimeout(context.Background(), 5*time.Second)
-	notes, err := m.data.Notes.LoadByAgent(ctx3, domain.AgentID(agent.ID))
+	notes, err := m.data.Notes.LoadByAgent(ctx3, domain.AgentID(agent.ID), agent.SessionID)
 	cancel3()
 	if err != nil {
 		// Don't fail if notes loading fails

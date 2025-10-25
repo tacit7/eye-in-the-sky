@@ -122,7 +122,7 @@ func loadAgentDetailsCmd(client *DataClient, agentID domain.AgentID) tea.Cmd {
 		}()
 
 		go func() {
-			notes, _ := client.Notes.LoadByAgent(ctx, agentID)
+			notes, _ := client.Notes.LoadByAgent(ctx, agentID, agent.SessionID)
 			notesCh <- notes
 		}()
 
@@ -212,13 +212,13 @@ func loadMetricsByAgentCmd(store MetricsStore, agentID domain.AgentID, limit int
 	}
 }
 
-// loadNotesCmd loads notes for an agent
-func loadNotesCmd(store NotesStore, agentID domain.AgentID) tea.Cmd {
+// loadNotesCmd loads notes for an agent's session
+func loadNotesCmd(store NotesStore, agentID domain.AgentID, sessionID string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := withTimeout()
 		defer cancel()
 
-		notes, err := store.LoadByAgent(ctx, agentID)
+		notes, err := store.LoadByAgent(ctx, agentID, sessionID)
 		if err != nil {
 			return ErrMsg{Error: err}
 		}
@@ -227,7 +227,7 @@ func loadNotesCmd(store NotesStore, agentID domain.AgentID) tea.Cmd {
 }
 
 // createNoteCmd creates a new note
-func createNoteCmd(store NotesStore, agentID domain.AgentID, content string) tea.Cmd {
+func createNoteCmd(store NotesStore, agentID domain.AgentID, sessionID string, content string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := withTimeout()
 		defer cancel()
@@ -237,7 +237,7 @@ func createNoteCmd(store NotesStore, agentID domain.AgentID, content string) tea
 			return ErrMsg{Error: err}
 		}
 		// After creating, reload notes
-		return loadNotesCmd(store, agentID)()
+		return loadNotesCmd(store, agentID, sessionID)()
 	}
 }
 
