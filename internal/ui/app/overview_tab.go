@@ -5,8 +5,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/tacit7/eye-in-the-sky/internal/domain"
+)
+
+const (
+	maxCommitsToShow = 5
+	maxActionsToShow = 3
 )
 
 // renderOverviewTab renders the overview tab content
@@ -74,15 +78,15 @@ func (m *Model) renderTiming(agent domain.Agent) string {
 	sb.WriteString(m.styles.SectionTitle.Render("⏱️ Timing"))
 	sb.WriteString("\n\n")
 
-	sb.WriteString(renderLabelValue("Created:", agent.CreatedAt.Format("Jan 2, 2006 15:04:05 MST"), m.styles.Value, m.styles.Label))
-	sb.WriteString(renderLabelValue("Updated:", agent.UpdatedAt.Format("Jan 2, 2006 15:04:05 MST"), m.styles.Value, m.styles.Label))
+	sb.WriteString(renderLabelValue("Created:", formatTimestamp(agent.CreatedAt), m.styles.Value, m.styles.Label))
+	sb.WriteString(renderLabelValue("Updated:", formatTimestamp(agent.UpdatedAt), m.styles.Value, m.styles.Label))
 
 	if !agent.LastActivityAt.IsZero() {
 		elapsed := time.Since(agent.LastActivityAt)
 		activityStr := fmt.Sprintf("%s (%s ago)",
-			agent.LastActivityAt.Format("15:04:05"),
+			formatTime(agent.LastActivityAt),
 			FormatDuration(elapsed))
-		style := m.getActivityStyle(elapsed)
+		style := activityStyle(elapsed, m.styles)
 		sb.WriteString(renderLabelValue("Last Activity:", activityStr, style, m.styles.Label))
 	}
 
@@ -101,7 +105,7 @@ func (m *Model) renderCommitsSection() string {
 	sb.WriteString(m.styles.SectionTitle.Render("📝 Recent Commits"))
 	sb.WriteString("\n\n")
 
-	maxCommits := minInt(len(m.commits), 5)
+	maxCommits := minInt(len(m.commits), maxCommitsToShow)
 	for i := 0; i < maxCommits; i++ {
 		commit := m.commits[i]
 		elapsed := time.Since(commit.Timestamp)
@@ -192,7 +196,7 @@ func (m *Model) renderActionsSection() string {
 	sb.WriteString(m.styles.SectionTitle.Render("⚡ Recent Actions"))
 	sb.WriteString("\n\n")
 
-	maxActions := minInt(len(m.actions), 3)
+	maxActions := minInt(len(m.actions), maxActionsToShow)
 	for i := 0; i < maxActions; i++ {
 		action := m.actions[i]
 		elapsed := time.Since(action.Timestamp)
@@ -210,16 +214,6 @@ func (m *Model) renderActionsSection() string {
 	}
 
 	return sb.String()
-}
-
-// getActivityStyle returns appropriate style based on elapsed time
-func (m *Model) getActivityStyle(elapsed time.Duration) lipgloss.Style {
-	if elapsed < 5*time.Minute {
-		return m.styles.Success
-	} else if elapsed < 30*time.Minute {
-		return m.styles.Warning
-	}
-	return m.styles.Subtle
 }
 
 // renderDuration renders session or total duration

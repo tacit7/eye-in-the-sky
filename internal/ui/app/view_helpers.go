@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/tacit7/eye-in-the-sky/internal/domain"
@@ -293,4 +294,27 @@ func minInt(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// activityStyle returns the appropriate style based on elapsed time
+// Green: < 5 min (active), Yellow: 5-30 min (stale), Gray: > 30 min (inactive)
+func activityStyle(elapsed time.Duration, styles Styles) lipgloss.Style {
+	switch {
+	case elapsed < 5*time.Minute:
+		return styles.Success
+	case elapsed < 30*time.Minute:
+		return styles.Warning
+	default:
+		return styles.Subtle
+	}
+}
+
+// formatTimestamp formats a time with standard format
+func formatTimestamp(t time.Time) string {
+	return t.Format("Jan 2, 2006 15:04:05 MST")
+}
+
+// formatTime formats a time with short format (HH:MM:SS)
+func formatTime(t time.Time) string {
+	return t.Format("15:04:05")
 }
