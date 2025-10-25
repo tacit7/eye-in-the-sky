@@ -298,7 +298,7 @@ func minInt(a, b int) int {
 
 // activityStyle returns the appropriate style based on elapsed time
 // Green: < 5 min (active), Yellow: 5-30 min (stale), Gray: > 30 min (inactive)
-func activityStyle(elapsed time.Duration, styles Styles) lipgloss.Style {
+func activityStyle(elapsed time.Duration, styles OverviewStyles) lipgloss.Style {
 	switch {
 	case elapsed < 5*time.Minute:
 		return styles.Success

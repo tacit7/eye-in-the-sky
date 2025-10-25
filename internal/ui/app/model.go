@@ -229,8 +229,9 @@ type Model struct {
 	keybindingsError    string // Validation error message (empty if valid)
 
 	// Overview rendering cache (for pure, fast View() calls)
-	overviewCache string // Cached rendered overview tab content
-	overviewDirty bool   // True if cache needs refresh
+	overviewCache  string         // Cached rendered overview tab content
+	overviewDirty  bool           // True if cache needs refresh
+	overviewStyles OverviewStyles // Styles specific to overview tab
 }
 
 // Type aliases for backward compatibility during migration
@@ -418,6 +419,8 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 		modalManager: modalManager,
 		keybindResolver: keybindResolver,
 		keybindingsError: keybindingsError,
+		overviewStyles: NewOverviewStyles(styles),
+		overviewDirty:  true, // Start dirty to force initial render
 	}
 
 	// Initialize view renderers map

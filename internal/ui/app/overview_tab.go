@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/tacit7/eye-in-the-sky/internal/domain"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/presenters"
 )
@@ -13,6 +14,25 @@ const (
 	maxCommitsToShow = 5
 	maxActionsToShow = 3
 )
+
+// getStatusStyleFromOverview converts OverviewStyles to Styles for GetStatusStyle
+// This is a temporary helper to bridge the style systems
+func getStatusStyleFromOverview(status string, overviewStyles OverviewStyles) lipgloss.Style {
+	switch status {
+	case "active":
+		return overviewStyles.Success
+	case "working":
+		return overviewStyles.Warning
+	case "idle":
+		return overviewStyles.Subtle
+	case "failed":
+		return overviewStyles.Error
+	case "completed":
+		return overviewStyles.Primary
+	default:
+		return overviewStyles.Subtle
+	}
+}
 
 // renderOverviewTab renders the overview tab content with caching
 // Pure, cached View() calls for performance
@@ -36,14 +56,15 @@ func (m *Model) renderOverviewTab() string {
 		m.actions,
 	)
 
-	// Render each section with clean data
+	// Render each section with clean data and centralized styles
+	// Pass overviewStyles instead of full Styles struct to reduce theme coupling
 	sections := []string{
-		renderAgentInfo(data.AgentInfo, m.styles),
-		renderTiming(data.AgentInfo, m.styles),
-		renderCommitsSection(data.Commits, m.styles),
-		renderNotesSection(data.Notes, m.styles),
-		renderTasksSection(data.TaskCounts, m.styles),
-		renderActionsSection(data.Actions, m.styles),
+		renderAgentInfo(data.AgentInfo, m.overviewStyles),
+		renderTiming(data.AgentInfo, m.overviewStyles),
+		renderCommitsSection(data.Commits, m.overviewStyles),
+		renderNotesSection(data.Notes, m.overviewStyles),
+		renderTasksSection(data.TaskCounts, m.overviewStyles),
+		renderActionsSection(data.Actions, m.overviewStyles),
 	}
 
 	// Cache the result
@@ -56,13 +77,13 @@ func (m *Model) renderOverviewTab() string {
 
 // renderAgentInfo renders agent identification information
 // Pure function - no Model dependency
-func renderAgentInfo(agent domain.Agent, styles Styles) string {
+func renderAgentInfo(agent domain.Agent, styles OverviewStyles) string {
 	var sb strings.Builder
 	sb.WriteString(styles.SectionTitle.Render("📋 Agent Information"))
 	sb.WriteString("\n\n")
 
 	sb.WriteString(renderLabelValue("Agent ID:", string(agent.ID), styles.Value, styles.Label))
-	sb.WriteString(renderLabelValue("Status:", agent.Status, GetStatusStyle(agent.Status, styles), styles.Label))
+	sb.WriteString(renderLabelValue("Status:", agent.Status, getStatusStyleFromOverview(agent.Status, styles), styles.Label))
 
 	if agent.FeatureDesc != "" {
 		sb.WriteString(renderLabelValue("Description:", agent.FeatureDesc, styles.Value, styles.Label))
@@ -97,7 +118,7 @@ func renderAgentInfo(agent domain.Agent, styles Styles) string {
 
 // renderTiming renders timing information section
 // Pure function - no Model dependency
-func renderTiming(agent domain.Agent, styles Styles) string {
+func renderTiming(agent domain.Agent, styles OverviewStyles) string {
 	var sb strings.Builder
 	sb.WriteString(styles.SectionTitle.Render("⏱️ Timing"))
 	sb.WriteString("\n\n")
@@ -121,7 +142,7 @@ func renderTiming(agent domain.Agent, styles Styles) string {
 
 // renderCommitsSection renders recent commits section
 // Pure function - no Model dependency
-func renderCommitsSection(commits []domain.Commit, styles Styles) string {
+func renderCommitsSection(commits []domain.Commit, styles OverviewStyles) string {
 	if len(commits) == 0 {
 		return ""
 	}
@@ -152,7 +173,7 @@ func renderCommitsSection(commits []domain.Commit, styles Styles) string {
 
 // renderNotesSection renders notes summary section
 // Pure function - no Model dependency
-func renderNotesSection(notes []domain.Note, styles Styles) string {
+func renderNotesSection(notes []domain.Note, styles OverviewStyles) string {
 	if len(notes) == 0 {
 		return ""
 	}
@@ -178,7 +199,7 @@ func renderNotesSection(notes []domain.Note, styles Styles) string {
 
 // renderTasksSection renders task summary section
 // Pure function - no Model dependency
-func renderTasksSection(taskCounts map[string]int, styles Styles) string {
+func renderTasksSection(taskCounts map[string]int, styles OverviewStyles) string {
 	if len(taskCounts) == 0 || (taskCounts["todo"] == 0 && taskCounts["inProgress"] == 0 && taskCounts["completed"] == 0 && taskCounts["archived"] == 0) {
 		return ""
 	}
@@ -213,7 +234,7 @@ func renderTasksSection(taskCounts map[string]int, styles Styles) string {
 
 // renderActionsSection renders recent actions section
 // Pure function - no Model dependency
-func renderActionsSection(actions []domain.Action, styles Styles) string {
+func renderActionsSection(actions []domain.Action, styles OverviewStyles) string {
 	if len(actions) == 0 {
 		return ""
 	}
@@ -244,7 +265,7 @@ func renderActionsSection(actions []domain.Action, styles Styles) string {
 
 // renderDuration renders session or total duration
 // Pure function - no Model dependency
-func renderDuration(agent domain.Agent, styles Styles) string {
+func renderDuration(agent domain.Agent, styles OverviewStyles) string {
 	if agent.Status != "completed" && agent.Status != "failed" {
 		duration := time.Since(agent.CreatedAt)
 		return renderLabelValue("Session Duration:", presenters.FormatDuration(duration), styles.Value, styles.Label)
