@@ -24,7 +24,7 @@ func (s *agentStore) LoadAgents(ctx context.Context) ([]domain.Agent, error) {
 		SELECT id, status, source, created_at, updated_at,
 		       git_worktree_path, feature_description, current_task,
 		       last_activity_at, window_id, terminal_application,
-		       description, project_name, session_id, parent_agent_id
+		       description, project_name, session_id, parent_session_id, parent_agent_id
 		FROM agents
 		WHERE status IN ('active', 'working', 'idle', 'stale', 'unknown')
 		ORDER BY
@@ -50,13 +50,13 @@ func (s *agentStore) LoadAgents(ctx context.Context) ([]domain.Agent, error) {
 	var agents []domain.Agent
 	for rows.Next() {
 		var a domain.Agent
-		var gitPath, featureDesc, currentTask, windowID, terminalApp, desc, projectName, sessionID, parentAgentID sql.NullString
+		var gitPath, featureDesc, currentTask, windowID, terminalApp, desc, projectName, sessionID, parentSessionID, parentAgentID sql.NullString
 		var lastActivity sql.NullTime
 
 		err := rows.Scan(
 			&a.ID, &a.Status, &a.Source, &a.CreatedAt, &a.UpdatedAt,
 			&gitPath, &featureDesc, &currentTask, &lastActivity,
-			&windowID, &terminalApp, &desc, &projectName, &sessionID, &parentAgentID,
+			&windowID, &terminalApp, &desc, &projectName, &sessionID, &parentSessionID, &parentAgentID,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scan agent: %w", err)
@@ -90,6 +90,9 @@ func (s *agentStore) LoadAgents(ctx context.Context) ([]domain.Agent, error) {
 		if sessionID.Valid {
 			a.SessionID = sessionID.String
 		}
+		if parentSessionID.Valid {
+			a.ParentSessionID = parentSessionID.String
+		}
 		if parentAgentID.Valid {
 			a.ParentAgentID = parentAgentID.String
 		}
@@ -110,19 +113,19 @@ func (s *agentStore) LoadAgent(ctx context.Context, agentID domain.AgentID) (*do
 		SELECT id, status, source, created_at, updated_at,
 		       git_worktree_path, feature_description, current_task,
 		       last_activity_at, window_id, terminal_application,
-		       description, project_name, session_id, parent_agent_id
+		       description, project_name, session_id, parent_session_id, parent_agent_id
 		FROM agents
 		WHERE id = ?
 	`
 
 	var a domain.Agent
-	var gitPath, featureDesc, currentTask, windowID, terminalApp, desc, projectName, sessionID, parentAgentID sql.NullString
+	var gitPath, featureDesc, currentTask, windowID, terminalApp, desc, projectName, sessionID, parentSessionID, parentAgentID sql.NullString
 	var lastActivity sql.NullTime
 
 	err := s.db.QueryRowContext(ctx, query, string(agentID)).Scan(
 		&a.ID, &a.Status, &a.Source, &a.CreatedAt, &a.UpdatedAt,
 		&gitPath, &featureDesc, &currentTask, &lastActivity,
-		&windowID, &terminalApp, &desc, &projectName, &sessionID, &parentAgentID,
+		&windowID, &terminalApp, &desc, &projectName, &sessionID, &parentSessionID, &parentAgentID,
 	)
 
 	if err == sql.ErrNoRows {
@@ -159,6 +162,9 @@ func (s *agentStore) LoadAgent(ctx context.Context, agentID domain.AgentID) (*do
 	}
 	if sessionID.Valid {
 		a.SessionID = sessionID.String
+	}
+	if parentSessionID.Valid {
+		a.ParentSessionID = parentSessionID.String
 	}
 	if parentAgentID.Valid {
 		a.ParentAgentID = parentAgentID.String
