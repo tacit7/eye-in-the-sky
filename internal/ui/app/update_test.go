@@ -57,7 +57,7 @@ func TestAdjustScroll(t *testing.T) {
 func TestViewHandlerRouting(t *testing.T) {
 	tests := []struct {
 		name      string
-		viewMode  ViewMode
+		viewMode  ViewType
 		hasHandler bool
 	}{
 		{
