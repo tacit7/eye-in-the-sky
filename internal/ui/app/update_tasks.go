@@ -29,6 +29,8 @@ func (m *Model) handleTasksMessages(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.taskError = nil
 			m.statusMsg = fmt.Sprintf("Loaded %d task(s)", len(msg.Tasks))
 			log.Printf("[TASKS] Successfully loaded %d tasks", len(msg.Tasks))
+			// Invalidate overview cache when tasks change
+			m.overviewDirty = true
 		}
 		return m, nil
 

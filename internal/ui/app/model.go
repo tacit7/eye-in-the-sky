@@ -227,6 +227,10 @@ type Model struct {
 	keybindingsEditBuf  string // Edit buffer for changes
 	keybindingsViewport viewport.Model
 	keybindingsError    string // Validation error message (empty if valid)
+
+	// Overview rendering cache (for pure, fast View() calls)
+	overviewCache string // Cached rendered overview tab content
+	overviewDirty bool   // True if cache needs refresh
 }
 
 // Type aliases for backward compatibility during migration

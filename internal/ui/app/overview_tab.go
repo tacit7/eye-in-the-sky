@@ -14,11 +14,17 @@ const (
 	maxActionsToShow = 3
 )
 
-// renderOverviewTab renders the overview tab content
+// renderOverviewTab renders the overview tab content with caching
+// Pure, cached View() calls for performance
 // Separates business logic (presenter) from rendering (this function)
 func (m *Model) renderOverviewTab() string {
 	if m.selectedAgent == nil {
 		return "No agent selected"
+	}
+
+	// Use cache if available and not dirty
+	if !m.overviewDirty && m.overviewCache != "" {
+		return m.overviewCache
 	}
 
 	// Build preprocessed data using presenter layer
@@ -40,7 +46,12 @@ func (m *Model) renderOverviewTab() string {
 		renderActionsSection(data.Actions, m.styles),
 	}
 
-	return strings.Join(filterNonEmpty(sections), "\n")
+	// Cache the result
+	output := strings.Join(filterNonEmpty(sections), "\n")
+	m.overviewCache = output
+	m.overviewDirty = false
+
+	return output
 }
 
 // renderAgentInfo renders agent identification information

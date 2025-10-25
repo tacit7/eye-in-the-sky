@@ -217,6 +217,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.actions = msg.Actions
 		m.commits = msg.Commits
 		m.notes = msg.Notes
+		// Invalidate overview cache when agent details change
+		m.overviewDirty = true
 		// Load metrics for the agent
 		if m.selectedAgent != nil {
 			return m, loadMetricsCmd(m.data.Metrics, m.selectedAgent.ID)
