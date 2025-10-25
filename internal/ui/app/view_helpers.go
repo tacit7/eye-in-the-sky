@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/tacit7/eye-in-the-sky/internal/domain"
 )
 
 // formatNumber formats an integer with comma separators
@@ -239,4 +240,57 @@ func getColorForStatus(status string) string {
 	default:
 		return "white"
 	}
+}
+
+// renderLabelValue renders a label-value pair with consistent formatting
+func renderLabelValue(label, value string, valueStyle lipgloss.Style, labelStyle lipgloss.Style) string {
+	return fmt.Sprintf("  %s %s\n",
+		labelStyle.Render(label),
+		valueStyle.Render(value))
+}
+
+// countTasksByState counts tasks grouped by their state
+func countTasksByState(tasks []domain.Task) map[string]int {
+	counts := map[string]int{
+		"todo":       0,
+		"inProgress": 0,
+		"completed":  0,
+		"archived":   0,
+	}
+
+	for _, task := range tasks {
+		if task.Archived {
+			counts["archived"]++
+		} else {
+			switch task.StateID {
+			case 3: // done
+				counts["completed"]++
+			case 2: // in_progress
+				counts["inProgress"]++
+			default: // todo
+				counts["todo"]++
+			}
+		}
+	}
+
+	return counts
+}
+
+// filterNonEmpty removes empty strings from a slice
+func filterNonEmpty(sections []string) []string {
+	var result []string
+	for _, s := range sections {
+		if strings.TrimSpace(s) != "" {
+			result = append(result, s)
+		}
+	}
+	return result
+}
+
+// minInt returns the minimum of two integers
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
