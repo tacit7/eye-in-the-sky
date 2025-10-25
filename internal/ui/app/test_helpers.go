@@ -37,7 +37,7 @@ func newTestModel(t *testing.T) *Model {
 // newTestTabs creates a TabsModel for testing
 func newTestTabs() components.TabsModel {
 	return components.NewTabsModel(
-		[]string{"[O]verview", "[C]ommits", "[L]ogs", "[N]otes", "[A]ctions", "[T]asks", "[P]rojects"},
+		[]string{"[O]verview", "[C]ommits", "[L]ogs", "[N]otes", "[A]ctions", "[T]asks"},
 		"#ff0000",
 		"#ffffff",
 	)

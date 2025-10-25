@@ -82,7 +82,7 @@ func renderAgentInfo(agent domain.Agent, styles OverviewStyles) string {
 	sb.WriteString(styles.SectionTitle.Render("📋 Agent Information"))
 	sb.WriteString("\n\n")
 
-	sb.WriteString(renderLabelValue("Agent ID:", string(agent.ID), styles.Value, styles.Label))
+	sb.WriteString(renderLabelValue("Agent ID:", truncateID(string(agent.ID), 8), styles.Value, styles.Label))
 	sb.WriteString(renderLabelValue("Status:", agent.Status, getStatusStyleFromOverview(agent.Status, styles), styles.Label))
 
 	if agent.FeatureDesc != "" {
@@ -101,13 +101,13 @@ func renderAgentInfo(agent domain.Agent, styles OverviewStyles) string {
 		sb.WriteString(renderLabelValue("Worktree:", agent.GitWorktreePath, styles.Value, styles.Label))
 	}
 	if agent.SessionID != "" {
-		sb.WriteString(renderLabelValue("Session ID:", agent.SessionID, styles.Value, styles.Label))
+		sb.WriteString(renderLabelValue("Session ID:", truncateID(agent.SessionID, 8), styles.Value, styles.Label))
 	}
 	if agent.ParentSessionID != "" {
-		sb.WriteString(renderLabelValue("Parent Session:", agent.ParentSessionID, styles.Value, styles.Label))
+		sb.WriteString(renderLabelValue("Parent Session:", truncateID(agent.ParentSessionID, 8), styles.Value, styles.Label))
 	}
 	if agent.ParentAgentID != "" {
-		sb.WriteString(renderLabelValue("Parent Agent:", string(agent.ParentAgentID), styles.Value, styles.Label))
+		sb.WriteString(renderLabelValue("Parent Agent:", truncateID(string(agent.ParentAgentID), 8), styles.Value, styles.Label))
 	}
 	if agent.WindowID != "" {
 		sb.WriteString(renderLabelValue("Window ID:", agent.WindowID, styles.Value, styles.Label))

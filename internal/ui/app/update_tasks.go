@@ -12,26 +12,16 @@ import (
 func (m *Model) handleTasksMessages(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case TasksLoadedMsg:
-		// Determine if this is for Tasks tab (6) or Projects tab (7)
-		if m.tabs.ActiveIndex == 7 {
-			// Projects tab
-			m.projectTickets = msg.Tasks
-			m.projectTicketsIndex = 0
-			m.projectTicketsOffset = 0
-			m.statusMsg = fmt.Sprintf("Loaded %d project ticket(s)", len(msg.Tasks))
-			log.Printf("[PROJECT TICKETS] Successfully loaded %d project tickets", len(msg.Tasks))
-		} else {
-			// Tasks tab (or other tabs)
-			m.tasks = msg.Tasks
-			m.taskState = TaskLoaded
-			m.tasksIndex = 0
-			m.tasksOffset = 0
-			m.taskError = nil
-			m.statusMsg = fmt.Sprintf("Loaded %d task(s)", len(msg.Tasks))
-			log.Printf("[TASKS] Successfully loaded %d tasks", len(msg.Tasks))
-			// Invalidate overview cache when tasks change
-			m.overviewDirty = true
-		}
+		// Tasks tab
+		m.tasks = msg.Tasks
+		m.taskState = TaskLoaded
+		m.tasksIndex = 0
+		m.tasksOffset = 0
+		m.taskError = nil
+		m.statusMsg = fmt.Sprintf("Loaded %d task(s)", len(msg.Tasks))
+		log.Printf("[TASKS] Successfully loaded %d tasks", len(msg.Tasks))
+		// Invalidate overview cache when tasks change
+		m.overviewDirty = true
 		return m, nil
 
 	case TasksErrorMsg:

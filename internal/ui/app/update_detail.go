@@ -78,11 +78,6 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.taskState = TaskLoading
 		m.statusMsg = "Loading tasks..."
 		return m, m.loadTasksCmd()
-	case "P":
-		m.tabs.Set(7) // Projects tab
-		// Trigger async project tickets loading
-		m.statusMsg = "Loading project tickets..."
-		return m, m.loadProjectTicketsCmd()
 	}
 
 	// Navigation using resolver

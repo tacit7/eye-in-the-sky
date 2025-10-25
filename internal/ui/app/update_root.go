@@ -510,7 +510,7 @@ func (m *Model) openContextualHelp() {
 			tabName := m.tabs.Titles[m.tabs.ActiveIndex]
 			// Map tab names to scope names
 			switch {
-			case tabName == "[A]gent View" || tabName == "Agent View":
+			case tabName == "[O]verview" || tabName == "Overview":
 				scope = "detail_overview"
 			case tabName == "[C]ommits" || tabName == "Commits":
 				scope = "detail_commits"

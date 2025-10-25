@@ -27,7 +27,7 @@ func (h AgentHeader) View() string {
 	// Build header content
 	header := fmt.Sprintf(" %s %s  %s  %s",
 		h.Styles.Primary.Bold(true).Render("Agent:"),
-		h.Styles.Bold.Render(string(h.Agent.ID)),
+		h.Styles.Bold.Render(truncateID(string(h.Agent.ID), 8)),
 		GetStatusStyle(h.Agent.Status, h.Styles).Render(fmt.Sprintf("[%s]", h.Agent.Status)),
 		taskInfo,
 	)

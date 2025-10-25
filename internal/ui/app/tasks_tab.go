@@ -177,12 +177,12 @@ func renderTaskDetails(task domain.Task, styles Styles) string {
 	if task.SessionID != "" {
 		sb.WriteString(fmt.Sprintf("\n  %s %s\n",
 			styles.Subtle.Render("Session:"),
-			styles.Subtle.Render(task.SessionID)))
+			styles.Subtle.Render(truncateID(task.SessionID, 8))))
 	}
 	if task.AgentID != "" {
 		sb.WriteString(fmt.Sprintf("  %s %s\n",
 			styles.Subtle.Render("Agent:"),
-			styles.Subtle.Render(task.AgentID)))
+			styles.Subtle.Render(truncateID(task.AgentID, 8))))
 	}
 
 	return sb.String()

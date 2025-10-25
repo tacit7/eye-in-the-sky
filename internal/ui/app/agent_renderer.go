@@ -95,7 +95,7 @@ func (r *AgentLineRenderer) RenderAgent(agent domain.Agent, selected bool) []str
 
 	// ID column
 	if r.Columns.ID {
-		id := string(agent.ID)
+		id := truncateID(string(agent.ID), 8)
 		cells = append(cells, id)
 	}
 
@@ -113,7 +113,7 @@ func (r *AgentLineRenderer) RenderAgent(agent domain.Agent, selected bool) []str
 
 	// Session column
 	if r.Columns.Session {
-		session := agent.SessionID
+		session := truncateID(agent.SessionID, 8)
 		cells = append(cells, session)
 	}
 
@@ -187,7 +187,7 @@ func (r *AgentLineRenderer) getColumnWidths() []int {
 		widths = append(widths, 12)
 	}
 	if r.Columns.ID {
-		widths = append(widths, 40)
+		widths = append(widths, 10)
 	}
 	if r.Columns.Task {
 		widths = append(widths, 40)
@@ -196,7 +196,7 @@ func (r *AgentLineRenderer) getColumnWidths() []int {
 		widths = append(widths, 30)
 	}
 	if r.Columns.Session {
-		widths = append(widths, 12)
+		widths = append(widths, 10)
 	}
 
 	return widths
