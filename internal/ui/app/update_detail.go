@@ -48,36 +48,42 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.err = err
 		}
 		return m, nil
-	case "A":
-		m.tabs.Set(1) // Agent View tab (index 1 now, 0 is back arrow)
-		if err := m.loadTabData(); err != nil {
-			m.err = err
-		}
-		return m, nil
-	case "C":
-		m.tabs.Set(2) // Commits tab
-		if err := m.loadTabData(); err != nil {
-			m.err = err
-		}
-		return m, nil
-	case "L":
-		m.tabs.Set(3) // Logs tab
-		if err := m.loadTabData(); err != nil {
-			m.err = err
-		}
-		return m, nil
-	case "N":
-		m.tabs.Set(4) // Notes tab
+	case "O":
+		m.tabs.Set(1) // Overview tab
 		if err := m.loadTabData(); err != nil {
 			m.err = err
 		}
 		return m, nil
 	case "T":
-		m.tabs.Set(6) // Tasks tab
+		m.tabs.Set(2) // Tasks tab
 		// Trigger async task loading
 		m.taskState = TaskLoading
 		m.statusMsg = "Loading tasks..."
 		return m, m.loadTasksCmd()
+	case "A":
+		m.tabs.Set(3) // Actions tab
+		if err := m.loadTabData(); err != nil {
+			m.err = err
+		}
+		return m, nil
+	case "L":
+		m.tabs.Set(4) // Logs tab
+		if err := m.loadTabData(); err != nil {
+			m.err = err
+		}
+		return m, nil
+	case "C":
+		m.tabs.Set(5) // Commits tab
+		if err := m.loadTabData(); err != nil {
+			m.err = err
+		}
+		return m, nil
+	case "N":
+		m.tabs.Set(6) // Notes tab
+		if err := m.loadTabData(); err != nil {
+			m.err = err
+		}
+		return m, nil
 	}
 
 	// Navigation using resolver
