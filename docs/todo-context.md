@@ -834,6 +834,53 @@ When a task is selected, shows:
 3. **Task Model**: Uses unified `internal/domain/task.go`
 4. **MCP Integration**: Mark done calls `Tasks.MarkDone()` which updates database
 
+## TUI Integration Status
+
+### Completed (October 24, 2025)
+
+**Consolidation (Commit a93928b):**
+- ✅ Consolidated old `tasks.go` into new unified `todo.go` TodoStore
+- ✅ Removed deprecated `internal/data/tasks.go` and `tasks_test.go`
+- ✅ Refactored TUI components to use new TodoStore
+- ✅ Added `database.NewFromConnection()` helper for existing connections
+- ✅ Fixed `createTodoServiceFromWrapper()` initialization
+- ✅ Both main binaries compile successfully (eye-in-the-sky, eye-ui)
+
+**TUI Components Ready:**
+- ✅ `tasks_tab.go` - Task display with priority/state/date sorting
+- ✅ `overview_tab.go` - Task count summaries by state
+- ✅ `client.go` - DataClient with TodoStore initialization
+- ✅ `todo.go` - Full TaskStore implementation with:
+  - Task loading by agent with pagination
+  - Task count aggregation across projects
+  - Mark done functionality
+  - Notes and tags display
+  - Session/Agent ID tracking
+
+### Remaining Work
+
+**Testing & Validation:**
+- [ ] Manual TUI testing: Tasks tab loads and displays tasks correctly
+- [ ] Verify task sorting (priority → state → created date)
+- [ ] Test task selection and detail panel rendering
+- [ ] Test "d" key functionality to mark tasks done
+- [ ] Verify task counts in overview display correctly
+- [ ] Test pagination for large task lists (100+ tasks per agent)
+
+**Enhancements:**
+- [ ] Add keyboard shortcut help showing "d" to mark done
+- [ ] Implement task filtering UI (by priority, state, tags)
+- [ ] Add search functionality in tasks tab
+- [ ] Enable create new task from TUI
+- [ ] Enable task state transitions (todo → in_progress → done)
+- [ ] Enable editing task priority/tags from TUI
+
+**Database Stability:**
+- [ ] Verify FTS5 index stays in sync during operations
+- [ ] Test concurrent access (multiple agents)
+- [ ] Monitor WAL mode lock contention
+- [ ] Implement automatic weekly reindex check
+
 ## Future Enhancements
 
 Potential improvements:
