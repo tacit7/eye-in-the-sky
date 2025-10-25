@@ -257,9 +257,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.claudeContent = msg.content
 		m.claudeShowingContent = true
-		// Apply syntax highlighting for JSON files
+		// Apply syntax highlighting for supported file types
 		contentToDisplay := msg.content
-		if len(msg.path) >= 5 && (msg.path[len(msg.path)-5:] == ".json" || msg.path[len(msg.path)-3:] == ".md") {
+		if m.shouldHighlightFile(msg.path) {
 			if highlighted, err := m.syntaxHighlight(msg.content, msg.path); err == nil {
 				contentToDisplay = highlighted
 			}
@@ -556,15 +556,81 @@ func (m *Model) syntaxHighlight(content string, filePath string) (string, error)
 
 	// Detect language from file extension
 	var language string
-	if len(filePath) > 5 && filePath[len(filePath)-5:] == ".json" {
+	fileName := filePath
+	if idx := len(filePath) - 1; idx >= 0 {
+		for i := idx; i >= 0; i-- {
+			if filePath[i] == '/' {
+				fileName = filePath[i+1:]
+				break
+			}
+		}
+	}
+
+	// Determine language/format from extension
+	if len(fileName) > 5 && fileName[len(fileName)-5:] == ".json" {
 		language = "json"
-	} else if len(filePath) > 3 && filePath[len(filePath)-3:] == ".md" {
+	} else if len(fileName) > 3 && fileName[len(fileName)-3:] == ".md" {
 		language = "markdown"
+	} else if len(fileName) > 4 && (fileName[len(fileName)-4:] == ".yml" || fileName[len(fileName)-5:] == ".yaml") {
+		language = "yaml"
+	} else if len(fileName) > 2 && fileName[len(fileName)-2:] == ".go" {
+		language = "go"
+	} else if len(fileName) > 2 && fileName[len(fileName)-2:] == ".sh" {
+		language = "bash"
+	} else if len(fileName) > 3 && fileName[len(fileName)-3:] == ".py" {
+		language = "python"
+	} else if len(fileName) > 3 && fileName[len(fileName)-3:] == ".ts" {
+		language = "typescript"
+	} else if len(fileName) > 2 && fileName[len(fileName)-2:] == ".js" {
+		language = "javascript"
+	} else if len(fileName) > 2 && fileName[len(fileName)-2:] == ".rb" {
+		language = "ruby"
+	} else if len(fileName) > 2 && fileName[len(fileName)-2:] == ".rs" {
+		language = "rust"
+	} else if len(fileName) > 4 && fileName[len(fileName)-4:] == ".java" {
+		language = "java"
+	} else if len(fileName) > 4 && fileName[len(fileName)-4:] == ".php" {
+		language = "php"
+	} else if len(fileName) > 2 && fileName[len(fileName)-2:] == ".cs" {
+		language = "csharp"
+	} else if len(fileName) > 4 && fileName[len(fileName)-4:] == ".cpp" {
+		language = "cpp"
+	} else if len(fileName) > 2 && fileName[len(fileName)-2:] == ".c" && (len(fileName) < 3 || fileName[len(fileName)-3] != '.') {
+		language = "c"
+	} else if len(fileName) > 2 && fileName[len(fileName)-2:] == ".h" {
+		language = "c"
+	} else if len(fileName) > 3 && fileName[len(fileName)-3:] == ".kt" {
+		language = "kotlin"
+	} else if len(fileName) > 5 && fileName[len(fileName)-5:] == ".swift" {
+		language = "swift"
+	} else if len(fileName) > 2 && fileName[len(fileName)-2:] == ".m" {
+		language = "objective-c"
+	} else if len(fileName) > 2 && fileName[len(fileName)-2:] == ".r" && (len(fileName) < 3 || fileName[len(fileName)-3] != '.') {
+		language = "r"
+	} else if len(fileName) > 3 && fileName[len(fileName)-3:] == ".pl" {
+		language = "perl"
+	} else if len(fileName) > 2 && fileName[len(fileName)-2:] == ".lua" {
+		language = "lua"
+	} else if len(fileName) > 5 && fileName[len(fileName)-5:] == ".scala" {
+		language = "scala"
+	} else if len(fileName) > 6 && fileName[len(fileName)-6:] == ".gradle" {
+		language = "gradle"
+	} else if len(fileName) > 7 && fileName[len(fileName)-7:] == ".groovy" {
+		language = "groovy"
 	} else {
 		language = "text"
 	}
 
-	// Wrap in markdown code block for glamour to process
+	// For markdown files, render as markdown directly without code block wrapping
+	if language == "markdown" {
+		highlighted, err := m.mdRenderer.Render(content)
+		if err != nil {
+			return content, err
+		}
+		return highlighted, nil
+	}
+
+	// For other languages, wrap in code block for syntax highlighting
 	mdContent := fmt.Sprintf("```%s\n%s\n```", language, content)
 
 	// Render with glamour
@@ -574,4 +640,42 @@ func (m *Model) syntaxHighlight(content string, filePath string) (string, error)
 	}
 
 	return highlighted, nil
+}
+
+// shouldHighlightFile checks if a file should have syntax highlighting applied
+func (m *Model) shouldHighlightFile(filePath string) bool {
+	// Get filename from path
+	fileName := filePath
+	if idx := len(filePath) - 1; idx >= 0 {
+		for i := idx; i >= 0; i-- {
+			if filePath[i] == '/' {
+				fileName = filePath[i+1:]
+				break
+			}
+		}
+	}
+
+	// Check for supported extensions
+	supportedExts := []string{
+		// Markup & Config
+		".md", ".json", ".yaml", ".yml", ".toml", ".ini", ".conf",
+		// Web & Frontend
+		".html", ".css", ".scss", ".sass", ".less", ".js", ".ts", ".jsx", ".tsx",
+		// Backend
+		".go", ".py", ".rb", ".php", ".java", ".cs", ".cpp", ".c", ".h", ".rs", ".kt", ".swift", ".m",
+		// Scripting
+		".sh", ".bash", ".zsh", ".fish", ".pl", ".lua", ".r",
+		// JVM Languages
+		".scala", ".gradle", ".groovy",
+		// Database & Other
+		".sql", ".xml", ".txt",
+	}
+
+	for _, ext := range supportedExts {
+		if len(fileName) > len(ext) && fileName[len(fileName)-len(ext):] == ext {
+			return true
+		}
+	}
+
+	return false
 }
