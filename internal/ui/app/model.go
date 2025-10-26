@@ -24,6 +24,8 @@ import (
 	"github.com/tacit7/eye-in-the-sky/internal/ui/services"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/util"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/viewmodel"
+	"github.com/tacit7/eye-in-the-sky/internal/ui/app/views/overview"
+	"github.com/tacit7/eye-in-the-sky/internal/ui/app/views/shared"
 )
 
 // ViewType represents the current view state
@@ -74,6 +76,9 @@ type Model struct {
 	config Config
 	theme  Theme
 	styles Styles
+
+	// View models (new modular architecture)
+	overviewView tea.Model // overview.Model
 
 	// View renderers map
 	renderers map[ViewType]ViewRenderer
@@ -306,6 +311,45 @@ type Styles struct {
 	Bold         lipgloss.Style
 }
 
+// Interface methods for overview.Styles compatibility
+func (s *Styles) RenderSuccess(text string) string {
+	return s.Success.Render(text)
+}
+
+func (s *Styles) RenderWarning(text string) string {
+	return s.Warning.Render(text)
+}
+
+func (s *Styles) RenderSubtle(text string) string {
+	return s.Subtle.Render(text)
+}
+
+func (s *Styles) RenderError(text string) string {
+	return s.Error.Render(text)
+}
+
+func (s *Styles) RenderPrimary(text string) string {
+	return s.Primary.Render(text)
+}
+
+func (s *Styles) RenderSelected(text string) string {
+	return s.Selected.Render(text)
+}
+
+// GetSelf returns the concrete Styles pointer for use with TableBuilder
+// This allows views to use Styles through an interface but still access the concrete type
+func (s *Styles) GetSelf() *Styles {
+	return s
+}
+
+// Get* methods for components.Styles interface
+func (s *Styles) GetSuccess() lipgloss.Style { return s.Success }
+func (s *Styles) GetWarning() lipgloss.Style { return s.Warning }
+func (s *Styles) GetSubtle() lipgloss.Style  { return s.Subtle }
+func (s *Styles) GetError() lipgloss.Style   { return s.Error }
+func (s *Styles) GetPrimary() lipgloss.Style { return s.Primary }
+func (s *Styles) GetSelected() lipgloss.Style { return s.Selected }
+
 // NewModel creates a new application model
 func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 	// Load configuration
@@ -390,8 +434,13 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 	// Initialize modal manager
 	modalManager := modal.New()
 
+	// Create overview view (new modular architecture)
+	// Will be initialized properly after m is created
+	var overviewView tea.Model
+
 	m := &Model{
-		data:      NewDataClient(db),
+		data:         NewDataClient(db),
+		overviewView: overviewView,
 		ccusageDB: ccusageDB,
 		config:    config,
 		theme:     theme,
@@ -425,7 +474,7 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 
 	// Initialize view renderers map
 	m.renderers = map[ViewType]ViewRenderer{
-		ViewList:   (*Model).renderListView,
+		ViewList:   (*Model).renderOverviewView, // New modular overview view
 		ViewDetail: (*Model).renderDetail,
 	}
 
@@ -445,8 +494,35 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 		m.keybindingsViewport.SetContent(keybindingsContent)
 	}
 
+	// Initialize overview view (new modular architecture)
+	m.overviewView = m.createOverviewView()
+
 	// Initial load will happen in Init()
 	return m, nil
+}
+
+// createOverviewView creates the overview view with injected dependencies
+func (m *Model) createOverviewView() tea.Model {
+	// Create data client adapter
+	dataClient := overview.NewDataClientAdapter(m.data.Agents)
+
+	// Create overview view with viewport provider
+	return overview.New(dataClient, &m.styles, m)
+}
+
+// GetUsageViewport implements shared.ViewportProvider
+func (m *Model) GetUsageViewport() shared.ViewportAccess {
+	return &m.usageViewport
+}
+
+// GetClaudeViewport implements shared.ViewportProvider
+func (m *Model) GetClaudeViewport() shared.ViewportAccess {
+	return &m.claudeViewport
+}
+
+// GetKeybindingsViewport implements shared.ViewportProvider
+func (m *Model) GetKeybindingsViewport() shared.ViewportAccess {
+	return &m.keybindingsViewport
 }
 
 // createStyles creates lipgloss styles from theme
@@ -490,8 +566,12 @@ func createStyles(theme Theme) Styles {
 
 // Init initializes the model
 func (m *Model) Init() tea.Cmd {
+	// Initialize overview view (will load its own agents)
+	overviewCmd := m.overviewView.Init()
+
 	return tea.Batch(
-		loadAgentsCmd(m.data.Agents), // Load initial agents
+		overviewCmd,                   // Initialize overview view
+		loadAgentsCmd(m.data.Agents),  // Load initial agents (for old code, can be removed later)
 		m.loadClaudeFilesCmd(),        // Load Claude config files
 		m.tickCmd(),                   // Start ticker
 	)
