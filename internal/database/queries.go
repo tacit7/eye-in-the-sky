@@ -553,8 +553,8 @@ func (db *DB) GetLogs(sessionID string) ([]*Log, error) {
 
 // CreateNote inserts a new note
 func (db *DB) CreateNote(note *Note) error {
-	query := `INSERT INTO notes (session_id, content, created_at) VALUES (?, ?, ?)`
-	_, err := db.conn.Exec(query, note.SessionID, note.Content, note.Timestamp)
+	query := `INSERT INTO notes (session_id, title, content, created_at) VALUES (?, ?, ?, ?)`
+	_, err := db.conn.Exec(query, note.SessionID, note.Title, note.Content, note.Timestamp)
 	if err != nil {
 		return fmt.Errorf("failed to create note: %w", err)
 	}
@@ -563,7 +563,7 @@ func (db *DB) CreateNote(note *Note) error {
 
 // GetNotes retrieves all notes for a session
 func (db *DB) GetNotes(sessionID string) ([]*Note, error) {
-	query := `SELECT id, session_id, content, created_at FROM notes WHERE session_id = ? ORDER BY created_at ASC`
+	query := `SELECT id, session_id, title, content, created_at FROM notes WHERE session_id = ? ORDER BY created_at ASC`
 	rows, err := db.conn.Query(query, sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get notes: %w", err)
@@ -573,7 +573,7 @@ func (db *DB) GetNotes(sessionID string) ([]*Note, error) {
 	var notes []*Note
 	for rows.Next() {
 		var note Note
-		err := rows.Scan(&note.ID, &note.SessionID, &note.Content, &note.Timestamp)
+		err := rows.Scan(&note.ID, &note.SessionID, &note.Title, &note.Content, &note.Timestamp)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan note: %w", err)
 		}

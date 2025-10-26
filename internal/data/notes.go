@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/tacit7/eye-in-the-sky/internal/domain"
 )
@@ -21,7 +22,7 @@ func NewNotesStore(db *sql.DB) *notesStore {
 // LoadByAgent loads notes for a specific agent's session
 func (s *notesStore) LoadByAgent(ctx context.Context, agentID domain.AgentID, sessionID string) ([]domain.Note, error) {
 	query := `
-		SELECT id, session_id, content, created_at
+		SELECT id, session_id, title, content, created_at
 		FROM notes
 		WHERE session_id = ?
 		ORDER BY created_at DESC
@@ -37,7 +38,7 @@ func (s *notesStore) LoadByAgent(ctx context.Context, agentID domain.AgentID, se
 	for rows.Next() {
 		var n domain.Note
 		var sessionID string
-		err := rows.Scan(&n.ID, &sessionID, &n.Content, &n.CreatedAt)
+		err := rows.Scan(&n.ID, &sessionID, &n.Title, &n.Content, &n.CreatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("scan note: %w", err)
 		}
@@ -48,14 +49,27 @@ func (s *notesStore) LoadByAgent(ctx context.Context, agentID domain.AgentID, se
 	return notes, nil
 }
 
+// extractTitle extracts the first two words from content as a title
+func extractTitle(content string) string {
+	words := strings.Fields(content)
+	if len(words) == 0 {
+		return "Untitled"
+	}
+	if len(words) == 1 {
+		return words[0]
+	}
+	return strings.Join(words[:2], " ")
+}
+
 // Create creates a new note (agentID parameter kept for interface compatibility, uses sessionID in query)
 func (s *notesStore) Create(ctx context.Context, agentID domain.AgentID, content string) error {
+	title := extractTitle(content)
 	query := `
-		INSERT INTO notes (session_id, content, created_at)
-		VALUES (?, ?, CURRENT_TIMESTAMP)
+		INSERT INTO notes (session_id, title, content, created_at)
+		VALUES (?, ?, ?, CURRENT_TIMESTAMP)
 	`
 
-	_, err := s.db.ExecContext(ctx, query, string(agentID), content)
+	_, err := s.db.ExecContext(ctx, query, string(agentID), title, content)
 	if err != nil {
 		return fmt.Errorf("insert note: %w", err)
 	}

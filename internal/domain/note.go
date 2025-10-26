@@ -9,6 +9,7 @@ type NoteID int
 type Note struct {
 	ID        NoteID
 	AgentID   AgentID
+	Title     string
 	Content   string
 	CreatedAt time.Time
 }

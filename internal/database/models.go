@@ -87,6 +87,7 @@ type Log struct {
 type Note struct {
 	ID        int       `json:"id"`
 	SessionID string    `json:"session_id"`
+	Title     string    `json:"title"`
 	Content   string    `json:"content"`
 	Timestamp time.Time `json:"timestamp"`
 }
