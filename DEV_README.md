@@ -224,6 +224,67 @@ Detailed explanation of what changed and why."
 git push origin feature/my-feature
 ```
 
+## Keybindings System
+
+The TUI uses a **scope-based resolver pattern** for customizable keyboard shortcuts. Instead of hardcoding key handling, keypresses are mapped to semantic actions through YAML configuration.
+
+### Key Components
+
+- **Configuration**: `~/.eye-in-the-sky/keybindings.yaml` (auto-created on first run)
+- **Resolver** (`internal/ui/keybindings/resolver.go`): Maps keypresses to actions based on current scope
+- **Scopes**: Global, list view (per-tab), detail view (per-tab), and modal-specific
+- **Config Tab**: Built-in editor to customize and validate keybindings live
+
+### How It Works
+
+1. **Key press** arrives as `tea.KeyMsg`
+2. **Resolver** checks current scope context (e.g., `"list.overview"`, `"detail.commits"`)
+3. **Action** is looked up in resolved keybindings map
+4. **Handler** executes the action via switch statement
+5. **Help modal** renders dynamically from resolver data
+
+### Usage
+
+**Set context before resolving:**
+```go
+m.keybindResolver.SetContext("list", "overview")
+action, found := m.keybindResolver.Resolve(msg, false)
+if found {
+    switch action {
+    case "new_session": // handle action
+    case "down": // handle action
+    }
+}
+```
+
+**YAML Example:**
+```yaml
+global:
+  quit: [ctrl+c, shift+q]
+  help: [?, shift+h]
+
+list:
+  overview:
+    new_session: [n]
+    down: [j, down]
+    up: [k, up]
+```
+
+### Key Features
+
+- **Live reload**: Edit keybindings in Config tab and apply without restart
+- **Per-view scopes**: Different actions available in different tabs
+- **Fallback navigation**: j/k navigation works even if YAML is missing
+- **Validation**: Invalid YAML shows error but keeps last valid state
+- **Dynamic help**: Help modal shows actual keybindings from configuration
+
+**For detailed documentation**, see **[docs/DEV_KEYBINDINGS_SYSTEM.md](docs/DEV_KEYBINDINGS_SYSTEM.md)** which covers:
+- Complete data flow and architecture
+- Scope hierarchy and naming conventions
+- Adding new actions and keybindings
+- Help system integration
+- Debugging and troubleshooting
+
 ### Common Development Tasks
 
 #### Adding a New Tab to TUI
