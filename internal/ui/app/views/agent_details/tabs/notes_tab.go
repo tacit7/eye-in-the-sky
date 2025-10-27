@@ -3,9 +3,6 @@ package tabs
 import (
 	"fmt"
 	"strings"
-
-	"github.com/charmbracelet/glamour"
-	"github.com/tacit7/eye-in-the-sky/internal/ui/theme"
 )
 
 // RenderNotes renders the notes tab content with markdown support
@@ -38,40 +35,6 @@ func RenderNotes(ctx *DataContext, overviewStyles OverviewStyles) string {
 
 		line := fmt.Sprintf("%-11s %-12s %s\n", timestamp, scope, preview)
 		sb.WriteString(line)
-	}
-
-	sb.WriteString("\n")
-	sb.WriteString(theme.TextMuted.Render("↓ Scroll down to see full markdown-rendered notes ↓"))
-	sb.WriteString("\n\n")
-
-	// Render full notes with markdown
-	renderer, err := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
-		glamour.WithWordWrap(80),
-	)
-	if err != nil {
-		return sb.String() + fmt.Sprintf("\nFailed to create markdown renderer: %v", err)
-	}
-
-	for i, note := range ctx.Notes {
-		// Note header
-		scope := getScopeLabel(note.ParentType)
-		header := fmt.Sprintf("## Note #%d [%s] - %s", i+1, scope, note.CreatedAt.Format("2006-01-02 15:04:05"))
-		sb.WriteString(theme.TextSubtitle.Render(header))
-		sb.WriteString("\n\n")
-
-		// Render markdown content
-		rendered, err := renderer.Render(note.Body)
-		if err != nil {
-			sb.WriteString(fmt.Sprintf("Error rendering markdown: %v\n", err))
-			sb.WriteString(note.Body)
-		} else {
-			sb.WriteString(rendered)
-		}
-
-		sb.WriteString("\n")
-		sb.WriteString(overviewStyles.Subtle.Render(strings.Repeat("─", 80)))
-		sb.WriteString("\n\n")
 	}
 
 	return sb.String()
