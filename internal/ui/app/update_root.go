@@ -388,7 +388,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case components.NoteSubmitMsg:
 		// Handle note submission
-		return m.handleNoteSubmission(msg)
+		model, cmd := m.handleNoteSubmission(msg)
+		// Reload agent details if in detail view to show new note
+		if m.currentView == ViewDetail && m.selectedAgent != nil {
+			return model, tea.Batch(cmd, loadAgentDetailsCmd(m.data, m.selectedAgent.ID))
+		}
+		return model, cmd
 	}
 
 	return m, nil
