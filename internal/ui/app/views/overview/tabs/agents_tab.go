@@ -21,12 +21,14 @@ func RenderAgentsTab(agents []domain.Agent, selectedIndex int, listOffset int, s
 
 	// Configure columns to show
 	renderer.ConfigureColumns(components.ColumnConfig{
-		Icon:    false,
-		Status:  true,
-		ID:      true,
-		Task:    true,
-		Source:  true,
-		Session: true,
+		Icon:         false,
+		Status:       true,
+		ID:           true,
+		Task:         true,
+		Source:       true,
+		Session:      true,
+		LastActivity: true,
+		ProjectName:  true,
 	})
 
 	// Create table builder

@@ -1,7 +1,9 @@
 package components
 
 import (
+	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/tacit7/eye-in-the-sky/internal/domain"
@@ -131,6 +133,21 @@ func (r *AgentLineRenderer) RenderAgent(agent domain.Agent, selected bool) []str
 	if r.Columns.Source {
 		source := string(agent.Source)
 		cells = append(cells, source)
+	}
+
+	// LastActivity column
+	if r.Columns.LastActivity {
+		lastActivity := r.formatLastActivity(agent.LastActivityAt)
+		cells = append(cells, lastActivity)
+	}
+
+	// ProjectName column
+	if r.Columns.ProjectName {
+		projectName := agent.ProjectName
+		if projectName == "" {
+			projectName = "-"
+		}
+		cells = append(cells, projectName)
 	}
 
 	return cells
@@ -332,4 +349,20 @@ func StatusColor(status string) string {
 		return color
 	}
 	return "white"
+}
+// formatLastActivity formats the last activity timestamp
+func (r *AgentLineRenderer) formatLastActivity(lastActivity time.Time) string {
+	if lastActivity.IsZero() {
+		return r.Styles.GetSubtle().Render("-")
+	}
+	elapsed := time.Since(lastActivity)
+	if elapsed < time.Minute {
+		return "just now"
+	} else if elapsed < time.Hour {
+		return fmt.Sprintf("%dm ago", int(elapsed.Minutes()))
+	} else if elapsed < 24*time.Hour {
+		return fmt.Sprintf("%dh ago", int(elapsed.Hours()))
+	} else {
+		return fmt.Sprintf("%dd ago", int(elapsed.Hours()/24))
+	}
 }
