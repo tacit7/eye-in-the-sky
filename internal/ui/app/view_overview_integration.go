@@ -33,27 +33,18 @@ func (m *Model) handleOverviewUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case overview.NewSessionRequestMsg:
 		// User wants to create note - open note modal
-		selectedAgent := m.overviewView.(overview.Model).SelectedAgent()
+		overviewModel := m.overviewView.(overview.Model)
+		selectedAgent := overviewModel.SelectedAgent()
 		if selectedAgent != nil {
-			// Set context for note modal
-			sessionID := ""
-			if selectedAgent.SessionID != nil {
-				sessionID = *selectedAgent.SessionID
-			}
-			projectName := ""
-			if selectedAgent.ProjectName != nil {
-				projectName = *selectedAgent.ProjectName
-			}
-
 			// Get project ID from project name
 			projectID := ""
-			if projectName != "" {
-				if proj, err := m.data.DB.GetProjectByName(projectName); err == nil && proj != nil {
+			if selectedAgent.ProjectName != "" {
+				if proj, err := m.data.DB.GetProjectByName(selectedAgent.ProjectName); err == nil && proj != nil {
 					projectID = proj.ID
 				}
 			}
 
-			m.noteModal.SetContext(selectedAgent.ID, sessionID, projectID)
+			m.noteModal.SetContext(string(selectedAgent.ID), selectedAgent.SessionID, projectID)
 			m.noteModal.Show()
 		} else {
 			m.statusMsg = "No agent selected"

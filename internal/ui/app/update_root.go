@@ -8,7 +8,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/google/uuid"
+	"github.com/tacit7/eye-in-the-sky/internal/database"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/app/views/overview"
+	"github.com/tacit7/eye-in-the-sky/internal/ui/components"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/modal"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/util"
 )
@@ -794,12 +796,13 @@ func (m *Model) handleNoteSubmission(msg components.NoteSubmitMsg) (tea.Model, t
 		}
 
 		// 2. For session entity (if session exists)
-		selectedAgent := m.overviewView.(overview.Model).SelectedAgent()
-		if selectedAgent != nil && selectedAgent.SessionID != nil && *selectedAgent.SessionID != "" {
+		overviewModel := m.overviewView.(overview.Model)
+		selectedAgent := overviewModel.SelectedAgent()
+		if selectedAgent != nil && selectedAgent.SessionID != "" {
 			sessionNote := &database.Note{
 				ID:         fmt.Sprintf("%d", time.Now().UnixNano()+1), // +1 to avoid collision
 				ParentType: "sessions",
-				ParentID:   *selectedAgent.SessionID,
+				ParentID:   selectedAgent.SessionID,
 				Body:       msg.Body,
 				CreatedAt:  time.Now(),
 			}

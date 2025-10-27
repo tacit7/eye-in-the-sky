@@ -17,6 +17,7 @@ type DataClient struct {
 	Commits  CommitsStore
 	Actions  ActionsStore
 	Logs     LogsStore
+	DB       *database.DB // Direct database access for new queries
 }
 
 // NewDataClient creates a new data client with all stores initialized
@@ -29,6 +30,9 @@ func NewDataClient(db *sql.DB) *DataClient {
 	// Our DBWrapper implements the necessary methods
 	todoService := createTodoServiceFromWrapper(dbWrapper)
 
+	// Wrap db connection for direct database access
+	dbForQueries := database.NewFromConnection(db)
+
 	return &DataClient{
 		Agents:   data.NewAgentStore(db),
 		Tasks:    data.NewTodoStore(todoService),
@@ -37,6 +41,7 @@ func NewDataClient(db *sql.DB) *DataClient {
 		Commits:  data.NewCommitsStore(db),
 		Actions:  data.NewActionsStore(db),
 		Logs:     data.NewLogsStore(db),
+		DB:       dbForQueries,
 	}
 }
 
