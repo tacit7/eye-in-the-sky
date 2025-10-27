@@ -2,6 +2,7 @@ package agent_details
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/tacit7/eye-in-the-sky/internal/ui/app/views/agent_details/tabs"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/components"
 )
 
@@ -17,12 +18,8 @@ const (
 	tabProjects = 7 // 7
 )
 
-// OverviewStyles is temporarily defined here
-// TODO: Extract to shared location after full migration
-type OverviewStyles interface{}
-
 type Styles struct {
-	OverviewStyles OverviewStyles
+	OverviewStyles tabs.OverviewStyles
 }
 
 // Model is the agent details view model

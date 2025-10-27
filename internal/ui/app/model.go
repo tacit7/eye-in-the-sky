@@ -78,7 +78,8 @@ type Model struct {
 	styles Styles
 
 	// View models (new modular architecture)
-	overviewView tea.Model // overview.Model
+	overviewView     tea.Model // overview.Model
+	agentDetailsView tea.Model // agent_details.Model (stores as interface to avoid import issues)
 
 	// View renderers map
 	renderers map[ViewType]ViewRenderer

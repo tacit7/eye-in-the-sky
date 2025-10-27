@@ -46,37 +46,37 @@ func (m *Model) renderOverviewTab() string {
 		return m.overviewCache
 	}
 
-	m.overviewCache = tabs.RenderOverview(m.ctx, m.styles)
+	m.overviewCache = tabs.RenderOverview(m.ctx, m.styles.OverviewStyles)
 	m.overviewDirty = false
 	return m.overviewCache
 }
 
 // renderTasksTab renders the tasks tab
 func (m *Model) renderTasksTab() string {
-	return tabs.RenderTasks(m.ctx, m.styles)
+	return tabs.RenderTasks(m.ctx, m.styles.OverviewStyles)
 }
 
 // renderActionsTab renders the actions tab
 func (m *Model) renderActionsTab() string {
-	return tabs.RenderActions(m.ctx, m.styles)
+	return tabs.RenderActions(m.ctx, m.styles.OverviewStyles)
 }
 
 // renderLogsTab renders the logs tab
 func (m *Model) renderLogsTab() string {
-	return tabs.RenderLogs(m.ctx, m.styles)
+	return tabs.RenderLogs(m.ctx, m.styles.OverviewStyles)
 }
 
 // renderCommitsTab renders the commits tab
 func (m *Model) renderCommitsTab() string {
-	return tabs.RenderCommits(m.ctx, m.styles)
+	return tabs.RenderCommits(m.ctx, m.styles.OverviewStyles)
 }
 
 // renderNotesTab renders the notes tab
 func (m *Model) renderNotesTab() string {
-	return tabs.RenderNotes(m.ctx, m.styles)
+	return tabs.RenderNotes(m.ctx, m.styles.OverviewStyles)
 }
 
 // renderProjectsTab renders the projects tab
 func (m *Model) renderProjectsTab() string {
-	return tabs.RenderProjects(m.ctx, m.styles)
+	return tabs.RenderProjects(m.ctx, m.styles.OverviewStyles)
 }

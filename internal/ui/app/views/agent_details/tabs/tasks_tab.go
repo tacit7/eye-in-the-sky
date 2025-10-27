@@ -169,8 +169,8 @@ func renderTaskDetails(task domain.Task, taskNotes []domain.TaskNote, width int)
 		for _, note := range taskNotes {
 			timestamp := note.CreatedAt.Format("15:04:05")
 			author := "system"
-			if note.Author != nil && *note.Author != "" {
-				author = *note.Author
+			if note.Author != "" {
+				author = note.Author
 			}
 			noteHeader := fmt.Sprintf("[%s] %s:", timestamp, author)
 			sb.WriteString(theme.TextTimestamp.Render(noteHeader))

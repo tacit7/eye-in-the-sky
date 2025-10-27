@@ -1,13 +1,6 @@
 package agent_details
 
-import "github.com/tacit7/eye-in-the-sky/internal/domain"
+import "github.com/tacit7/eye-in-the-sky/internal/ui/app/views/agent_details/tabs"
 
-// DataContext wraps all data needed by agent details tabs
-// Container and tabs import it; nobody imports root app
-type DataContext struct {
-	Agent   *domain.Agent
-	Commits []domain.Commit
-	Notes   []domain.Note
-	Tasks   []domain.Task
-	Actions []domain.Action
-}
+// DataContext is defined in tabs package to avoid import cycles
+type DataContext = tabs.DataContext
