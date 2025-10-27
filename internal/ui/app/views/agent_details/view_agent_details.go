@@ -10,7 +10,8 @@ func (m *Model) View() string {
 		return "No agent selected"
 	}
 
-	// TODO: Add header + tabs bar rendering
+	// Render tabs bar
+	tabsBar := m.tabs.View()
 
 	// Content based on active tab - explicit switch, no registry
 	var content string
@@ -35,9 +36,8 @@ func (m *Model) View() string {
 		content = ""
 	}
 
-	// TODO: Add footer
-
-	return content
+	// Combine tabs and content
+	return tabsBar + "\n\n" + content
 }
 
 // renderOverviewTab renders the overview tab with caching
