@@ -36,6 +36,24 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		// Back to overview
 		case "esc", "left":
 			return m, func() tea.Msg { return BackToOverviewMsg{} }
+
+		// Task navigation (j/k when on tasks tab)
+		case "j", "down":
+			if m.tabs.ActiveIndex == tabTasks && m.ctx != nil {
+				if m.ctx.SelectedTaskIndex < len(m.ctx.Tasks)-1 {
+					m.ctx.SelectedTaskIndex++
+					// TODO: Load task notes for selected task
+				}
+			}
+			return m, nil
+		case "k", "up":
+			if m.tabs.ActiveIndex == tabTasks && m.ctx != nil {
+				if m.ctx.SelectedTaskIndex > 0 {
+					m.ctx.SelectedTaskIndex--
+					// TODO: Load task notes for selected task
+				}
+			}
+			return m, nil
 		}
 
 		// Handle enter on back arrow tab

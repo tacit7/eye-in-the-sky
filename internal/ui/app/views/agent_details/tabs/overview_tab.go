@@ -17,11 +17,14 @@ const (
 
 // DataContext wraps all data needed by tabs (avoids circular import)
 type DataContext struct {
-	Agent   *domain.Agent
-	Commits []domain.Commit
-	Notes   []domain.Note
-	Tasks   []domain.Task
-	Actions []domain.Action
+	Agent              *domain.Agent
+	Commits            []domain.Commit
+	Notes              []domain.Note
+	Tasks              []domain.Task
+	TaskNotes          []domain.TaskNote // Annotations for selected task
+	Actions            []domain.Action
+	SelectedTaskIndex  int    // Index of selected task in tasks list
+	Width              int    // Terminal width for responsive layout
 }
 
 // OverviewStyles is temporarily kept here to avoid cycles

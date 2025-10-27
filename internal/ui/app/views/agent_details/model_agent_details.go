@@ -69,4 +69,8 @@ func (m *Model) SetContext(ctx *DataContext) {
 func (m *Model) SetSize(width, height int) {
 	m.width = width
 	m.height = height
+	// Update context width for responsive rendering
+	if m.ctx != nil {
+		m.ctx.Width = width
+	}
 }
