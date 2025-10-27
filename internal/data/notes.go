@@ -86,7 +86,7 @@ func (s *notesStore) Create(ctx context.Context, agentID domain.AgentID, content
 func (s *notesStore) Delete(ctx context.Context, noteID domain.NoteID) error {
 	query := `DELETE FROM notes WHERE id = ?`
 
-	result, err := s.db.ExecContext(ctx, query, int(noteID))
+	result, err := s.db.ExecContext(ctx, query, string(noteID))
 	if err != nil {
 		return fmt.Errorf("delete note: %w", err)
 	}
