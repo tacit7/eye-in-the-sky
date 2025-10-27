@@ -1,7 +1,9 @@
 package agent_details
 
 import (
+	"github.com/charmbracelet/lipgloss"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/app/views/agent_details/tabs"
+	"github.com/tacit7/eye-in-the-sky/internal/ui/theme"
 )
 
 // View renders the agent details view
@@ -10,8 +12,17 @@ func (m *Model) View() string {
 		return "No agent selected"
 	}
 
-	// Render tabs bar
-	tabsBar := m.tabs.View()
+	// Render tabs bar using theme styles
+	tabNames := []string{"← Back", "[O]verview", "[T]asks", "[A]ctions", "[L]ogs", "[C]ommits", "[N]otes", "[P]rojects"}
+	var renderedTabs []string
+	for i, name := range tabNames {
+		if i == m.tabs.ActiveIndex {
+			renderedTabs = append(renderedTabs, theme.TabActive.Render(name))
+		} else {
+			renderedTabs = append(renderedTabs, theme.TabInactive.Render(name))
+		}
+	}
+	tabsBar := lipgloss.JoinHorizontal(lipgloss.Top, renderedTabs...)
 
 	// Content based on active tab - explicit switch, no registry
 	var content string
