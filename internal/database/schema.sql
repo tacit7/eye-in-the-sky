@@ -168,8 +168,13 @@ CREATE TABLE IF NOT EXISTS session_metrics (
 CREATE TABLE IF NOT EXISTS projects (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
+    slug TEXT,
     path TEXT UNIQUE,
     remote_url TEXT,
+    git_remote TEXT,
+    repo_url TEXT,
+    branch TEXT,
+    commit TEXT,
     subpath TEXT,
     module TEXT,
     salt TEXT,

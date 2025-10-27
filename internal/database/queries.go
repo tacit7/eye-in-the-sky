@@ -598,18 +598,18 @@ func (db *DB) GetLogs(sessionID string) ([]*Log, error) {
 
 // CreateNote inserts a new note
 func (db *DB) CreateNote(note *Note) error {
-	query := `INSERT INTO notes (session_id, title, content, created_at) VALUES (?, ?, ?, ?)`
-	_, err := db.conn.Exec(query, note.SessionID, note.Title, note.Content, note.Timestamp)
+	query := `INSERT INTO notes (id, parent_id, parent_type, body, created_at) VALUES (?, ?, ?, ?, ?)`
+	_, err := db.conn.Exec(query, note.ID, note.ParentID, note.ParentType, note.Body, note.CreatedAt)
 	if err != nil {
 		return fmt.Errorf("failed to create note: %w", err)
 	}
 	return nil
 }
 
-// GetNotes retrieves all notes for a session
-func (db *DB) GetNotes(sessionID string) ([]*Note, error) {
-	query := `SELECT id, session_id, title, content, created_at FROM notes WHERE session_id = ? ORDER BY created_at ASC`
-	rows, err := db.conn.Query(query, sessionID)
+// GetNotes retrieves all notes for a specific parent
+func (db *DB) GetNotes(parentID string, parentType string) ([]*Note, error) {
+	query := `SELECT id, parent_id, parent_type, body, created_at FROM notes WHERE parent_id = ? AND parent_type = ? ORDER BY created_at ASC`
+	rows, err := db.conn.Query(query, parentID, parentType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get notes: %w", err)
 	}
@@ -618,7 +618,7 @@ func (db *DB) GetNotes(sessionID string) ([]*Note, error) {
 	var notes []*Note
 	for rows.Next() {
 		var note Note
-		err := rows.Scan(&note.ID, &note.SessionID, &note.Title, &note.Content, &note.Timestamp)
+		err := rows.Scan(&note.ID, &note.ParentID, &note.ParentType, &note.Body, &note.CreatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan note: %w", err)
 		}
@@ -1237,4 +1237,52 @@ func (db *DB) GetMonthlyCosts() ([]*SessionMetrics, error) {
 	}
 
 	return metrics, nil
+}
+
+// ============================================================================
+// Project Query Methods
+// ============================================================================
+
+// GetProjectByName retrieves a project by its name
+func (db *DB) GetProjectByName(name string) (*Project, error) {
+	query := `SELECT id, name, slug, path, remote_url, git_remote, repo_url, branch, commit, subpath, module, salt, id_algorithm, created_at, updated_at, last_commit, active FROM projects WHERE name = ? LIMIT 1`
+	
+	var project Project
+	err := db.conn.QueryRow(query, name).Scan(
+		&project.ID, &project.Name, &project.Slug, &project.Path, &project.RemoteURL,
+		&project.GitRemote, &project.RepoURL, &project.Branch, &project.Commit,
+		&project.Subpath, &project.Module, &project.Salt, &project.IDAlgorithm,
+		&project.CreatedAt, &project.UpdatedAt, &project.LastCommit, &project.Active,
+	)
+	
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("project not found: %s", name)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get project by name: %w", err)
+	}
+	
+	return &project, nil
+}
+
+// GetProjectByPath retrieves a project by its path
+func (db *DB) GetProjectByPath(path string) (*Project, error) {
+	query := `SELECT id, name, slug, path, remote_url, git_remote, repo_url, branch, commit, subpath, module, salt, id_algorithm, created_at, updated_at, last_commit, active FROM projects WHERE path = ? LIMIT 1`
+	
+	var project Project
+	err := db.conn.QueryRow(query, path).Scan(
+		&project.ID, &project.Name, &project.Slug, &project.Path, &project.RemoteURL,
+		&project.GitRemote, &project.RepoURL, &project.Branch, &project.Commit,
+		&project.Subpath, &project.Module, &project.Salt, &project.IDAlgorithm,
+		&project.CreatedAt, &project.UpdatedAt, &project.LastCommit, &project.Active,
+	)
+	
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("project not found: %s", path)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get project by path: %w", err)
+	}
+	
+	return &project, nil
 }

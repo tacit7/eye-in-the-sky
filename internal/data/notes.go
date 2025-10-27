@@ -19,16 +19,17 @@ func NewNotesStore(db *sql.DB) *notesStore {
 	return &notesStore{db: db}
 }
 
-// LoadByAgent loads notes for a specific agent's session
+// LoadByAgent loads notes for a specific agent and its session (polymorphic)
 func (s *notesStore) LoadByAgent(ctx context.Context, agentID domain.AgentID, sessionID string) ([]domain.Note, error) {
 	query := `
-		SELECT id, session_id, title, content, created_at
+		SELECT id, parent_id, parent_type, body, created_at
 		FROM notes
-		WHERE session_id = ?
+		WHERE (parent_id = ? AND parent_type = 'agents')
+		   OR (parent_id = ? AND parent_type = 'sessions')
 		ORDER BY created_at DESC
 	`
 
-	rows, err := s.db.QueryContext(ctx, query, sessionID)
+	rows, err := s.db.QueryContext(ctx, query, string(agentID), sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("query notes: %w", err)
 	}
@@ -37,12 +38,16 @@ func (s *notesStore) LoadByAgent(ctx context.Context, agentID domain.AgentID, se
 	var notes []domain.Note
 	for rows.Next() {
 		var n domain.Note
-		var sessionID string
-		err := rows.Scan(&n.ID, &sessionID, &n.Title, &n.Content, &n.CreatedAt)
+		var idStr string
+		err := rows.Scan(&idStr, &n.ParentID, &n.ParentType, &n.Body, &n.CreatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("scan note: %w", err)
 		}
+		n.ID = domain.NoteID(idStr)
 		n.AgentID = agentID
+		// Set legacy fields for backward compatibility
+		n.Content = n.Body
+		n.Title = extractTitle(n.Body)
 		notes = append(notes, n)
 	}
 

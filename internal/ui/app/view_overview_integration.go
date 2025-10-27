@@ -32,9 +32,32 @@ func (m *Model) handleOverviewUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, loadAgentDetailsCmd(m.data, m.selectedAgent.ID)
 
 	case overview.NewSessionRequestMsg:
-		// User wants to create new session - open modal
-		// TODO: implement modal opening
-		m.statusMsg = "New session requested (TODO: open modal)"
+		// User wants to create note - open note modal
+		selectedAgent := m.overviewView.(overview.Model).SelectedAgent()
+		if selectedAgent != nil {
+			// Set context for note modal
+			sessionID := ""
+			if selectedAgent.SessionID != nil {
+				sessionID = *selectedAgent.SessionID
+			}
+			projectName := ""
+			if selectedAgent.ProjectName != nil {
+				projectName = *selectedAgent.ProjectName
+			}
+
+			// Get project ID from project name
+			projectID := ""
+			if projectName != "" {
+				if proj, err := m.data.DB.GetProjectByName(projectName); err == nil && proj != nil {
+					projectID = proj.ID
+				}
+			}
+
+			m.noteModal.SetContext(selectedAgent.ID, sessionID, projectID)
+			m.noteModal.Show()
+		} else {
+			m.statusMsg = "No agent selected"
+		}
 		return m, nil
 
 	case overview.ViewportUpdateMsg:

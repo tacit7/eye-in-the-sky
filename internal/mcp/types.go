@@ -133,8 +133,9 @@ type AddLogResult struct {
 
 // AddNoteArgs represents the arguments for i-note-add tool
 type AddNoteArgs struct {
-	SessionID string `json:"session_id" jsonschema:"description:Session identifier"`
-	Content   string `json:"content" jsonschema:"description:Note content"`
+	ParentID   string `json:"parent_id" jsonschema:"description:Parent entity identifier (session, agent, context, etc)"`
+	ParentType string `json:"parent_type" jsonschema:"description:Parent entity type (sessions, agents, contexts, etc)"`
+	Body       string `json:"body" jsonschema:"description:Note content"`
 }
 
 type AddNoteResult struct {

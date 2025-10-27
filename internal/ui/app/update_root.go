@@ -26,6 +26,14 @@ var viewHandlers = map[ViewType]ViewHandler{
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// DEBUG: Verify Update is being called
 	debugf("Update() called with message type %T", msg)
+
+	// Note modal gate: if note modal is visible, route messages to it first
+	if m.noteModal.Visible {
+		var cmd tea.Cmd
+		m.noteModal, cmd = m.noteModal.Update(msg)
+		return m, cmd
+	}
+
 	// Modal gate: if modal is active, route all messages through modal
 	if m.modalManager.IsActive() {
 		switch msg := msg.(type) {
@@ -372,6 +380,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case modal.FormSubmitted:
 		// Handle form submission from modal
 		return m.handleFormSubmission(msg)
+
+	case components.NoteSubmitMsg:
+		// Handle note submission
+		return m.handleNoteSubmission(msg)
 	}
 
 	return m, nil
@@ -721,4 +733,83 @@ func (m *Model) shouldHighlightFile(filePath string) bool {
 	}
 
 	return false
+}
+
+// handleNoteSubmission handles note creation from the note modal
+func (m *Model) handleNoteSubmission(msg components.NoteSubmitMsg) (tea.Model, tea.Cmd) {
+	if msg.Body == "" {
+		m.statusMsg = "Note body cannot be empty"
+		return m, nil
+	}
+
+	// Create note(s) based on scope
+	switch msg.Scope {
+	case components.NoteScopeGlobal:
+		// Global note: parent_type='global', parent_id=NULL
+		note := &database.Note{
+			ID:         fmt.Sprintf("%d", time.Now().UnixNano()),
+			ParentType: "global",
+			ParentID:   "",
+			Body:       msg.Body,
+			CreatedAt:  time.Now(),
+		}
+		if err := m.data.DB.CreateNote(note); err != nil {
+			m.statusMsg = fmt.Sprintf("Failed to create global note: %v", err)
+			return m, nil
+		}
+		m.statusMsg = "Global note created"
+
+	case components.NoteScopeProject:
+		// Project note: parent_type='projects', parent_id=project.id
+		if msg.ParentID == "" {
+			m.statusMsg = "No project selected for note"
+			return m, nil
+		}
+		note := &database.Note{
+			ID:         fmt.Sprintf("%d", time.Now().UnixNano()),
+			ParentType: "projects",
+			ParentID:   msg.ParentID,
+			Body:       msg.Body,
+			CreatedAt:  time.Now(),
+		}
+		if err := m.data.DB.CreateNote(note); err != nil {
+			m.statusMsg = fmt.Sprintf("Failed to create project note: %v", err)
+			return m, nil
+		}
+		m.statusMsg = "Project note created"
+
+	case components.NoteScopeAgent:
+		// Agent scope: create TWO notes
+		// 1. For agent entity
+		agentNote := &database.Note{
+			ID:         fmt.Sprintf("%d", time.Now().UnixNano()),
+			ParentType: "agents",
+			ParentID:   msg.ParentID, // agent.id
+			Body:       msg.Body,
+			CreatedAt:  time.Now(),
+		}
+		if err := m.data.DB.CreateNote(agentNote); err != nil {
+			m.statusMsg = fmt.Sprintf("Failed to create agent note: %v", err)
+			return m, nil
+		}
+
+		// 2. For session entity (if session exists)
+		selectedAgent := m.overviewView.(overview.Model).SelectedAgent()
+		if selectedAgent != nil && selectedAgent.SessionID != nil && *selectedAgent.SessionID != "" {
+			sessionNote := &database.Note{
+				ID:         fmt.Sprintf("%d", time.Now().UnixNano()+1), // +1 to avoid collision
+				ParentType: "sessions",
+				ParentID:   *selectedAgent.SessionID,
+				Body:       msg.Body,
+				CreatedAt:  time.Now(),
+			}
+			if err := m.data.DB.CreateNote(sessionNote); err != nil {
+				m.statusMsg = fmt.Sprintf("Agent note created, session note failed: %v", err)
+				return m, nil
+			}
+		}
+		m.statusMsg = "Agent note created"
+	}
+
+	return m, nil
 }

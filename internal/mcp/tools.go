@@ -730,9 +730,11 @@ func (t *Tools) AddLog(args AddLogArgs) (AddLogResult, error) {
 // AddNote implements the i-note-add tool
 func (t *Tools) AddNote(args AddNoteArgs) (AddNoteResult, error) {
 	note := &database.Note{
-		SessionID: args.SessionID,
-		Content:   args.Content,
-		Timestamp: time.Now(),
+		ID:         fmt.Sprintf("%d", time.Now().UnixNano()),
+		ParentID:   args.ParentID,
+		ParentType: args.ParentType,
+		Body:       args.Body,
+		CreatedAt:  time.Now(),
 	}
 
 	if err := t.db.CreateNote(note); err != nil {
@@ -771,8 +773,8 @@ func (t *Tools) GetSession(args GetSessionArgs) (GetSessionResult, error) {
 		return GetSessionResult{}, fmt.Errorf("failed to get logs: %w", err)
 	}
 
-	// Get notes
-	notes, err := t.db.GetNotes(args.SessionID)
+	// Get notes for this session
+	notes, err := t.db.GetNotes(args.SessionID, "sessions")
 	if err != nil {
 		return GetSessionResult{}, fmt.Errorf("failed to get notes: %w", err)
 	}
@@ -797,8 +799,8 @@ func (t *Tools) GetSession(args GetSessionArgs) (GetSessionResult, error) {
 	noteResults := make([]SessionNote, len(notes))
 	for i, n := range notes {
 		noteResults[i] = SessionNote{
-			Content:   n.Content,
-			Timestamp: n.Timestamp.Format(time.RFC3339),
+			Content:   n.Body,
+			Timestamp: n.CreatedAt.Format(time.RFC3339),
 		}
 	}
 

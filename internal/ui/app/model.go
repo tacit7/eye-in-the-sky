@@ -223,6 +223,7 @@ type Model struct {
 
 	// Modal system
 	modalManager *modal.Modal
+	noteModal    components.NoteModal
 	keybindResolver *keybindings.Resolver
 
 	// Config tab state

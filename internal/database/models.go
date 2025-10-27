@@ -84,13 +84,13 @@ type Log struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
-// Note represents a session note
+// Note represents a polymorphic note
 type Note struct {
-	ID        int       `json:"id"`
-	SessionID string    `json:"session_id"`
-	Title     string    `json:"title"`
-	Content   string    `json:"content"`
-	Timestamp time.Time `json:"timestamp"`
+	ID         string    `json:"id"`
+	ParentID   string    `json:"parent_id"`
+	ParentType string    `json:"parent_type"`
+	Body       string    `json:"body"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 // Context represents a session context key-value pair
@@ -178,4 +178,25 @@ type SessionMetrics struct {
 	Timestamp        time.Time `json:"timestamp"`
 	CreatedAt        time.Time `json:"created_at"`
 	Notes            *string   `json:"notes,omitempty"`
+}
+
+// Project represents a project/repository
+type Project struct {
+	ID          string     `json:"id"`
+	Name        string     `json:"name"`
+	Slug        *string    `json:"slug,omitempty"`
+	Path        *string    `json:"path,omitempty"`
+	RemoteURL   *string    `json:"remote_url,omitempty"`
+	GitRemote   *string    `json:"git_remote,omitempty"`
+	RepoURL     *string    `json:"repo_url,omitempty"`
+	Branch      *string    `json:"branch,omitempty"`
+	Commit      *string    `json:"commit,omitempty"`
+	Subpath     *string    `json:"subpath,omitempty"`
+	Module      *string    `json:"module,omitempty"`
+	Salt        *string    `json:"salt,omitempty"`
+	IDAlgorithm *string    `json:"id_algorithm,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+	LastCommit  *string    `json:"last_commit,omitempty"`
+	Active      bool       `json:"active"`
 }
