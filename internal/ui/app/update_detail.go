@@ -84,6 +84,21 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.err = err
 		}
 		return m, nil
+	case "n":
+		// Create new note for current agent
+		if m.selectedAgent != nil {
+			// Get project ID from project name
+			projectID := ""
+			if m.selectedAgent.ProjectName != "" {
+				if proj, err := m.data.DB.GetProjectByName(m.selectedAgent.ProjectName); err == nil && proj != nil {
+					projectID = proj.ID
+				}
+			}
+
+			m.noteModal.SetContext(string(m.selectedAgent.ID), m.selectedAgent.SessionID, projectID)
+			m.noteModal.Show()
+		}
+		return m, nil
 	}
 
 	// Navigation using resolver

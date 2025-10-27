@@ -71,6 +71,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
     m.height = msg.Height
     // Old help.Width removed - using new modal-based help system
 
+    // Update note modal dimensions
+    m.noteModal = components.NewNoteModal(msg.Width, msg.Height)
+
     // Forward window size to overview view
     if m.currentView == ViewList {
         var cmd tea.Cmd

@@ -1,11 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "Bash(go test:*)",
-      "Bash(go build:*)",
-      "Bash(say*)",
-      "Bash(say:*)",
-      "Bash(sqlite3:*)"
+      "mcp__eye-in-the-sky__i-speak"
     ],
     "deny": [],
     "ask": [],

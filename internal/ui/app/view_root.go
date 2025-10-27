@@ -23,7 +23,12 @@ func (m *Model) View() string {
 		return "Loading..."
 	}
 
-	// Render modal if active (highest priority)
+	// Render note modal if visible (highest priority)
+	if m.noteModal.Visible {
+		return m.noteModal.View()
+	}
+
+	// Render modal if active
 	if m.modalManager.IsActive() {
 		return m.renderModalOverlay()
 	}

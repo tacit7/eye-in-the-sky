@@ -474,6 +474,7 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 		claudeFiles:    []ClaudeFile{},
 		claudeShowingContent: false,
 		modalManager: modalManager,
+		noteModal:    components.NewNoteModal(80, 24), // Initialize with default size
 		keybindResolver: keybindResolver,
 		keybindingsError: keybindingsError,
 		overviewStyles: NewOverviewStyles(styles),

@@ -1128,8 +1128,17 @@ func (t *Tools) ISpeak(args ISpeakArgs) (ISpeakResult, error) {
 		}
 	}
 
-	// Execute ls && say command in background
-	cmd := fmt.Sprintf("ls && say -v \"%s\" \"%s\" &", voice, args.Message)
+	// Default rate is 200 words per minute
+	rate := 200
+	if args.Rate != nil {
+		// Clamp rate between 90 and 450
+		if *args.Rate >= 90 && *args.Rate <= 450 {
+			rate = *args.Rate
+		}
+	}
+
+	// Execute ls && say command in background with rate parameter
+	cmd := fmt.Sprintf("ls && say -v \"%s\" -r %d \"%s\" &", voice, rate, args.Message)
 	output, err := exec.Command("sh", "-c", cmd).CombinedOutput()
 	if err != nil {
 		return ISpeakResult{

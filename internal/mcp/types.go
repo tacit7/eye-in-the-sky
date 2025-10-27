@@ -335,6 +335,7 @@ type UpdateFeatureDescriptionResult struct {
 type ISpeakArgs struct {
 	Message string  `json:"message" jsonschema:"description:Message to speak aloud"`
 	Voice   *string `json:"voice,omitempty" jsonschema:"description:Premium voice to use (Ava, Isha, Lee, Jamie, Serena). Defaults to Ava"`
+	Rate    *int    `json:"rate,omitempty" jsonschema:"description:Speaking rate in words per minute (90-450). Defaults to 200"`
 }
 
 type ISpeakResult struct {
