@@ -21,12 +21,14 @@ type Styles interface {
 
 // ColumnConfig controls which columns are visible in the agent table
 type ColumnConfig struct {
-	Icon    bool
-	Status  bool
-	ID      bool
-	Task    bool
-	Source  bool
-	Session bool
+	Icon         bool
+	Status       bool
+	ID           bool
+	Task         bool
+	Source       bool
+	Session      bool
+	LastActivity bool
+	ProjectName  bool
 }
 
 // DefaultColumnConfig returns the default column configuration
