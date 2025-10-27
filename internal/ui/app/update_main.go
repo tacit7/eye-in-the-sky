@@ -46,23 +46,6 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "shift+tab", "left":
 		m.listTabs.Prev()
 		return m, nil
-	case "o":
-		m.listTabs.Set(0) // Overview
-		return m, nil
-	case "p", "P":
-		m.listTabs.Set(1) // Project
-		return m, nil
-	case "c":
-		m.listTabs.Set(2) // Claude
-		return m, nil
-	case "t", "T":
-		m.listTabs.Set(3) // Usage
-		m.statusMsg = "Switched to Usage tab"
-		return m, func() tea.Msg { return RefreshUsageMsg{} }
-	case "u", "U":
-		m.listTabs.Set(3) // Usage (support both u and U for backward compatibility)
-		m.statusMsg = "Switched to Usage tab"
-		return m, func() tea.Msg { return RefreshUsageMsg{} }
 	case "i", "I":
 		// Initialize CCUsage database (only in Usage tab when empty)
 		if m.listTabs.ActiveIndex == 3 && m.ccusageDB != nil && m.ccusageEntryCount == 0 && !m.ccusageSyncing {

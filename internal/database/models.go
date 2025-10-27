@@ -20,6 +20,7 @@ type Agent struct {
 	SessionID           *string    `json:"session_id,omitempty"`
 	PersonaID           *string    `json:"persona_id,omitempty"`
 	ParentAgentID       *string    `json:"parent_agent_id,omitempty"`
+	Bookmarked          bool       `json:"bookmarked"`
 }
 
 // Action represents an activity performed by an agent

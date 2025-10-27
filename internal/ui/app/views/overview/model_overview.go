@@ -21,7 +21,7 @@ type Model struct {
 	showAll       bool // Show all agents or only active ones
 
 	// Tab navigation
-	tabs components.TabsModel
+	tabs components.NavBar
 
 	// UI dimensions
 	width  int
@@ -52,7 +52,7 @@ type ErrMsg struct {
 func New(dataClient DataClient, styles shared.Styles, viewports shared.ViewportProvider) Model {
 	// Create tabs for overview view
 	// Tab indices: 0=Agents, 1=Project, 2=Claude, 3=Usage, 4=Config
-	tabs := components.NewTabsModel(
+	tabs := components.NewNavBar(
 		[]string{"[O]verview", "[P]roject", "[C]laude", "[T]oken Usage", "[K]eybindings"},
 		"#00ADD8", // Active color (placeholder, should come from styles)
 		"#FFFFFF", // Text color (placeholder, should come from styles)

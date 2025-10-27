@@ -5,6 +5,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/tacit7/eye-in-the-sky/internal/domain"
+	"github.com/tacit7/eye-in-the-sky/internal/ui/components"
 )
 
 // renderListView renders the agent list view using the new component system
@@ -101,10 +102,10 @@ type TableConfig struct {
 // renderAgentTable renders agents as a table using the new table system
 func (m *Model) renderAgentTable(agents []domain.Agent, config TableConfig) string {
 	// Create agent renderer
-	renderer := NewAgentLineRenderer(&m.styles)
+	renderer := components.NewAgentLineRenderer(&m.styles)
 
 	// Configure columns
-	renderer.ConfigureColumns(ColumnConfig{
+	renderer.ConfigureColumns(components.ColumnConfig{
 		Icon:    config.ShowIcons,
 		Status:  config.ShowStatus,
 		ID:      config.ShowID,

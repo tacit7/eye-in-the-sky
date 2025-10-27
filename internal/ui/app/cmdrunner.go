@@ -8,14 +8,12 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/google/uuid"
+	"github.com/tacit7/eye-in-the-sky/internal/utils"
 )
 
-// truncateID safely truncates an ID string to specified length
+// truncateID is a wrapper for utils.TruncateID for backward compatibility
 func truncateID(id string, maxLen int) string {
-	if len(id) <= maxLen {
-		return id
-	}
-	return id[:maxLen]
+	return utils.TruncateID(id, maxLen)
 }
 
 // ResolveClaudePath resolves the path to the claude binary

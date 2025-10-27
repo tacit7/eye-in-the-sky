@@ -52,67 +52,107 @@ The user keybindings live in:
 **Example:**
 
 ```yaml
-global:
-  help: ["ctrl+h", "?"]
-  quit: ["ctrl+c", "shift+q"]
-  refresh: ["r"]
+keybindings:
+  global:
+    help: ["ctrl+h", "?"]
+    quit: ["ctrl+c", "shift+q"]
+    refresh: ["r"]
 
-list:
-  overview:
-    j: down
-    k: up
-    enter: select
-    n: new_session
-  project:
-    j: down
-    k: up
-    n: new_ticket
-  claude:
-    j: down
-    k: up
-    e: edit
-    v: validate
-  usage:
-    j: down
-    k: up
-    pgdn: page_down
-    pgup: page_up
-  config:
-    e: edit
-    ctrl+s: save
-    esc: cancel
+  list:
+    overview:
+      j: down
+      k: up
+      enter: select
+      n: new_session
+    project:
+      j: down
+      k: up
+      n: new_ticket
+    claude:
+      j: down
+      k: up
+      e: edit
+      v: validate
+    usage:
+      j: down
+      k: up
+      pgdn: page_down
+      pgup: page_up
+    config:
+      j: down
+      k: up
+      e: edit
+      ctrl+s: save
+      esc: cancel
+
+  agent_details:
+    overview:
+      j: down
+      k: up
+      enter: select
+    commits:
+      j: down
+      k: up
+      h: scroll_left
+      l: scroll_right
+      r: refresh
+    logs:
+      j: down
+      k: up
+      r: refresh
+    notes:
+      j: down
+      k: up
+      n: new_note
+    actions:
+      j: down
+      k: up
+      r: rerun
+    tasks:
+      j: down
+      k: up
+      n: new_task
+    projects:
+      j: down
+      k: up
 ```
 
-Each top-level key (`global`, `list`, etc.) defines **scope groups**.  
-Scopes may nest further — e.g. `"list.overview"`.
+Each top-level key (`global`, `list`, `agent_details`) defines **scope groups**.
+Scopes use underscore format internally (e.g., `list_overview`, `agent_details_commits`).
+
+**Note:** `detail:` is deprecated but still supported for backward compatibility. Use `agent_details:` in new configurations.
 
 ---
 
 ### 3.2 Resolver (`keybindResolver`)
 
 Responsible for:
-- Tracking **current scope** (`list`, `detail`, etc.).
+- Tracking **current scope** (`list_overview`, `detail_commits`, etc.).
 - Looking up key-to-action mappings.
 - Returning `(action, found)`.
 
 Typical call:
 ```go
-action, found := m.keybindResolver.Resolve(msg, false)
+action, found := m.keybindResolver.Resolve(msg, m.modalManager.IsActive())
 ```
 
 The resolver maintains internal state:
 ```go
 type Resolver struct {
-    Bindings map[string]map[string]string // scope → key → action
-    Context  string                       // "list.overview"
+    config      KeybindingsConfig
+    resolved    ResolvedKeybindings        // map of scope → key → action
+    currentView string                      // e.g., "list" or "detail"
+    currentTab  string                      // e.g., "overview" or "commits"
 }
 ```
+
+Scope is constructed as `view_tab` (e.g., `list_overview`, `detail_commits`).
 
 #### Core methods
 | Method | Purpose |
 |--------|----------|
-| `SetContext(view, tab string)` | e.g., `"list"`, `"overview"` → context `"list.overview"` |
-| `Resolve(msg tea.KeyMsg, allowFallback bool)` | Match keypress within current context |
+| `SetContext(view, tab string)` | Set current scope (e.g., `"list"`, `"overview"` → scope `"list_overview"`) |
+| `Resolve(msg tea.KeyMsg, modalActive bool)` | Match keypress within current context; modalActive checks modal scope first |
 | `Reload()` | Reload YAML and rebuild binding maps |
 | `GetScopeKeybindings(scope string)` | For Help modal rendering |
 
@@ -120,16 +160,24 @@ type Resolver struct {
 
 ### 3.3 Scopes
 
-Each **view** defines its own logical scope.  
+Each **view** defines its own logical scope using underscore format: `view_tab`.
 
-| View / Context | Example Context String | Source File | Description |
+| View / Context | Scope Name | Source File | Description |
 |----------------|------------------------|--------------|--------------|
-| Overview Tab | `list.overview` | `update_list.go` | Shows agents list |
-| Project Tab | `list.project` | `update_list.go` | Project tasks, CLAUDE.md, etc. |
-| Claude Tab | `list.claude` | `update_list.go` | File explorer for Claude configs |
-| Usage Tab | `list.usage` | `update_list.go` | Token usage + viewport |
-| Config Tab | `list.config` | `update_list.go` | Keybindings YAML viewer/editor |
-| Detail View | `detail.overview`, etc. | `update_detail.go` | Per-agent detail tabs |
+| Overview Tab (List) | `list_overview` | `update_main.go` | Shows agents list |
+| Project Tab (List) | `list_project` | `update_main.go` | Project tasks, CLAUDE.md, etc. |
+| Claude Tab (List) | `list_claude` | `update_main.go` | File explorer for Claude configs |
+| Usage Tab (List) | `list_usage` | `update_main.go` | Token usage + viewport |
+| Config Tab (List) | `list_config` | `update_main.go` | Keybindings YAML viewer/editor |
+| Agent Details: Overview | `agent_details_overview` | `update_detail.go` | Agent info, recent commits |
+| Agent Details: Commits | `agent_details_commits` | `update_detail.go` | Commit split-pane view |
+| Agent Details: Logs | `agent_details_logs` | `update_detail.go` | Session logs with filtering |
+| Agent Details: Notes | `agent_details_notes` | `update_detail.go` | Session notes |
+| Agent Details: Actions | `agent_details_actions` | `update_detail.go` | All agent actions |
+| Agent Details: Tasks | `agent_details_tasks` | `update_detail.go` | Agent tasks sorted by priority |
+| Agent Details: Projects | `agent_details_projects` | `update_detail.go` | Project-specific tasks |
+
+**Note:** `detail_*` aliases are maintained for backward compatibility with existing YAML files.
 
 ---
 
@@ -152,7 +200,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
     m.keybindResolver.SetContext("list", activeTabName)
 
-    action, found := m.keybindResolver.Resolve(msg, false)
+    action, found := m.keybindResolver.Resolve(msg, m.modalManager.IsActive())
     if found {
         switch action {
         case "new_session": ...
@@ -164,8 +212,8 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
         }
     }
 
-    // Static fallback for j/k if resolver swallowed input
-    if m.listTabs.ActiveIndex == 0 {
+    // Static fallback for j/k if resolver didn't match
+    if !m.modalManager.IsActive() {
         switch msg.String() {
         case "j", "down": m.selectedIndex++
         case "k", "up":   m.selectedIndex--
@@ -181,20 +229,30 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 | Scope Type | Description | Examples |
 |-------------|--------------|-----------|
-| **Global** | Always active, regardless of view. Handled in `handleGlobalKeys()`. | Quit (`Ctrl+C`), Help (`Ctrl+H`), Refresh (`r`). |
+| **Global** | Always active, regardless of view. Hardcoded or resolver-based. | `Ctrl+C` (hardcoded), `Ctrl+H` (hardcoded), `r` (resolver-based). |
 | **View-Scoped** | Active within a major view like List or Detail. | `tab`/`shift+tab` for changing tabs. |
-| **Tab-Scoped** | Active within a specific tab of a view. | `j/k` navigation in Overview tab only. |
-| **Modal-Scoped** | Active when a modal form is open. | `tab` to cycle fields, `esc` to cancel. |
+| **Tab-Scoped** | Active within a specific tab of a view. | `j/k` navigation in `list_overview` only. |
+| **Modal-Scoped** | Active when a modal form is open. | Currently modal components handle their own keys; resolver modal scope not yet populated. |
 
-Global bindings are hardcoded fallbacks in `update_root.go`:
+**Important:** Some global keys are **hardcoded and bypass the resolver entirely** in `update_root.go`:
+- `Ctrl+C` and `Shift+Q` → Quit (always works)
+- `Ctrl+H` → Help (always works, cannot be remapped via YAML)
+
+Other global keys (`quit`, `refresh`, etc.) **flow through the resolver** and can be customized in YAML:
 ```go
-case "ctrl+c", "shift+q":
-    return m, tea.Quit
-case "ctrl+h", "?":
-    return m.openContextualHelp()
-```
+action, found := m.keybindResolver.Resolve(msg, m.modalManager.IsActive())
+if !found {
+    return m, nil
+}
 
-Everything else flows through the resolver.
+switch action {
+case "quit":
+    return m, tea.Quit
+case "refresh":
+    m.statusMsg = "Refreshing..."
+    return m, loadAgentsCmd(m.data.Agents)
+}
+```
 
 ---
 
@@ -233,15 +291,19 @@ When user edits keybindings:
 
 ## 8. Fallback Hierarchy
 
-Order of evaluation for every keypress:
+Order of evaluation for every keypress in `handleKeyPress()`:
 
-1. **Modal active?** → Modal handles all keys.  
-2. **Global keys?** → Quit, Help, Refresh.  
-3. **Resolver lookup:**  
-   - If found and handled → stop.  
-   - If found but unhandled → continue.  
-4. **Static fallback** (hardcoded j/k navigation, etc.).  
-5. **No match:** → Ignore key.
+1. **Modal active?** → Modal handler gets first priority, processes key or passes through.
+2. **Hardcoded global keys** (in `handleGlobalKeys()`) → `Ctrl+C`, `Shift+Q`, `Ctrl+H`.
+3. **Resolver lookup** (for global, view-scoped, and tab-scoped actions):
+   - Checks current resolver context (set via `SetContext()`)
+   - Returns `(action, found)` tuple
+   - If found, switch on action name
+   - If not found, return early
+4. **Component-level fallback** (in individual handlers like `handleListKeys()`):
+   - Hardcoded navigation (`j/k` for up/down, `h/l` for horizontal scroll)
+   - Only applies when resolver didn't match the key
+5. **No match:** → Ignore key, return unchanged model.
 
 ---
 
@@ -284,13 +346,16 @@ To add a new action (e.g. `"archive_agent"`):
 - Use `debugf("Key pressed: %s", msg.String())` to confirm input.
 - To trace resolver matches:
   ```go
+  action, found := m.keybindResolver.Resolve(msg, modalActive)
   debugf("Resolver: action=%s, found=%v", action, found)
   ```
-- To verify scope:
+- To verify current scope before resolving:
   ```go
-  debugf("Resolver context: %s", m.keybindResolver.CurrentScope())
+  m.keybindResolver.SetContext("list", "overview")
+  debugf("Scope set to: list_overview")
   ```
-- Use the Config tab to reload YAML on the fly.
+- Check keybindings YAML validity in the Config tab — invalid YAML is rejected with error message.
+- Use the Config tab to reload YAML on the fly; press `r` to refresh resolver with new bindings.
 
 ---
 
@@ -305,10 +370,22 @@ To add a new action (e.g. `"archive_agent"`):
 
 ---
 
+## 13. Known Issues and Limitations
+
+| Issue | Impact | Workaround |
+|-------|--------|-----------|
+| **Modal scope not populated** | Modal keybindings cannot be configured via YAML; modals handle keys internally | Modal components implement their own key handling |
+| **Ctrl+H hardcoded** | Help key cannot be remapped via YAML | Always available, but cannot customize trigger key |
+| **No per-action validation** | Invalid action names in YAML are silently ignored (no warning at load time) | Test keybindings in Config tab to verify actions are recognized |
+| **Scope naming transition** | Code now uses `agent_details_*` but YAML still supports `detail.*` for backward compatibility | Both naming schemes work; prefer `agent_details` in new configs |
+
+---
+
 ### TL;DR
 
-- `Resolver` maps keys → actions from YAML based on context.  
-- Global keys (quit/help/refresh) are hardcoded.  
-- Each tab/view sets its own resolver context.  
-- Fallbacks keep navigation reliable when YAML is missing or mismatched.  
-- Help modal shows real mappings dynamically; footer is static.
+- `Resolver` maps keys → actions from YAML based on context (underscore format: `view_tab`).
+- Agent details view uses `agent_details_*` scopes; `detail_*` aliases maintained for backward compatibility.
+- Some global keys (`Ctrl+C`, `Ctrl+H`) are hardcoded and bypass the resolver.
+- Each tab/view sets its own resolver context via `SetContext(view, tab)`.
+- Fallbacks keep navigation reliable when resolver doesn't match.
+- Help modal shows real mappings dynamically from resolver data.

@@ -142,6 +142,11 @@ func (s *Server) registerTools() {
 		Description: "Log session token usage and cost metrics",
 	}, s.handleLogSessionCost)
 
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "i-update-description",
+		Description: "Update session feature description",
+	}, s.handleUpdateFeatureDescription)
+
 	// Persona Management Tools
 	mcp.AddTool(s.mcp, &mcp.Tool{
 		Name:        "i-snapshot-expertise",
@@ -424,6 +429,13 @@ func (s *Server) HandleTool(toolName string, argsJSON []byte) (interface{}, erro
 	case "add_session_note", "i-add-session-note", "i-note":
 		return map[string]interface{}{"success": true, "message": "Session note added"}, nil
 
+	case "update_feature_description", "i-update-feature-description", "i-update-description":
+		var args UpdateFeatureDescriptionArgs
+		if err := json.Unmarshal(argsJSON, &args); err != nil {
+			return nil, err
+		}
+		return s.tools.UpdateFeatureDescription(args)
+
 	default:
 		return nil, fmt.Errorf("unknown tool: %s", toolName)
 	}
@@ -458,6 +470,19 @@ func (s *Server) handleAddNote(ctx context.Context, req *mcp.CallToolRequest, ar
 
 func (s *Server) handleLogSessionCost(ctx context.Context, req *mcp.CallToolRequest, args LogSessionCostArgs) (*mcp.CallToolResult, any, error) {
 	result, err := s.tools.LogSessionCost(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: result.Message},
+		},
+	}, result, nil
+}
+
+func (s *Server) handleUpdateFeatureDescription(ctx context.Context, req *mcp.CallToolRequest, args UpdateFeatureDescriptionArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.UpdateFeatureDescription(args)
 	if err != nil {
 		return nil, nil, err
 	}

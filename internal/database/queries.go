@@ -33,13 +33,13 @@ func (db *DB) GetAgent(id string) (*Agent, error) {
 	// No longer validating agent ID format - accepting UUIDs now
 
 	query := `
-		SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, session_id, persona_id, parent_agent_id
+		SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, session_id, persona_id, parent_agent_id, bookmarked
 		FROM agents WHERE id = ?
 	`
 	var agent Agent
 	row := db.conn.QueryRow(query, id)
 	err := row.Scan(&agent.ID, &agent.Status, &agent.Source, &agent.Description, &agent.CreatedAt, &agent.UpdatedAt,
-		&agent.GitWorktreePath, &agent.FeatureDescription, &agent.CurrentTask, &agent.LastActivityAt, &agent.WindowID, &agent.ProjectName, &agent.SessionID, &agent.PersonaID, &agent.ParentAgentID)
+		&agent.GitWorktreePath, &agent.FeatureDescription, &agent.CurrentTask, &agent.LastActivityAt, &agent.WindowID, &agent.ProjectName, &agent.SessionID, &agent.PersonaID, &agent.ParentAgentID, &agent.Bookmarked)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, NewAgentError(id, "get", ErrAgentNotFound)
@@ -52,7 +52,7 @@ func (db *DB) GetAgent(id string) (*Agent, error) {
 // GetAgentBySessionID retrieves the most recent agent for a session ID
 func (db *DB) GetAgentBySessionID(sessionID string) (*Agent, error) {
 	query := `
-		SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, session_id, persona_id, parent_agent_id
+		SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, session_id, persona_id, parent_agent_id, bookmarked
 		FROM agents WHERE session_id = ?
 		ORDER BY created_at DESC
 		LIMIT 1
@@ -60,7 +60,7 @@ func (db *DB) GetAgentBySessionID(sessionID string) (*Agent, error) {
 	var agent Agent
 	row := db.conn.QueryRow(query, sessionID)
 	err := row.Scan(&agent.ID, &agent.Status, &agent.Source, &agent.Description, &agent.CreatedAt, &agent.UpdatedAt,
-		&agent.GitWorktreePath, &agent.FeatureDescription, &agent.CurrentTask, &agent.LastActivityAt, &agent.WindowID, &agent.ProjectName, &agent.SessionID, &agent.PersonaID, &agent.ParentAgentID)
+		&agent.GitWorktreePath, &agent.FeatureDescription, &agent.CurrentTask, &agent.LastActivityAt, &agent.WindowID, &agent.ProjectName, &agent.SessionID, &agent.PersonaID, &agent.ParentAgentID, &agent.Bookmarked)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil // Return nil without error if not found
@@ -114,6 +114,50 @@ func (db *DB) UpdateAgentDescription(id string, description string) error {
 	}
 
 	return nil
+}
+
+func (db *DB) UpdateAgentFeatureDescription(id string, featureDescription string) error {
+	query := `
+		UPDATE agents SET feature_description = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`
+	result, err := db.conn.Exec(query, featureDescription, id)
+	if err != nil {
+		return fmt.Errorf("failed to update agent feature description: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("agent not found: %s", id)
+	}
+
+	return nil
+}
+
+// ToggleAgentBookmark toggles the bookmarked status of an agent
+func (db *DB) ToggleAgentBookmark(id string) (bool, error) {
+	// Get current bookmark status
+	agent, err := db.GetAgent(id)
+	if err != nil {
+		return false, fmt.Errorf("failed to get agent: %w", err)
+	}
+
+	newStatus := !agent.Bookmarked
+
+	query := `
+		UPDATE agents SET bookmarked = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`
+	_, err = db.conn.Exec(query, newStatus, id)
+	if err != nil {
+		return false, fmt.Errorf("failed to toggle bookmark: %w", err)
+	}
+
+	return newStatus, nil
 }
 
 // CreateAction logs a new action
@@ -374,23 +418,23 @@ func (db *DB) ListAgents(status string) ([]*Agent, error) {
 		// Special handling for "active" filter - show all active sessions
 		if status == "active" {
 			query = `
-				SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, session_id, persona_id
+				SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, session_id, persona_id, bookmarked
 				FROM agents WHERE status IN ('active', 'working', 'idle')
-				ORDER BY updated_at DESC
+				ORDER BY bookmarked DESC, substr(session_id, 1, 8)
 			`
 		} else {
 			query = `
-				SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, session_id, persona_id
+				SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, session_id, persona_id, bookmarked
 				FROM agents WHERE status = ?
-				ORDER BY updated_at DESC
+				ORDER BY bookmarked DESC, substr(session_id, 1, 8)
 			`
 			args = append(args, status)
 		}
 	} else {
 		query = `
-			SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, session_id, persona_id
+			SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, session_id, persona_id, bookmarked
 			FROM agents
-			ORDER BY updated_at DESC
+			ORDER BY bookmarked DESC, substr(session_id, 1, 8)
 		`
 	}
 
@@ -418,6 +462,7 @@ func (db *DB) ListAgents(status string) ([]*Agent, error) {
 			&agent.ProjectName,
 			&agent.SessionID,
 			&agent.PersonaID,
+			&agent.Bookmarked,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan agent: %w", err)

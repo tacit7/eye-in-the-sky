@@ -78,7 +78,11 @@ func (m *Model) renderAgentsTab() string {
 
 // renderProjectTab renders the project tab
 func (m *Model) renderProjectTab() string {
-	return tabs.RenderProjectTab()
+	if m.viewports == nil {
+		return m.styles.RenderSubtle("Loading project data...")
+	}
+	viewport := m.viewports.GetProjectViewport()
+	return tabs.RenderProjectTab(viewport, m.styles)
 }
 
 // renderClaudeTab renders the Claude config tab

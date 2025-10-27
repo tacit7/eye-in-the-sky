@@ -106,9 +106,18 @@ func sortAgents(agents []domain.Agent, config SortConfig) []domain.Agent {
 }
 
 // sortByHierarchy sorts agents with parent-child relationships grouped
+// Bookmarked agents are prioritized to appear at the top
 func sortByHierarchy(agents []domain.Agent) {
 	sort.Slice(agents, func(i, j int) bool {
-		// Parents (no ParentSessionID) come first
+		// Bookmarked agents always come first
+		if agents[i].Bookmarked && !agents[j].Bookmarked {
+			return true
+		}
+		if !agents[i].Bookmarked && agents[j].Bookmarked {
+			return false
+		}
+
+		// Within the same bookmark status, parents (no ParentSessionID) come first
 		if agents[i].ParentSessionID == "" && agents[j].ParentSessionID != "" {
 			return true
 		}

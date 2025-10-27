@@ -245,6 +245,34 @@ func (t *Tools) LogSessionCost(args LogSessionCostArgs) (LogSessionCostResult, e
 	return LogSessionCostResult{Success: true, Message: message}, nil
 }
 
+// UpdateFeatureDescription implements the i-update-description MCP tool
+func (t *Tools) UpdateFeatureDescription(args UpdateFeatureDescriptionArgs) (UpdateFeatureDescriptionResult, error) {
+	// Validate agent exists
+	_, err := t.db.GetAgent(args.AgentID)
+	if err != nil {
+		return UpdateFeatureDescriptionResult{Success: false, Message: fmt.Sprintf("Agent not found: %v", err)}, nil
+	}
+
+	// Update feature description
+	if err := t.db.UpdateAgentFeatureDescription(args.AgentID, args.FeatureDescription); err != nil {
+		return UpdateFeatureDescriptionResult{Success: false, Message: fmt.Sprintf("Failed to update feature description: %v", err)}, nil
+	}
+
+	// Log the update as an action
+	action := &database.Action{
+		AgentID:     args.AgentID,
+		ActionType:  database.ActionStatusUpdate,
+		Description: fmt.Sprintf("Feature description updated to: %s", args.FeatureDescription),
+	}
+
+	if err := t.db.CreateAction(action); err != nil {
+		// Don't fail the whole operation if action logging fails
+		fmt.Fprintf(os.Stderr, "Warning: Failed to log description update action: %v\n", err)
+	}
+
+	return UpdateFeatureDescriptionResult{Success: true, Message: "Feature description updated successfully"}, nil
+}
+
 // GetCurrentWindow implements the get_current_window MCP tool
 func (t *Tools) GetCurrentWindow(args GetCurrentWindowArgs) (GetCurrentWindowResult, error) {
 	if runtime.GOOS != "darwin" {

@@ -34,9 +34,9 @@ func newTestModel(t *testing.T) *Model {
 	}
 }
 
-// newTestTabs creates a TabsModel for testing
-func newTestTabs() components.TabsModel {
-	return components.NewTabsModel(
+// newTestTabs creates a NavBar for testing
+func newTestTabs() components.NavBar {
+	return components.NewNavBar(
 		[]string{"[O]verview", "[C]ommits", "[L]ogs", "[N]otes", "[A]ctions", "[T]asks"},
 		"#ff0000",
 		"#ffffff",

@@ -25,4 +25,5 @@ type Agent struct {
 	ParentAgentID       string
 	CompletedAt         *time.Time
 	TaskCount           int    // Number of tasks from TaskWarrior
+	Bookmarked          bool   // Pinned/bookmarked agents appear at top
 }

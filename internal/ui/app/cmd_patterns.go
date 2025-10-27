@@ -7,14 +7,13 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/tacit7/eye-in-the-sky/internal/domain"
+	"github.com/tacit7/eye-in-the-sky/internal/ui/app/messages"
 )
 
 // Message types for Bubble Tea
 
-// AgentsLoadedMsg is sent when agents are loaded
-type AgentsLoadedMsg struct {
-	Agents []domain.Agent
-}
+// AgentsLoadedMsg is an alias to the shared message type
+type AgentsLoadedMsg = messages.AgentsLoadedMsg
 
 // TasksLoadedMsg is sent when tasks are loaded
 type TasksLoadedMsg struct {

@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/google/uuid"
+	"github.com/tacit7/eye-in-the-sky/internal/ui/app/views/overview"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/modal"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/util"
 )
@@ -17,7 +18,7 @@ type ViewHandler func(*Model, tea.KeyMsg) (tea.Model, tea.Cmd)
 
 // viewHandlers maps views to their key handlers
 var viewHandlers = map[ViewType]ViewHandler{
-	ViewList:   (*Model).handleListKeys,
+	ViewList:   (*Model).handleOverviewKeys, // New modular overview view
 	ViewDetail: (*Model).handleDetailKeys,
 }
 
@@ -59,6 +60,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
     m.width = msg.Width
     m.height = msg.Height
     // Old help.Width removed - using new modal-based help system
+
+    // Forward window size to overview view
+    if m.currentView == ViewList {
+        var cmd tea.Cmd
+        m.overviewView, cmd = m.overviewView.Update(msg)
+        if cmd != nil {
+            return m, cmd
+        }
+    }
 
     // Update usage viewport dimensions dynamically
     if m.currentView == ViewList && m.listTabs.ActiveIndex == 3 {
@@ -115,6 +125,20 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
         m.keybindingsViewport.Width = msg.Width - 4
         m.keybindingsViewport.Height = available
+    }
+
+    // Update Project tab viewport dimensions dynamically
+    if m.currentView == ViewList && m.listTabs.ActiveIndex == 1 {
+        const headerHeight = 2  // Header + tabs
+        const footerHeight = 1  // Footer hints
+
+        available := msg.Height - headerHeight - footerHeight - 1  // -1 for breathing room
+        if available < 10 {
+            available = 10
+        }
+
+        m.projectViewport.Width = msg.Width - 4
+        m.projectViewport.Height = available
     }
 		return m, nil
 
@@ -194,10 +218,29 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case AgentsLoadedMsg:
-		// Update agents from command
+		// Update agents from command (old code, will be removed)
 		m.agents = msg.Agents
+
+		// Forward to overview view if in ViewList (new modular architecture)
+		if m.currentView == ViewList {
+			var cmd tea.Cmd
+			m.overviewView, cmd = m.overviewView.Update(msg)
+			// Also load task counts
+			taskCountsCmd := loadTaskCountsCmd(m.data.Tasks, m.agents)
+			return m, tea.Batch(cmd, taskCountsCmd)
+		}
+
 		// Load task counts after agents are loaded
 		return m, loadTaskCountsCmd(m.data.Tasks, m.agents)
+
+	case overview.SelectAgentMsg:
+		// User selected an agent from overview - switch to detail view
+		m.selectedAgent = msg.Agent
+		m.currentView = ViewDetail
+		m.detailOffset = 0
+		m.tabs.Set(1) // Set to Overview tab in detail view (index 1, since 0 is back arrow)
+		// Load agent details
+		return m, loadAgentDetailsCmd(m.data, m.selectedAgent.ID)
 
 	case TaskCountsLoadedMsg:
 		// Update task counts for each agent

@@ -34,6 +34,9 @@ type ViewportProvider interface {
 
 	// GetKeybindingsViewport returns the keybindings YAML viewport
 	GetKeybindingsViewport() ViewportAccess
+
+	// GetProjectViewport returns the project viewport for project tab
+	GetProjectViewport() ViewportAccess
 }
 
 // ViewportAccess provides read access to a Bubble Tea viewport

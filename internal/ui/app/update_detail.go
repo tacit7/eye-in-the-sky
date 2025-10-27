@@ -93,87 +93,77 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			switch action {
 			case "down":
 				// Navigate down in the current tab's list
+				// m.tabs.ActiveIndex includes the Back button at index 0
 				switch m.tabs.ActiveIndex {
-				case 2: // Commits
-					if m.commitsIndex < len(m.commits)-1 {
-						m.commitsIndex++
-						m.rightPaneOffset = 0
-					}
-				case 3: // Logs
-					if m.logsIndex < len(m.logs)-1 {
-						m.logsIndex++
-						m.rightPaneOffset = 0
-					}
-				case 4: // Notes
-					if m.notesIndex < len(m.notes)-1 {
-						m.notesIndex++
-						m.rightPaneOffset = 0
-					}
-				case 5: // Actions
-					if m.actionsIndex < len(m.actions)-1 {
-						m.actionsIndex++
-						m.rightPaneOffset = 0
-					}
-				case 6: // Tasks
+				case 1: // Overview
+					m.detailOffset++
+				case 2: // Tasks
 					if m.tasksIndex < len(m.tasks)-1 {
 						m.tasksIndex++
 						m.rightPaneOffset = 0
 					}
-				case 7: // Projects
-					if m.projectTicketsIndex < len(m.projectTickets)-1 {
-						m.projectTicketsIndex++
+				case 3: // Actions
+					if m.actionsIndex < len(m.actions)-1 {
+						m.actionsIndex++
 						m.rightPaneOffset = 0
 					}
-				default:
-					// Overview tab - use default scrolling
-					m.detailOffset++
+				case 4: // Logs
+					if m.logsIndex < len(m.logs)-1 {
+						m.logsIndex++
+						m.rightPaneOffset = 0
+					}
+				case 5: // Commits
+					if m.commitsIndex < len(m.commits)-1 {
+						m.commitsIndex++
+						m.rightPaneOffset = 0
+					}
+				case 6: // Notes
+					if m.notesIndex < len(m.notes)-1 {
+						m.notesIndex++
+						m.rightPaneOffset = 0
+					}
 				}
 				return m, nil
 
 			case "up":
 				// Navigate up in the current tab's list
+				// m.tabs.ActiveIndex includes the Back button at index 0
 				switch m.tabs.ActiveIndex {
-				case 2: // Commits
-					if m.commitsIndex > 0 {
-						m.commitsIndex--
-						m.rightPaneOffset = 0
+				case 1: // Overview
+					if m.detailOffset > 0 {
+						m.detailOffset--
 					}
-				case 3: // Logs
-					if m.logsIndex > 0 {
-						m.logsIndex--
-						m.rightPaneOffset = 0
-					}
-				case 4: // Notes
-					if m.notesIndex > 0 {
-						m.notesIndex--
-						m.rightPaneOffset = 0
-					}
-				case 5: // Actions
-					if m.actionsIndex > 0 {
-						m.actionsIndex--
-						m.rightPaneOffset = 0
-					}
-				case 6: // Tasks
+				case 2: // Tasks
 					if m.tasksIndex > 0 {
 						m.tasksIndex--
 						m.rightPaneOffset = 0
 					}
-				case 7: // Projects
-					if m.projectTicketsIndex > 0 {
-						m.projectTicketsIndex--
+				case 3: // Actions
+					if m.actionsIndex > 0 {
+						m.actionsIndex--
 						m.rightPaneOffset = 0
 					}
-				default:
-					// Overview tab - use default scrolling
-					if m.detailOffset > 0 {
-						m.detailOffset--
+				case 4: // Logs
+					if m.logsIndex > 0 {
+						m.logsIndex--
+						m.rightPaneOffset = 0
+					}
+				case 5: // Commits
+					if m.commitsIndex > 0 {
+						m.commitsIndex--
+						m.rightPaneOffset = 0
+					}
+				case 6: // Notes
+					if m.notesIndex > 0 {
+						m.notesIndex--
+						m.rightPaneOffset = 0
 					}
 				}
 				return m, nil
 
 			case "page_down":
 				// Page down in right pane (or overview)
-				if m.tabs.ActiveIndex >= 2 && m.tabs.ActiveIndex <= 7 {
+				if m.tabs.ActiveIndex >= 2 && m.tabs.ActiveIndex <= 6 {
 					m.rightPaneOffset += 10
 				} else {
 					m.detailOffset += 10
@@ -182,7 +172,7 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 			case "page_up":
 				// Page up in right pane (or overview)
-				if m.tabs.ActiveIndex >= 2 && m.tabs.ActiveIndex <= 7 {
+				if m.tabs.ActiveIndex >= 2 && m.tabs.ActiveIndex <= 6 {
 					m.rightPaneOffset -= 10
 					if m.rightPaneOffset < 0 {
 						m.rightPaneOffset = 0

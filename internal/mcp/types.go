@@ -318,3 +318,14 @@ type LogSessionCostResult struct {
 	Message string `json:"message"`
 }
 
+// UpdateFeatureDescriptionArgs represents the arguments for i-update-description tool
+type UpdateFeatureDescriptionArgs struct {
+	AgentID            string `json:"agent_id" jsonschema:"description:Agent UUID identifier"`
+	FeatureDescription string `json:"feature_description" jsonschema:"description:New feature description for the session"`
+}
+
+type UpdateFeatureDescriptionResult struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+

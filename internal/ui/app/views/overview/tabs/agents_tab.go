@@ -21,7 +21,7 @@ func RenderAgentsTab(agents []domain.Agent, selectedIndex int, listOffset int, s
 
 	// Configure columns to show
 	renderer.ConfigureColumns(components.ColumnConfig{
-		Icon:    true,
+		Icon:    false,
 		Status:  true,
 		ID:      true,
 		Task:    true,

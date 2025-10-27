@@ -97,10 +97,10 @@ type Model struct {
 	mdRenderer *glamour.TermRenderer
 
 	// Tabs for detail view
-	tabs components.TabsModel
+	tabs components.NavBar
 
 	// Tabs for list view
-	listTabs components.TabsModel
+	listTabs components.NavBar
 
 	// View state
 	currentView ViewType
@@ -232,6 +232,9 @@ type Model struct {
 	keybindingsEditBuf  string // Edit buffer for changes
 	keybindingsViewport viewport.Model
 	keybindingsError    string // Validation error message (empty if valid)
+
+	// Project tab state and viewport
+	projectViewport viewport.Model
 
 	// Overview rendering cache (for pure, fast View() calls)
 	overviewCache  string         // Cached rendered overview tab content
@@ -381,14 +384,14 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 	}
 
 	// Create tabs for agent detail view (← is back arrow, unicode 8678)
-	tabs := components.NewTabsModel(
+	tabs := components.NewNavBar(
 		[]string{"← Back", "[O]verview", "[T]asks", "[A]ctions", "[L]ogs", "[C]ommits", "[N]otes"},
 		theme.Colors.Active,
 		theme.Colors.Text,
 	)
 
 	// Create tabs for overview (agent list)
-	listTabs := components.NewTabsModel(
+	listTabs := components.NewNavBar(
 		[]string{"[O]verview", "[P]roject", "[C]laude", "[T]oken Usage", "[K]eybindings"},
 		theme.Colors.Active,
 		theme.Colors.Text,
@@ -414,6 +417,9 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 
 	// Create viewport for Config tab (will be resized on window size updates)
 	keybindingsViewport := viewport.New(80, 20)
+
+	// Create viewport for Project tab (will be resized on window size updates)
+	projectViewport := viewport.New(80, 20)
 
 	// Create usage service with system clock
 	usageSvc := services.NewUsageService(services.SystemClock{})
@@ -456,6 +462,7 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 		claudeViewport: claudeViewport,
 		claudeFilesViewport: claudeFilesViewport,
 		keybindingsViewport: keybindingsViewport,
+		projectViewport: projectViewport,
 		currentView:    ViewList,
 		showAll:        config.ShowAllAgents,
 		agents:         []Agent{},
@@ -523,6 +530,11 @@ func (m *Model) GetClaudeViewport() shared.ViewportAccess {
 // GetKeybindingsViewport implements shared.ViewportProvider
 func (m *Model) GetKeybindingsViewport() shared.ViewportAccess {
 	return &m.keybindingsViewport
+}
+
+// GetProjectViewport implements shared.ViewportProvider
+func (m *Model) GetProjectViewport() shared.ViewportAccess {
+	return &m.projectViewport
 }
 
 // createStyles creates lipgloss styles from theme
