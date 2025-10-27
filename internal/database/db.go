@@ -23,6 +23,12 @@ func New(dbPath string) (*DB, error) {
 		return nil, fmt.Errorf("failed to create database directory: %w", err)
 	}
 
+	// Check if database file already exists
+	dbExists := false
+	if _, err := os.Stat(dbPath); err == nil {
+		dbExists = true
+	}
+
 	conn, err := sql.Open("sqlite", "file:"+dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
@@ -30,9 +36,12 @@ func New(dbPath string) (*DB, error) {
 
 	db := &DB{conn: conn}
 
-	if err := db.initSchema(); err != nil {
-		conn.Close()
-		return nil, fmt.Errorf("failed to initialize schema: %w", err)
+	// Only initialize schema if database is new
+	if !dbExists {
+		if err := db.initSchema(); err != nil {
+			conn.Close()
+			return nil, fmt.Errorf("failed to initialize schema: %w", err)
+		}
 	}
 
 	return db, nil

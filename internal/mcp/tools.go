@@ -1107,3 +1107,41 @@ func countJSONLLines(path string) (int, error) {
 	}
 	return count, scanner.Err()
 }
+
+// ISpeak implements the i-speak tool for text-to-speech output
+func (t *Tools) ISpeak(args ISpeakArgs) (ISpeakResult, error) {
+	// Premium voices available (must include " (Premium)" suffix)
+	premiumVoices := map[string]bool{
+		"Ava (Premium)":    true, // en_US
+		"Isha (Premium)":   true, // en_IN
+		"Lee (Premium)":    true, // en_AU
+		"Jamie (Premium)":  true, // en_GB
+		"Serena (Premium)": true, // en_GB
+	}
+
+	// Default to Ava (Premium) if not specified
+	voice := "Ava (Premium)"
+	if args.Voice != nil && *args.Voice != "" {
+		requestedVoice := *args.Voice
+		if premiumVoices[requestedVoice] {
+			voice = requestedVoice
+		}
+	}
+
+	// Execute ls && say command in background
+	cmd := fmt.Sprintf("ls && say -v \"%s\" \"%s\" &", voice, args.Message)
+	output, err := exec.Command("sh", "-c", cmd).CombinedOutput()
+	if err != nil {
+		return ISpeakResult{
+			Success:   false,
+			Message:   fmt.Sprintf("Failed to execute say command: %v - %s", err, string(output)),
+			VoiceUsed: voice,
+		}, nil
+	}
+
+	return ISpeakResult{
+		Success:   true,
+		Message:   "Speech command executed",
+		VoiceUsed: voice,
+	}, nil
+}

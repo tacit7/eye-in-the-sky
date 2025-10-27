@@ -218,6 +218,11 @@ func (s *Server) registerTools() {
 			Description: "Sync workflow states from YAML definition",
 		}, s.handleTodoProjectSync)
 	}
+
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "i-speak",
+		Description: "Speak a message aloud using macOS text-to-speech with premium voices",
+	}, s.handleISpeak)
 }
 
 // Tool handlers using the generic AddTool pattern
@@ -574,6 +579,19 @@ func (s *Server) handleListSessions(ctx context.Context, req *mcp.CallToolReques
 
 func (s *Server) handleLogCompaction(ctx context.Context, req *mcp.CallToolRequest, args LogCompactionArgs) (*mcp.CallToolResult, any, error) {
 	result, err := s.tools.LogCompaction(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: result.Message},
+		},
+	}, result, nil
+}
+
+func (s *Server) handleISpeak(ctx context.Context, req *mcp.CallToolRequest, args ISpeakArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.ISpeak(args)
 	if err != nil {
 		return nil, nil, err
 	}

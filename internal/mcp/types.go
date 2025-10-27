@@ -330,3 +330,15 @@ type UpdateFeatureDescriptionResult struct {
 	Message string `json:"message"`
 }
 
+
+// ISpeakArgs represents the arguments for i-speak tool
+type ISpeakArgs struct {
+	Message string  `json:"message" jsonschema:"description:Message to speak aloud"`
+	Voice   *string `json:"voice,omitempty" jsonschema:"description:Premium voice to use (Ava, Isha, Lee, Jamie, Serena). Defaults to Ava"`
+}
+
+type ISpeakResult struct {
+	Success   bool   `json:"success"`
+	Message   string `json:"message"`
+	VoiceUsed string `json:"voice_used"`
+}

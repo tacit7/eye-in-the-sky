@@ -174,7 +174,7 @@ CREATE TABLE IF NOT EXISTS projects (
     git_remote TEXT,
     repo_url TEXT,
     branch TEXT,
-    commit TEXT,
+    commit_hash TEXT,
     subpath TEXT,
     module TEXT,
     salt TEXT,
