@@ -53,18 +53,42 @@ SQLite database: `~/.config/eye-in-the-sky/agents.db` (created at runtime)
 - Metadata tracking: creation time, git worktree path, feature description, current task, session ID
 
 ### Action Logging
-- All major Claude Code activities are logged with timestamps
-- Action types: "task_start", "file_operation", "git_commit", "status_update"
+- Claude Code hooks automatically log all tool execution via PreToolUse/PostToolUse events
+- Hook system manages agent status updates (idle on Stop, completed on SessionEnd)
 - Git commits are tracked separately with hashes and messages
 
 ### MCP Integration
-The system exposes these MCP tools for Claude Code integration:
-- `i-start-session(session_id, description, worktree_path?, parent_agent_id?, parent_session_id?)` - Start new session and receive UUID agent_id
-- `i-update-status(agent_id, status, current_task?)` - Update agent status
-- `i-action(agent_id, action_type, description, details?)` - Log agent activity
-- `i-commits(agent_id, commit_hashes[], commit_messages?)` - Track git commits
-- `i-end(agent_id, summary?, final_status?)` - Complete agent session
-- `i-instructions()` - Get detailed help and usage instructions
+The system exposes 22 MCP tools for Claude Code integration:
+
+**Session Lifecycle (4 tools):**
+- `i-start-session` - Start new session and receive UUID agent_id
+- `i-end-session` - Complete agent session
+- `i-save-context` - Save session state for resumption
+- `i-instructions` - Get detailed help and usage instructions
+
+**Git & Window (2 tools):**
+- `i-commits` - Track git commits
+- `i-window` - Get current active window info (macOS)
+
+**Session Data (2 tools):**
+- `i-note-add` - Add note to session
+- `i-log-compaction` - Log conversation compaction and backup JSONL file
+
+**Persona Management (1 tool):**
+- `i-snapshot-expertise` - Save agent expertise as reusable persona
+
+**Todo/Task Management (12 tools):**
+- `i-todo-create/annotate/start/done/status/tag/list/search/delete/reindex/vacuum/project-sync`
+
+**Utility (1 tool):**
+- `i-speak` - Text-to-speech with premium macOS voices
+
+**Note:** The following tools are handled automatically by hooks and are NOT exposed to Claude:
+- `i-update-status` - Hooks update status on Stop/SessionEnd events
+- `i-log` - Hooks log all tool calls via PreToolUse/PostToolUse
+- `i-action` - Redundant with hook logging
+- `i-log-session-cost` - Hook logging captures token usage
+- `i-update-description` - Hooks handle this automatically
 
 ## Development Commands
 

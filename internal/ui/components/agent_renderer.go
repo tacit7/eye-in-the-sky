@@ -77,19 +77,19 @@ func (r *AgentLineRenderer) RenderHeaders() []string {
 		headers = append(headers, "")
 	}
 	if r.Columns.Status {
-		headers = append(headers, "Status")
+		headers = append(headers, " Status  ")
 	}
 	if r.Columns.Session {
-		headers = append(headers, "Session")
+		headers = append(headers, "Session  ")
 	}
 	if r.Columns.ID {
-		headers = append(headers, "Agent ID")
+		headers = append(headers, "Agent ID  ")
 	}
 	if r.Columns.Task {
-		headers = append(headers, "Description")
+		headers = append(headers, "Description  ")
 	}
 	if r.Columns.Source {
-		headers = append(headers, "Source")
+		headers = append(headers, "Source ")
 	}
 
 	return headers
@@ -107,34 +107,34 @@ func (r *AgentLineRenderer) RenderAgent(agent domain.Agent, selected bool) []str
 		cells = append(cells, icon)
 	}
 
-	// Status column
+	// Status column with padding (first column gets leading space)
 	if r.Columns.Status {
 		status := r.formatStatus(agent.Status, isChild)
-		cells = append(cells, status)
+		cells = append(cells, " "+status+"  ")
 	}
 
-	// Session column (moved after Status)
+	// Session column with padding
 	if r.Columns.Session {
 		session := utils.TruncateID(agent.SessionID, 8)
-		cells = append(cells, session)
+		cells = append(cells, session+"  ")
 	}
 
-	// ID column
+	// ID column with padding
 	if r.Columns.ID {
 		id := utils.TruncateID(string(agent.ID), 8)
-		cells = append(cells, id)
+		cells = append(cells, id+"  ")
 	}
 
-	// Task column
+	// Task column with padding
 	if r.Columns.Task {
 		task := r.formatTask(agent)
-		cells = append(cells, task)
+		cells = append(cells, task+"  ")
 	}
 
-	// Source column
+	// Source column (last column gets trailing space)
 	if r.Columns.Source {
 		source := string(agent.Source)
-		cells = append(cells, source)
+		cells = append(cells, source+" ")
 	}
 
 	// LastActivity column
@@ -195,7 +195,7 @@ func (r *AgentLineRenderer) getStatusIcon(status string) string {
 	return orangeStyle.Render(icon)
 }
 
-// formatTask formats the task/feature description
+// formatTask formats the task/feature description with truncation
 func (r *AgentLineRenderer) formatTask(agent domain.Agent) string {
 	// Prioritize feature description (session description)
 	desc := agent.FeatureDesc
@@ -204,6 +204,12 @@ func (r *AgentLineRenderer) formatTask(agent domain.Agent) string {
 	}
 	if desc == "" {
 		return r.Styles.GetSubtle().Render("(no description)")
+	}
+
+	// Truncate description to max 50 characters
+	maxWidth := 50
+	if len(desc) > maxWidth {
+		return desc[:maxWidth-3] + "..."
 	}
 	return desc
 }
@@ -304,21 +310,21 @@ func (r *AgentLineRenderer) RenderAgentTable(agents []domain.Agent, selectedInde
 	}
 
 	// Choose border based on font mode
-	border := lipgloss.NormalBorder()
+	border := lipgloss.RoundedBorder()
 	if !config.UseNerdFonts {
 		border = lipgloss.ASCIIBorder()
 	}
 
-	// Create lipgloss table with full borders
+	// Create lipgloss table with outside border (no top - connects to tabs)
 	t := table.New().
 		Border(border).
-		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
-		BorderTop(true).
+		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("#4A5057"))).
+		BorderTop(false).
 		BorderBottom(true).
 		BorderLeft(true).
 		BorderRight(true).
-		BorderHeader(true).
-		BorderColumn(true).
+		BorderHeader(false).
+		BorderColumn(false).
 		BorderRow(false).
 		Headers(headers...).
 		Rows(rows...)
@@ -332,6 +338,7 @@ func (r *AgentLineRenderer) RenderAgentTable(agents []domain.Agent, selectedInde
 		if row == selectedIndex {
 			return r.Styles.GetSelected()
 		}
+		// No background - use terminal default
 		return lipgloss.NewStyle()
 	})
 

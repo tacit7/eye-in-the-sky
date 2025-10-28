@@ -520,3 +520,215 @@ When in doubt, check if you can reuse or extend an existing style before creatin
 - [ ] Built from existing styles using `.Copy()` when possible
 - [ ] Tested in actual TUI rendering
 - [ ] Documented in this guide if it's a new pattern
+
+---
+
+## Lipgloss Table Styling
+
+### Agent List Table Implementation
+
+The agent list uses `github.com/charmbracelet/lipgloss/table` for native table rendering with full border support and custom styling.
+
+**Location**: `internal/ui/components/agent_renderer.go` → `RenderAgentTable()`
+
+### Table Configuration
+
+```go
+import "github.com/charmbracelet/lipgloss/table"
+
+// Choose border style based on Nerd Font mode
+border := lipgloss.RoundedBorder()  // ╭╮╰╯ rounded corners
+if !config.UseNerdFonts {
+    border = lipgloss.ASCIIBorder()  // +|-  ASCII fallback
+}
+
+// Create table with borders
+t := table.New().
+    Border(border).
+    BorderStyle(lipgloss.NewStyle().
+        Foreground(lipgloss.Color("#4A5057")).      // Border color
+        Background(lipgloss.Color("#282A2C"))).     // Border background
+    BorderTop(false).       // No top border
+    BorderBottom(true).     // Bottom border
+    BorderLeft(true).       // Left border
+    BorderRight(true).      // Right border
+    BorderHeader(false).    // No header separator
+    BorderColumn(true).     // Column separators
+    BorderRow(false).       // No row separators
+    Headers(headers...).
+    Rows(rows...)
+```
+
+### Color Scheme
+
+**Background Colors**:
+- App background: `#363638` (defined in `internal/ui/config/theme_config.go`)
+- Table cells: `#282A2C` (darker than app background for subtle inset effect)
+- Border color: `#4A5057` (lighter gray for visibility)
+
+**Customization via Environment Variable**:
+```bash
+# Override app background color
+export EITS_BG_COLOR="#292C33"
+```
+
+### Cell Styling with StyleFunc
+
+```go
+t.StyleFunc(func(row, col int) lipgloss.Style {
+    // Header row styling
+    if row == table.HeaderRow {
+        return r.Styles.GetPrimary().Bold(true).
+            Background(lipgloss.Color("#282A2C"))
+    }
+
+    // Selected row highlighting
+    if row == selectedIndex {
+        return r.Styles.GetSelected()
+    }
+
+    // Default cell background
+    return lipgloss.NewStyle().
+        Background(lipgloss.Color("#282A2C"))
+})
+```
+
+### Icon Integration
+
+Status icons use Nerd Font glyphs with orange color:
+
+```go
+// Status icon with orange color
+func (r *AgentLineRenderer) getStatusIcon(status string) string {
+    icon := getIcon(status)  // Returns "\uf069" (nf-fa-asterisk)
+    orangeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FF8C00"))
+    return orangeStyle.Render(icon)
+}
+```
+
+**Icon Mappings**:
+- Nerd Font mode: `\uf069` (orange asterisk) for active/working/idle
+- Plain mode: `*/@/o` ASCII characters
+
+### Border Variants
+
+**Rounded (Nerd Font mode)**:
+```
+╭──────┬─────────┬──────────╮
+│ Col1 │ Col2    │ Col3     │
+├──────┼─────────┼──────────┤
+│ data │ data    │ data     │
+╰──────┴─────────┴──────────╯
+```
+
+**ASCII (Plain mode)**:
+```
++------+---------+----------+
+| Col1 | Col2    | Col3     |
++------+---------+----------+
+| data | data    | data     |
++------+---------+----------+
+```
+
+### Usage in Tabs
+
+**In `agents_tab.go`**:
+
+```go
+func RenderAgentsTab(agents []domain.Agent, selectedIndex int,
+                     listOffset int, styles components.Styles,
+                     layout LayoutInfo) string {
+
+    renderer := components.NewAgentLineRenderer(styles)
+
+    // Configure visible columns
+    renderer.ConfigureColumns(components.ColumnConfig{
+        Status:  true,
+        Session: true,
+        ID:      true,
+        Task:    true,
+        Source:  true,
+    })
+
+    // Calculate viewport slice
+    visibleAgents := agents[listOffset:end]
+    adjustedSelectedIndex := selectedIndex - listOffset
+
+    // Render with lipgloss table
+    return renderer.RenderAgentTable(visibleAgents, adjustedSelectedIndex)
+}
+```
+
+### Description Truncation
+
+Long descriptions are automatically truncated to 50 characters:
+
+```go
+func (r *AgentLineRenderer) formatTask(agent domain.Agent) string {
+    desc := agent.FeatureDesc
+    if desc == "" {
+        desc = agent.CurrentTask
+    }
+
+    // Truncate to max 50 characters
+    maxWidth := 50
+    if len(desc) > maxWidth {
+        return desc[:maxWidth-3] + "..."
+    }
+    return desc
+}
+```
+
+### Best Practices for Tables
+
+1. **Use RoundedBorder() for modern look** - softer appearance than sharp corners
+2. **Disable BorderHeader if no separator needed** - cleaner header integration
+3. **Always set BorderColumn(true)** - helps distinguish columns
+4. **Match border background to cell background** - creates cohesive appearance
+5. **Use StyleFunc for row-based styling** - selection, alternating colors, etc.
+6. **Truncate long text fields** - prevents table layout breaking
+7. **Support both Nerd Font and ASCII modes** - maximum compatibility
+
+### Common Pitfalls
+
+❌ **DON'T**: Set border background without matching cell background
+```go
+// Border stands out awkwardly
+BorderStyle(lipgloss.NewStyle().Background(lipgloss.Color("#FF0000")))
+```
+
+✅ **DO**: Match border and cell backgrounds
+```go
+borderBg := "#282A2C"
+BorderStyle(lipgloss.NewStyle().Background(lipgloss.Color(borderBg)))
+// ... and in StyleFunc:
+return lipgloss.NewStyle().Background(lipgloss.Color(borderBg))
+```
+
+❌ **DON'T**: Forget to handle viewport slicing
+```go
+// Will render entire agent list
+return renderer.RenderAgentTable(agents, selectedIndex)
+```
+
+✅ **DO**: Slice for viewport and adjust selection index
+```go
+visibleAgents := agents[listOffset:end]
+adjustedSelectedIndex := selectedIndex - listOffset
+return renderer.RenderAgentTable(visibleAgents, adjustedSelectedIndex)
+```
+
+### Testing Table Styles
+
+```bash
+# Test with Nerd Fonts
+go build -o bin/eye-ui ./cmd/eye-ui && ./bin/eye-ui
+
+# Test with ASCII mode
+NERD_FONTS=0 ./bin/eye-ui
+
+# Test with custom background
+EITS_BG_COLOR="#1E1E1E" ./bin/eye-ui
+```
+
+---

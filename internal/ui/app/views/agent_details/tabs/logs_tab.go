@@ -3,6 +3,8 @@ package tabs
 import (
 	"fmt"
 	"strings"
+
+	"github.com/charmbracelet/lipgloss"
 )
 
 // RenderLogs renders the logs tab with scrollable viewport
@@ -14,8 +16,14 @@ func RenderLogs(ctx *DataContext, overviewStyles OverviewStyles) string {
 
 	var sb strings.Builder
 
-	// Header with column labels
-	sb.WriteString(overviewStyles.Primary.Render("Time        Type        Message"))
+	// Background style for table rows
+	rowBg := lipgloss.NewStyle().
+		Background(lipgloss.Color("#FF0000")).
+		Padding(0, 2)
+
+	// Header with column labels (with padding)
+	headerText := fmt.Sprintf("  %-12s  %-12s  %s", "Time", "Type", "Message")
+	sb.WriteString(overviewStyles.Primary.Render(headerText))
 	sb.WriteString("\n")
 	sb.WriteString(overviewStyles.Subtle.Render(strings.Repeat("─", ctx.Width-4)))
 	sb.WriteString("\n\n")
@@ -30,24 +38,27 @@ func RenderLogs(ctx *DataContext, overviewStyles OverviewStyles) string {
 		var typeStyled string
 		switch strings.ToLower(log.Type) {
 		case "error":
-			typeStyled = overviewStyles.Error.Render(padRight(logType, 11))
+			typeStyled = overviewStyles.Error.Render(padRight(logType, 12))
 		case "warning", "warn":
-			typeStyled = overviewStyles.Warning.Render(padRight(logType, 11))
+			typeStyled = overviewStyles.Warning.Render(padRight(logType, 12))
 		case "info":
-			typeStyled = overviewStyles.Primary.Render(padRight(logType, 11))
+			typeStyled = overviewStyles.Primary.Render(padRight(logType, 12))
 		case "commit":
-			typeStyled = overviewStyles.Git.Render(padRight(logType, 11))
+			typeStyled = overviewStyles.Git.Render(padRight(logType, 12))
 		default:
-			typeStyled = padRight(logType, 11)
+			typeStyled = padRight(logType, 12)
 		}
 
-		// Format line with timestamp, type, and message
-		line := fmt.Sprintf("%s %s %s\n",
-			overviewStyles.Subtle.Render(padRight(timestamp, 11)),
+		// Format line with increased padding
+		line := fmt.Sprintf("%-12s  %s  %s",
+			overviewStyles.Subtle.Render(padRight(timestamp, 12)),
 			typeStyled,
 			message,
 		)
-		sb.WriteString(line)
+
+		// Apply background and render
+		sb.WriteString(rowBg.Render(line))
+		sb.WriteString("\n")
 	}
 
 	return sb.String()

@@ -1,10 +1,9 @@
 package components
 
 import (
-	"strings"
-
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/tacit7/eye-in-the-sky/internal/ui/config"
 )
 
 // NavBarZone defines the clickable region for a nav bar item
@@ -23,46 +22,89 @@ type NavBar struct {
 	StyleNormal lipgloss.Style
 }
 
+// tabBorderWithBottom creates custom tab borders that connect to content
+func tabBorderWithBottom(left, middle, right string) lipgloss.Border {
+	border := lipgloss.RoundedBorder()
+	if !config.UseNerdFonts {
+		border = lipgloss.Border{
+			Top:          "-",
+			Bottom:       middle,
+			Left:         "|",
+			Right:        "|",
+			TopLeft:      "+",
+			TopRight:     "+",
+			BottomLeft:   left,
+			BottomRight:  right,
+		}
+	} else {
+		border.BottomLeft = left
+		border.Bottom = middle
+		border.BottomRight = right
+	}
+	return border
+}
+
 // NewNavBar creates a new navigation bar
 func NewNavBar(titles []string, activeColor, normalColor string) NavBar {
+	highlightColor := lipgloss.Color("#00ADD8")
+	inactiveTabBorder := tabBorderWithBottom("┴", "─", "┴")
+	activeTabBorder := tabBorderWithBottom("┘", " ", "└")
+
 	return NavBar{
 		Titles:      titles,
 		ActiveIndex: 0,
 		StyleActive: lipgloss.NewStyle().
-			Foreground(lipgloss.Color(activeColor)).
-			Bold(true).
-			Underline(true).
-			Padding(0, 2),
+			Border(activeTabBorder, true).
+			BorderForeground(highlightColor).
+			Padding(0, 1),
 		StyleNormal: lipgloss.NewStyle().
-			Foreground(lipgloss.Color(normalColor)).
-			Padding(0, 2),
+			Border(inactiveTabBorder, true).
+			BorderForeground(highlightColor).
+			Padding(0, 1),
 	}
 }
 
 // View renders the nav bar and calculates click zones
 func (m *NavBar) View() string {
-	var out []string
+	var renderedTabs []string
 	m.Zones = make([]NavBarZone, 0)
 	cursor := 0
 
 	for i, t := range m.Titles {
-		var rendered string
-		if i == m.ActiveIndex {
-			rendered = m.StyleActive.Render(t)
+		var style lipgloss.Style
+		isFirst, isLast, isActive := i == 0, i == len(m.Titles)-1, i == m.ActiveIndex
+
+		if isActive {
+			style = m.StyleActive
 		} else {
-			rendered = m.StyleNormal.Render(t)
+			style = m.StyleNormal
 		}
+
+		// Get border and adjust corners for seamless connection
+		border, _, _, _, _ := style.GetBorder()
+		if isFirst && isActive {
+			border.BottomLeft = "│"
+		} else if isFirst && !isActive {
+			border.BottomLeft = "├"
+		} else if isLast && isActive {
+			border.BottomRight = "│"
+		} else if isLast && !isActive {
+			border.BottomRight = "┤"
+		}
+		style = style.Border(border)
+
+		rendered := style.Render(t)
 		width := lipgloss.Width(rendered)
 		m.Zones = append(m.Zones, NavBarZone{
 			StartX: cursor,
 			EndX:   cursor + width,
 			Title:  t,
 		})
-		cursor += width + 1 // +1 for space between items
-		out = append(out, rendered)
+		cursor += width
+		renderedTabs = append(renderedTabs, rendered)
 	}
 
-	return strings.Join(out, " ")
+	return lipgloss.JoinHorizontal(lipgloss.Top, renderedTabs...)
 }
 
 // Next moves to the next item

@@ -17,9 +17,9 @@ func (m Model) View() string {
 
 	// Tabs
 	b.WriteString(m.tabs.Render())
-	b.WriteString("\n\n")
+	b.WriteString("\n")
 
-	// Content based on active tab
+	// Content based on active tab (connects to tabs)
 	b.WriteString(m.renderTabContent())
 	b.WriteString("\n")
 

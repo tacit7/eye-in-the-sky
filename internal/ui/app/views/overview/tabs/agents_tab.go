@@ -1,7 +1,6 @@
 package tabs
 
 import (
-	"github.com/charmbracelet/lipgloss"
 	"github.com/tacit7/eye-in-the-sky/internal/domain"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/components"
 )
@@ -13,8 +12,7 @@ type LayoutInfo struct {
 	ContentH int
 }
 
-// RenderAgentsTab renders the agents list tab using the proper AgentLineRenderer + TableBuilder system
-// This ensures consistent lipgloss styling with the old code
+// RenderAgentsTab renders the agents list tab using lipgloss table with borders
 func RenderAgentsTab(agents []domain.Agent, selectedIndex int, listOffset int, styles components.Styles, layout LayoutInfo) string {
 	// Create agent renderer with proper styles
 	renderer := components.NewAgentLineRenderer(styles)
@@ -27,12 +25,9 @@ func RenderAgentsTab(agents []domain.Agent, selectedIndex int, listOffset int, s
 		Task:         true,
 		Source:       true,
 		Session:      true,
-		LastActivity: true,
-		ProjectName:  true,
+		LastActivity: false,
+		ProjectName:  false,
 	})
-
-	// Create table builder
-	tb := renderer.CreateTableBuilder(styles)
 
 	// Calculate viewport
 	start := listOffset
@@ -44,27 +39,12 @@ func RenderAgentsTab(agents []domain.Agent, selectedIndex int, listOffset int, s
 		start = 0
 	}
 
-	// Set row styling for selection and alternating rows
-	tb.SetRowStyleFunc(func(rowIndex int) lipgloss.Style {
-		actualIndex := listOffset + rowIndex
-		if actualIndex == selectedIndex {
-			return styles.GetSelected()
-		}
-		// Alternating row colors for better readability
-		if rowIndex%2 == 1 {
-			return lipgloss.NewStyle().Background(lipgloss.Color("233"))
-		}
-		return lipgloss.NewStyle()
-	})
+	// Get visible agents slice
+	visibleAgents := agents[start:end]
 
-	// Convert agents to table rows using renderer
-	var rows [][]string
-	for i := start; i < end && i < len(agents); i++ {
-		row := renderer.RenderAgent(agents[i], false)
-		rows = append(rows, row)
-	}
+	// Adjust selected index to be relative to visible slice
+	adjustedSelectedIndex := selectedIndex - listOffset
 
-	// Render the table
-	result, _ := tb.RenderTable(rows)
-	return result
+	// Render the table using lipgloss table with borders
+	return renderer.RenderAgentTable(visibleAgents, adjustedSelectedIndex)
 }

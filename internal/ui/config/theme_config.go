@@ -13,6 +13,9 @@ const (
 // UseNerdFonts is the global font mode setting
 var UseNerdFonts = DetectNerdFonts()
 
+// DefaultBackgroundColor is the app's default background color
+const DefaultBackgroundColor = "#363638"
+
 // DetectNerdFonts checks if Nerd Fonts should be enabled
 // Option 1: Env var toggle (preferred)
 // Returns true (Nerd Fonts) by default unless NERD_FONTS=0
@@ -30,4 +33,12 @@ func GetFontMode() FontMode {
 		return FontModeNerd
 	}
 	return FontModePlain
+}
+
+// GetBackgroundColor returns the background color from env or default
+func GetBackgroundColor() string {
+	if bg := os.Getenv("EITS_BG_COLOR"); bg != "" {
+		return bg
+	}
+	return DefaultBackgroundColor
 }
