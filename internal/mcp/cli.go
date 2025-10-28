@@ -32,6 +32,14 @@ func HandleCLI(args []string, db *database.DB) int {
 		return handleCommitsCLI(args[2:], tools)
 	case "i-end", "i-end-session":
 		return handleEndSessionCLI(args[2:], tools)
+	case "i-update-status", "i-status":
+		return handleUpdateStatusCLI(args[2:], tools)
+	case "i-action":
+		return handleActionCLI(args[2:], tools)
+	case "i-context-set":
+		return handleContextSetCLI(args[2:], tools)
+	case "i-update-description":
+		return handleUpdateDescriptionCLI(args[2:], tools)
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", command)
 		printCLIUsage()
@@ -45,9 +53,13 @@ func printCLIUsage() {
 	fmt.Println("\nCommands:")
 	fmt.Println("  i-speak              Speak a message aloud")
 	fmt.Println("  i-start-session      Start a new agent session")
+	fmt.Println("  i-update-status      Update agent status")
+	fmt.Println("  i-action             Log an agent action")
 	fmt.Println("  i-note               Add a note")
 	fmt.Println("  i-log                Add a log entry")
 	fmt.Println("  i-commits            Log git commits")
+	fmt.Println("  i-context-set        Set session context")
+	fmt.Println("  i-update-description Update agent description")
 	fmt.Println("  i-end                End an agent session")
 	fmt.Println("\nRun without arguments to start MCP stdio server")
 }
@@ -209,6 +221,110 @@ func handleEndSessionCLI(args []string, tools *Tools) int {
 		AgentID:     *agentID,
 		Summary:     summary,
 		FinalStatus: finalStatus,
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return 1
+	}
+
+	fmt.Printf("✓ %s\n", result.Message)
+	return 0
+}
+
+func handleUpdateStatusCLI(args []string, tools *Tools) int {
+	fs := flag.NewFlagSet("i-update-status", flag.ExitOnError)
+	agentID := fs.String("agent-id", "", "Agent ID")
+	status := fs.String("status", "", "Status (active/working/idle/completed/failed)")
+	currentTask := fs.String("current-task", "", "Current task description (optional)")
+	fs.Parse(args)
+
+	if *agentID == "" || *status == "" {
+		fmt.Fprintln(os.Stderr, "Error: --agent-id and --status are required")
+		return 1
+	}
+
+	result, err := tools.UpdateStatus(UpdateStatusArgs{
+		AgentID:     *agentID,
+		Status:      *status,
+		CurrentTask: currentTask,
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return 1
+	}
+
+	fmt.Printf("✓ %s\n", result.Message)
+	return 0
+}
+
+func handleActionCLI(args []string, tools *Tools) int {
+	fs := flag.NewFlagSet("i-action", flag.ExitOnError)
+	agentID := fs.String("agent-id", "", "Agent ID")
+	actionType := fs.String("action-type", "", "Action type")
+	description := fs.String("description", "", "Action description")
+	details := fs.String("details", "", "Additional details (optional)")
+	fs.Parse(args)
+
+	if *agentID == "" || *actionType == "" || *description == "" {
+		fmt.Fprintln(os.Stderr, "Error: --agent-id, --action-type, and --description are required")
+		return 1
+	}
+
+	result, err := tools.LogAction(LogActionArgs{
+		AgentID:     *agentID,
+		ActionType:  *actionType,
+		Description: *description,
+		Details:     details,
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return 1
+	}
+
+	fmt.Printf("✓ %s\n", result.Message)
+	return 0
+}
+
+func handleContextSetCLI(args []string, tools *Tools) int {
+	fs := flag.NewFlagSet("i-context-set", flag.ExitOnError)
+	sessionID := fs.String("session-id", "", "Session ID")
+	key := fs.String("key", "", "Context key")
+	value := fs.String("value", "", "Context value")
+	fs.Parse(args)
+
+	if *sessionID == "" || *key == "" || *value == "" {
+		fmt.Fprintln(os.Stderr, "Error: --session-id, --key, and --value are required")
+		return 1
+	}
+
+	result, err := tools.SetContext(SetContextArgs{
+		SessionID: *sessionID,
+		Key:       *key,
+		Value:     *value,
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return 1
+	}
+
+	fmt.Printf("✓ %s\n", result.Message)
+	return 0
+}
+
+func handleUpdateDescriptionCLI(args []string, tools *Tools) int {
+	fs := flag.NewFlagSet("i-update-description", flag.ExitOnError)
+	agentID := fs.String("agent-id", "", "Agent ID")
+	description := fs.String("description", "", "New description")
+	fs.Parse(args)
+
+	if *agentID == "" || *description == "" {
+		fmt.Fprintln(os.Stderr, "Error: --agent-id and --description are required")
+		return 1
+	}
+
+	result, err := tools.UpdateFeatureDescription(UpdateFeatureDescriptionArgs{
+		AgentID:            *agentID,
+		FeatureDescription: *description,
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
