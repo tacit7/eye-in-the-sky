@@ -352,3 +352,15 @@ FOR EACH ROW
 BEGIN
     UPDATE workflow_states SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
 END;
+CREATE TABLE IF NOT EXISTS action_plans (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    agent_id TEXT NOT NULL,
+    content TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (session_id) REFERENCES sessions(id),
+    FOREIGN KEY (agent_id) REFERENCES agents(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_action_plans_session ON action_plans(session_id);
+CREATE INDEX IF NOT EXISTS idx_action_plans_agent ON action_plans(agent_id);
