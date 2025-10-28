@@ -20,6 +20,7 @@ func (m *Model) renderDetail() string {
 		Tasks:             m.tasks,
 		TaskNotes:         []domain.TaskNote{}, // TODO: Load based on selected task
 		Actions:           m.actions,
+		Logs:              m.logs,
 		SelectedTaskIndex: m.tasksIndex,
 		Width:             m.width,
 	}

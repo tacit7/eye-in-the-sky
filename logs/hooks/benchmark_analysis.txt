@@ -1,0 +1,58 @@
+SQLite vs JSON Lookup Performance Analysis
+==========================================
+
+Raw Data (8 samples):
+1. SQLite: 13.754ms | JSON: 13.940ms | Diff: -0.186ms (SQLite faster)
+2. SQLite: 15.126ms | JSON: 14.237ms | Diff: +0.889ms (JSON faster)
+3. SQLite: 15.866ms | JSON: 14.201ms | Diff: +1.665ms (JSON faster)
+4. SQLite: 16.364ms | JSON: 15.319ms | Diff: +1.045ms (JSON faster)
+5. SQLite: 19.840ms | JSON: 18.476ms | Diff: +1.364ms (JSON faster)
+6. SQLite: 17.642ms | JSON: 14.691ms | Diff: +2.951ms (JSON faster)
+7. SQLite: 19.212ms | JSON: 17.671ms | Diff: +1.541ms (JSON faster)
+8. SQLite: 12.032ms | JSON: 12.370ms | Diff: -0.338ms (SQLite faster)
+
+Statistics:
+-----------
+SQLite Average:  16.230ms
+JSON Average:    15.113ms
+
+SQLite Min:      12.032ms
+SQLite Max:      19.840ms
+SQLite Range:    7.808ms
+
+JSON Min:        12.370ms
+JSON Max:        18.476ms
+JSON Range:      6.106ms
+
+Findings:
+---------
+1. JSON is faster on average by 1.117ms (6.9% improvement)
+2. JSON is more consistent (smaller range: 6.1ms vs 7.8ms)
+3. Both methods are in the 12-20ms range per lookup
+4. Performance difference is minimal (< 2ms in most cases)
+
+Conclusion:
+-----------
+✓ JSON file lookup is slightly faster and more consistent
+✓ Performance difference is negligible for hook execution (~1ms)
+✓ Both add approximately 15ms overhead per hook call
+✓ Current JSON approach is validated - no need to switch to SQLite
+
+Hook Impact:
+-----------
+- Each tool call triggers 2 hooks (Pre + Post)
+- Total overhead per tool: ~30ms (15ms × 2)
+- This is acceptable for hook execution
+- User will not notice this latency
+
+Recommendation:
+--------------
+Keep the JSON mapping file approach. Benefits:
+1. Slightly faster (1ms advantage)
+2. More predictable performance
+3. Simpler to update (just edit JSON file)
+4. No database locking concerns
+5. Works even if Eye-in-the-Sky database is busy
+
+Alternative considered:
+SQLite query would work but offers no performance benefit and adds complexity.

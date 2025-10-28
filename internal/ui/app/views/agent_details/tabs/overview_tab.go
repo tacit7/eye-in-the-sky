@@ -23,6 +23,7 @@ type DataContext struct {
 	Tasks              []domain.Task
 	TaskNotes          []domain.TaskNote // Annotations for selected task
 	Actions            []domain.Action
+	Logs               []domain.Log
 	SelectedTaskIndex  int    // Index of selected task in tasks list
 	Width              int    // Terminal width for responsive layout
 }

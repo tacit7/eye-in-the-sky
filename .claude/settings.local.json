@@ -1,19 +1,36 @@
 {
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "permissions": {
     "allow": [
-      "mcp__eye-in-the-sky__i-speak"
+      "mcp__eye-in-the-sky__i-speak",
+      "mcp__eye-in-the-sky__i-action",
+      "mcp__eye-in-the-sky__i-update-status"
     ],
     "deny": [],
-    "ask": [],
-    "mcp": {
-      "servers": {
-        "eye-in-the-sky": {
-          "command": "./bin/eye-in-the-sky",
-          "args": [],
-          "env": {}
-        }
-      }
-    }
+    "ask": []
   },
-  "outputStyle": "default"
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/urielmaldonado/projects/eye-in-the-sky/.claude/hooks/log-tool.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/urielmaldonado/projects/eye-in-the-sky/.claude/hooks/log-tool.sh"
+          }
+        ]
+      }
+    ]
+  }
 }
