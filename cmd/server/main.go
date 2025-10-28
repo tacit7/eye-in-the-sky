@@ -65,6 +65,14 @@ func main() {
 
 	fmt.Fprintln(os.Stderr, "✅ Database initialized successfully")
 
+	// Check if running in CLI mode (has command-line arguments)
+	if len(os.Args) > 1 && os.Args[1] != "--help" && os.Args[1] != "--db" {
+		// CLI mode - handle command and exit
+		exitCode := mcp.HandleCLI(os.Args, db)
+		os.Exit(exitCode)
+	}
+
+	// MCP stdio mode - start server
 	// Initialize MCP server
 	mcpServer := mcp.NewServer(db)
 
