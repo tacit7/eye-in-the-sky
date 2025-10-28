@@ -79,22 +79,27 @@ func (s *Server) registerTools() {
 	// - i-load-context (internal context loading)
 	// - i-context-set (removed, use i-save-context instead)
 	// - i-note (deprecated stub, use i-note-add)
+	// - i-update-status (redundant with hook logging)
+	// - i-action (redundant with hook logging)
+	// - i-log (redundant with hook logging)
+	// - i-log-session-cost (redundant with hook logging)
+	// - i-update-description (redundant, hooks handle this)
 	// All are still available via HandleTool() for backward compatibility
 
-	mcp.AddTool(s.mcp, &mcp.Tool{
-		Name:        "i-update-status",
-		Description: "Update agent status and current task",
-	}, s.handleUpdateStatus)
+	// mcp.AddTool(s.mcp, &mcp.Tool{
+	// 	Name:        "i-update-status",
+	// 	Description: "Update agent status and current task",
+	// }, s.handleUpdateStatus)
 
-	mcp.AddTool(s.mcp, &mcp.Tool{
-		Name:        "i-action",
-		Description: "Log agent actions (task_start, file_operation, git_commit, status_update)",
-	}, s.handleLogAction)
+	// mcp.AddTool(s.mcp, &mcp.Tool{
+	// 	Name:        "i-action",
+	// 	Description: "Log agent actions (task_start, file_operation, git_commit, status_update)",
+	// }, s.handleLogAction)
 
-	mcp.AddTool(s.mcp, &mcp.Tool{
-		Name:        "i-log",
-		Description: "Add log entry to session",
-	}, s.handleAddLog)
+	// mcp.AddTool(s.mcp, &mcp.Tool{
+	// 	Name:        "i-log",
+	// 	Description: "Add log entry to session",
+	// }, s.handleAddLog)
 
 	mcp.AddTool(s.mcp, &mcp.Tool{
 		Name:        "i-commits",
@@ -137,15 +142,15 @@ func (s *Server) registerTools() {
 		Description: "Add note to session",
 	}, s.handleAddNote)
 
-	mcp.AddTool(s.mcp, &mcp.Tool{
-		Name:        "i-log-session-cost",
-		Description: "Log session token usage and cost metrics",
-	}, s.handleLogSessionCost)
+	// mcp.AddTool(s.mcp, &mcp.Tool{
+	// 	Name:        "i-log-session-cost",
+	// 	Description: "Log session token usage and cost metrics",
+	// }, s.handleLogSessionCost)
 
-	mcp.AddTool(s.mcp, &mcp.Tool{
-		Name:        "i-update-description",
-		Description: "Update session feature description",
-	}, s.handleUpdateFeatureDescription)
+	// mcp.AddTool(s.mcp, &mcp.Tool{
+	// 	Name:        "i-update-description",
+	// 	Description: "Update session feature description",
+	// }, s.handleUpdateFeatureDescription)
 
 	// Persona Management Tools
 	mcp.AddTool(s.mcp, &mcp.Tool{

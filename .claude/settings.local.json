@@ -4,12 +4,46 @@
     "allow": [
       "mcp__eye-in-the-sky__i-speak",
       "mcp__eye-in-the-sky__i-action",
-      "mcp__eye-in-the-sky__i-update-status"
+      "mcp__eye-in-the-sky__i-update-status",
+      "Bash(mkdir:*)",
+      "Bash(sqlite3:*)",
+      "mcp__eye-in-the-sky__i-end-session"
     ],
     "deny": [],
     "ask": []
   },
   "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/urielmaldonado/projects/eye-in-the-sky/.claude/hooks/session-stop.sh"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/urielmaldonado/projects/eye-in-the-sky/.claude/hooks/session-end.sh"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/urielmaldonado/projects/eye-in-the-sky/.claude/hooks/session-clear.sh"
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "*",

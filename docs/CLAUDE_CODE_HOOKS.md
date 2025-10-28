@@ -553,6 +553,43 @@ if [ -x "$CLAUDE_PROJECT_DIR/bin/eye-in-the-sky" ]; then
 fi
 ```
 
+### Where Logs Are Written
+
+Hook execution writes logs to two destinations:
+
+**1. Filesystem logs** (`$CLAUDE_PROJECT_DIR/logs/hooks/`):
+- `env_*.log` - Environment variables snapshot (created on every hook execution)
+- `benchmark.log` - Performance benchmarks (if enabled)
+- These are debug logs for troubleshooting hook issues
+
+**2. Eye-in-the-Sky database** (`~/.config/eye-in-the-sky/agents.db`):
+- Table: `logs`
+- Schema:
+  ```sql
+  CREATE TABLE logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id TEXT NOT NULL,
+      type TEXT NOT NULL,           -- "action", "info", "debug"
+      message TEXT NOT NULL,         -- Tool event details
+      timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (session_id) REFERENCES sessions(id)
+  );
+  ```
+
+**Query logs from database:**
+```bash
+sqlite3 ~/.config/eye-in-the-sky/agents.db \
+  "SELECT type, message, timestamp FROM logs \
+   WHERE session_id = 'your-session-id' \
+   ORDER BY timestamp DESC LIMIT 20"
+```
+
+**Note:** The filesystem `env_*.log` files are created on EVERY hook execution (PreToolUse + PostToolUse). Consider disabling this line in production to reduce disk I/O:
+```bash
+# Comment out this line in .claude/hooks/log-tool.sh
+# env | sort >"$CLAUDE_PROJECT_DIR/logs/hooks/env_$(date +%Y%m%d_%H%M%S).log"
+```
+
 ### Session-Agent Mapping
 
 Create `.claude/hooks/session_agent_map.json`:

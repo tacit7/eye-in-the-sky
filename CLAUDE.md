@@ -169,6 +169,14 @@ When finishing work:
 - Tracks git commit hashes and messages
 - Associates commits with agent sessions
 
+### Logs Table
+- Links to sessions via `session_id`
+- Simple log storage for hook execution and MCP calls
+- Fields: `id`, `session_id`, `type`, `message`, `timestamp`
+- Type values: "action" (PreToolUse), "info" (PostToolUse), "debug", "error"
+- Used by `i-log` CLI command and Claude Code hooks
+- Separate from structured `session_logs` table (which has more fields)
+
 ## TUI Dashboard Features
 
 ### Agent List View (Overview Page)

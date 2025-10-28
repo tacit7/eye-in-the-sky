@@ -173,6 +173,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		// Refresh logs if on logs tab (incremental tail -f style)
+		if m.currentView == ViewDetail && m.tabs.ActiveIndex == 4 { // tabLogs = 4
+			if err := m.loadLogsIncremental(); err != nil {
+				log.Printf("Warning: Failed to reload logs: %v\n", err)
+			}
+		}
+
 		return m, tea.Batch(cmds...)
 
 	case initCCUsageMsg:

@@ -145,6 +145,9 @@ type Model struct {
 	// Right pane scroll state
 	rightPaneOffset int
 
+	// Logs tab state for auto-refresh
+	lastFetchedAt time.Time // Last timestamp for incremental log fetching
+
 	// Task loading state
 	taskState TaskStateType
 	taskError error
@@ -710,10 +713,48 @@ func (m *Model) loadLogs() error {
 
 	m.logs = logs
 
+	// Set initial lastFetchedAt to most recent log timestamp
+	if len(m.logs) > 0 {
+		m.lastFetchedAt = m.logs[len(m.logs)-1].Timestamp
+	}
+
 	// Reset scroll position if needed
 	if len(m.logs) > 0 && m.logsIndex >= len(m.logs) {
 		m.logsIndex = len(m.logs) - 1
 	}
+
+	return nil
+}
+
+// loadLogsIncremental appends new logs since last fetch (for auto-refresh)
+func (m *Model) loadLogsIncremental() error {
+	if m.selectedAgent == nil || m.selectedAgent.SessionID == "" {
+		return nil
+	}
+
+	// Use the last fetched timestamp for incremental pull
+	newLogs, err := m.data.DB.GetLogsAfter(m.selectedAgent.SessionID, m.lastFetchedAt)
+	if err != nil {
+		return err
+	}
+
+	if len(newLogs) == 0 {
+		return nil
+	}
+
+	// Append new logs
+	for _, dbLog := range newLogs {
+		m.logs = append(m.logs, Log{
+			ID:        domain.LogID(dbLog.ID),
+			SessionID: dbLog.SessionID,
+			Type:      dbLog.Type,
+			Message:   dbLog.Message,
+			Timestamp: dbLog.Timestamp,
+		})
+	}
+
+	// Update lastFetchedAt to most recent log
+	m.lastFetchedAt = newLogs[len(newLogs)-1].Timestamp
 
 	return nil
 }

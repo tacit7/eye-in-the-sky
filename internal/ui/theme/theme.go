@@ -100,6 +100,38 @@ var (
 		Bold(true)
 )
 
+// OverviewStyles provides backward compatibility with existing tab code
+// This struct matches the style interface used in agent_details tabs
+type OverviewStyles struct {
+	SectionTitle lipgloss.Style
+	Label        lipgloss.Style
+	Value        lipgloss.Style
+	Subtle       lipgloss.Style
+	Success      lipgloss.Style
+	Warning      lipgloss.Style
+	Primary      lipgloss.Style
+	Secondary    lipgloss.Style
+	Git          lipgloss.Style
+	Error        lipgloss.Style
+}
+
+// GetOverviewStyles returns styles compatible with the OverviewStyles struct
+// This bridges the gap during migration from old style system to centralized theme
+func GetOverviewStyles() OverviewStyles {
+	return OverviewStyles{
+		SectionTitle: Header,
+		Label:        TextLabel,
+		Value:        TextValue,
+		Subtle:       TextDimmed,
+		Success:      TextSuccess,
+		Warning:      TextWarning, // From textures.go
+		Primary:      lipgloss.NewStyle().Foreground(PrimaryColor),
+		Secondary:    lipgloss.NewStyle().Foreground(SecondaryColor),
+		Git:          lipgloss.NewStyle().Foreground(lipgloss.Color("#BD93F9")), // Purple for git
+		Error:        TextError,
+	}
+}
+
 // Helper Functions
 
 // MaxWidth creates a style with maximum width constraint

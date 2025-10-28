@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // repeatPlaceholders creates a comma-separated string of ? placeholders
@@ -581,6 +582,31 @@ func (db *DB) GetLogs(sessionID string) ([]*Log, error) {
 	rows, err := db.conn.Query(query, sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get logs: %w", err)
+	}
+	defer rows.Close()
+
+	var logs []*Log
+	for rows.Next() {
+		var log Log
+		err := rows.Scan(&log.ID, &log.SessionID, &log.Type, &log.Message, &log.Timestamp)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan log: %w", err)
+		}
+		logs = append(logs, &log)
+	}
+	return logs, nil
+}
+
+// GetLogsAfter retrieves logs created after a specific timestamp
+// Used for incremental fetching in the logs viewer (tail -f style)
+func (db *DB) GetLogsAfter(sessionID string, after time.Time) ([]*Log, error) {
+	query := `SELECT id, session_id, type, message, timestamp
+	          FROM logs
+	          WHERE session_id = ? AND timestamp > ?
+	          ORDER BY timestamp ASC`
+	rows, err := db.conn.Query(query, sessionID, after)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get logs after timestamp: %w", err)
 	}
 	defer rows.Close()
 

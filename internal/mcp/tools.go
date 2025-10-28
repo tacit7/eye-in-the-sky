@@ -409,6 +409,45 @@ You MUST extract and use this returned agent_id for all subsequent MCP calls.
 The agent_id is auto-generated as a UUID and uniquely identifies your agent instance.
 
 ═══════════════════════════════════════════════════════════════
+CLAUDE CODE HOOKS - Manual Mapping File Update Required
+═══════════════════════════════════════════════════════════════
+
+CRITICAL: If you're using Claude Code hooks for logging tool execution:
+
+After calling i-start-session and receiving your agent_id, you MUST manually update
+the session-to-agent mapping file so hooks can look up your agent ID.
+
+STEP 1: Read the current mapping file:
+  Read: .claude/hooks/session_agent_map.json
+
+STEP 2: Add your session→agent mapping:
+  Edit the file to add a new entry:
+  {
+    "existing-session-1": "existing-agent-1",
+    "YOUR_SESSION_ID": "YOUR_AGENT_ID_FROM_START_SESSION"
+  }
+
+STEP 3: Save the file
+
+Why this is needed:
+- Claude Code provides session_id to hooks via JSON stdin
+- Eye-in-the-Sky uses agent_id (UUID) to track agents
+- Hooks need to translate session_id → agent_id
+- The mapping file bridges these two systems
+- JSON file lookup is 6.9% faster than SQLite query
+
+Example mapping file:
+  {
+    "97c212de-24e0-4c8d-b16a-876e406b7c14": "2743c649-18ab-422d-bdbe-bb3b59d2c431",
+    "1a398965-1f97-4329-802d-0bbe0d923564": "354ab567-5a8b-4259-8f25-9ed68d96e7d8"
+  }
+
+Without this mapping:
+- Hooks will fire but agent_id will be "unknown"
+- Logs will be written but not linked to your agent
+- TUI won't show hook activity for your session
+
+═══════════════════════════════════════════════════════════════
 SUBAGENTS - Creating and Managing Child Agents
 ═══════════════════════════════════════════════════════════════
 
