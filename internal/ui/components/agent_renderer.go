@@ -6,7 +6,9 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/lipgloss/table"
 	"github.com/tacit7/eye-in-the-sky/internal/domain"
+	"github.com/tacit7/eye-in-the-sky/internal/ui/config"
 	"github.com/tacit7/eye-in-the-sky/internal/utils"
 )
 
@@ -157,11 +159,13 @@ func (r *AgentLineRenderer) RenderAgent(agent domain.Agent, selected bool) []str
 func (r *AgentLineRenderer) getAgentIcon(agent domain.Agent) string {
 	if agent.Bookmarked {
 		// Bookmarked agents show a checkmark
-		return r.Styles.GetSuccess().Render("✓")
+		icon := getIcon("bookmark")
+		return r.Styles.GetSuccess().Render(icon)
 	}
 	if agent.ParentAgentID != "" {
-		// This is a subagent - use green pipe (UTF-8 vertical line)
-		return r.Styles.GetSuccess().Render("│")
+		// This is a subagent - use vertical line
+		icon := getIcon("pipe")
+		return r.Styles.GetSuccess().Render(icon)
 	}
 	return " "
 }
@@ -171,7 +175,8 @@ func (r *AgentLineRenderer) formatStatus(status string, isChild bool) string {
 	var icon string
 	if isChild {
 		// Child agents show cyan vertical line
-		icon = lipgloss.NewStyle().Foreground(lipgloss.Color("cyan")).Render("│")
+		pipeIcon := getIcon("pipe")
+		icon = lipgloss.NewStyle().Foreground(lipgloss.Color("cyan")).Render(pipeIcon)
 	} else {
 		icon = r.getStatusIcon(status)
 	}
@@ -182,19 +187,12 @@ func (r *AgentLineRenderer) formatStatus(status string, isChild bool) string {
 	return icon + " " + style.Render(status)
 }
 
-// getStatusIcon returns the icon for a given status
+// getStatusIcon returns the icon for a given status with orange color
 func (r *AgentLineRenderer) getStatusIcon(status string) string {
-	icons := map[string]string{
-		"active":    "●",
-		"working":   "◉",
-		"idle":      "○",
-		"completed": "✓",
-		"failed":    "✗",
-	}
-	if icon, exists := icons[status]; exists {
-		return icon
-	}
-	return "·"
+	icon := getIcon(status)
+	// Render icon in orange
+	orangeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FF8C00"))
+	return orangeStyle.Render(icon)
 }
 
 // formatTask formats the task/feature description
@@ -277,7 +275,7 @@ func truncateField(value string, maxWidth int) string {
 func (r *AgentLineRenderer) CreateTableBuilder(styles Styles) *TableBuilder {
 	tb := NewTableBuilder()
 	tb.SetHeaderStyle(styles.GetPrimary())
-	tb.SetBorderStyle(BorderSimple)
+	tb.SetBorderStyle(BorderSimple) // Simple border with separator line only
 
 	headers := r.RenderHeaders()
 	widths := r.getColumnWidths()
@@ -293,27 +291,51 @@ func (r *AgentLineRenderer) CreateTableBuilder(styles Styles) *TableBuilder {
 	return tb
 }
 
-// RenderAgentTable renders a complete table of agents
+// RenderAgentTable renders a complete table of agents using lipgloss table
 func (r *AgentLineRenderer) RenderAgentTable(agents []domain.Agent, selectedIndex int) string {
-	tb := r.CreateTableBuilder(r.Styles)
+	// Build headers
+	headers := r.RenderHeaders()
 
-	// Set row styling function for selection
-	tb.SetRowStyleFunc(func(rowIndex int) lipgloss.Style {
-		if rowIndex == selectedIndex {
+	// Build rows
+	var rows [][]string
+	for _, agent := range agents {
+		row := r.RenderAgent(agent, false)
+		rows = append(rows, row)
+	}
+
+	// Choose border based on font mode
+	border := lipgloss.NormalBorder()
+	if !config.UseNerdFonts {
+		border = lipgloss.ASCIIBorder()
+	}
+
+	// Create lipgloss table with full borders
+	t := table.New().
+		Border(border).
+		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
+		BorderTop(true).
+		BorderBottom(true).
+		BorderLeft(true).
+		BorderRight(true).
+		BorderHeader(true).
+		BorderColumn(true).
+		BorderRow(false).
+		Headers(headers...).
+		Rows(rows...)
+
+	// Style header and selection
+	t.StyleFunc(func(row, col int) lipgloss.Style {
+		if row == table.HeaderRow {
+			return r.Styles.GetPrimary().Bold(true)
+		}
+		// Apply selection style to entire row
+		if row == selectedIndex {
 			return r.Styles.GetSelected()
 		}
 		return lipgloss.NewStyle()
 	})
 
-	// Convert agents to rows
-	var rows [][]string
-	for _, agent := range agents {
-		row := r.RenderAgent(agent, false) // selection handled by style func
-		rows = append(rows, row)
-	}
-
-	result, _ := tb.RenderTable(rows)
-	return result
+	return t.Render()
 }
 
 // ConfigureColumns sets which columns are visible
@@ -321,19 +343,48 @@ func (r *AgentLineRenderer) ConfigureColumns(config ColumnConfig) {
 	r.Columns = config
 }
 
-// StatusIcon returns an icon for the given status
-func StatusIcon(status string) string {
-	icons := map[string]string{
-		"active":    "●",
-		"working":   "◉",
-		"idle":      "○",
-		"completed": "✓",
-		"failed":    "✗",
+// getIcon returns the appropriate icon based on font mode
+func getIcon(iconType string) string {
+	var icons map[string]string
+	if config.UseNerdFonts {
+		icons = nerdIcons
+	} else {
+		icons = plainIcons
 	}
-	if icon, exists := icons[status]; exists {
+
+	if icon, exists := icons[iconType]; exists {
 		return icon
 	}
-	return "·"
+	return icons["default"]
+}
+
+// nerdIcons contains Nerd Font glyphs
+var nerdIcons = map[string]string{
+	"active":    "\uf069", // Nerd Font asterisk (nf-fa-asterisk)
+	"working":   "\uf069", // Nerd Font asterisk (nf-fa-asterisk)
+	"idle":      "\uf069", // Nerd Font asterisk (nf-fa-asterisk)
+	"completed": "✓",      // Checkmark for completed
+	"failed":    "✗",      // X for failed
+	"bookmark":  "★",      // Star for bookmarks
+	"pipe":      "│",      // Vertical line for hierarchy
+	"default":   "·",      // Middle dot default
+}
+
+// plainIcons contains ASCII fallback characters
+var plainIcons = map[string]string{
+	"active":    "*",
+	"working":   "@",
+	"idle":      "o",
+	"completed": "+",
+	"failed":    "x",
+	"bookmark":  "*",
+	"pipe":      "|",
+	"default":   ".",
+}
+
+// StatusIcon returns an icon for the given status
+func StatusIcon(status string) string {
+	return getIcon(status)
 }
 
 // StatusColor returns a color name for the given status

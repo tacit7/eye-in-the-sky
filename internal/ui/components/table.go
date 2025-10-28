@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/tacit7/eye-in-the-sky/internal/ui/config"
 )
 
 // Alignment represents text alignment within a table cell
@@ -116,13 +117,7 @@ func (tb *TableBuilder) RenderBorder() string {
 		totalWidth += (len(tb.Columns) - 1) * 2 // "  " between columns
 	}
 
-	char := "─"
-	switch tb.BorderStyle {
-	case BorderDouble:
-		char = "═"
-	case BorderHeavy:
-		char = "━"
-	}
+	char := getBorderChar(tb.BorderStyle, "horizontal")
 
 	return lipgloss.NewStyle().Foreground(tb.BorderColor).Render(strings.Repeat(char, totalWidth))
 }
@@ -141,7 +136,8 @@ func (tb *TableBuilder) renderHeader() string {
 
 	var header string
 	if tb.BorderStyle == BorderBoxed {
-		header = "│ " + strings.Join(cells, " │ ") + " │"
+		pipe := getBorderChar(tb.BorderStyle, "vertical")
+		header = pipe + " " + strings.Join(cells, " "+pipe+" ") + " " + pipe
 	} else {
 		header = strings.Join(cells, "  ")
 	}
@@ -156,13 +152,7 @@ func (tb *TableBuilder) renderSeparator() string {
 	}
 	totalWidth += (len(tb.Columns) - 1) * 2 // Account for spacing between columns
 
-	char := "─"
-	switch tb.BorderStyle {
-	case BorderDouble:
-		char = "═"
-	case BorderHeavy:
-		char = "━"
-	}
+	char := getBorderChar(tb.BorderStyle, "horizontal")
 
 	separator := strings.Repeat(char, totalWidth)
 	return lipgloss.NewStyle().Foreground(tb.BorderColor).Render(separator)
@@ -183,7 +173,8 @@ func (tb *TableBuilder) renderRow(row []string, rowIndex int) string {
 
 	var rowStr string
 	if tb.BorderStyle == BorderBoxed {
-		rowStr = "│ " + strings.Join(cells, " │ ") + " │"
+		pipe := getBorderChar(tb.BorderStyle, "vertical")
+		rowStr = pipe + " " + strings.Join(cells, " "+pipe+" ") + " " + pipe
 	} else {
 		rowStr = strings.Join(cells, "  ")
 	}
@@ -306,4 +297,37 @@ func RenderSimpleTable(headers []string, rows [][]string, widths []int) string {
 
 	result, _ := tb.RenderTable(rows)
 	return result
+}
+
+// getBorderChar returns the appropriate border character based on font mode
+func getBorderChar(borderStyle BorderStyle, direction string) string {
+	if config.UseNerdFonts {
+		return getNerdBorderChar(borderStyle, direction)
+	}
+	return getPlainBorderChar(direction)
+}
+
+// getNerdBorderChar returns Nerd Font box-drawing characters
+func getNerdBorderChar(borderStyle BorderStyle, direction string) string {
+	if direction == "vertical" {
+		return "│"
+	}
+	// horizontal
+	switch borderStyle {
+	case BorderDouble:
+		return "═"
+	case BorderHeavy:
+		return "━"
+	default:
+		return "─"
+	}
+}
+
+// getPlainBorderChar returns ASCII fallback characters
+func getPlainBorderChar(direction string) string {
+	if direction == "vertical" {
+		return "|"
+	}
+	// horizontal
+	return "-"
 }
