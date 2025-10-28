@@ -24,6 +24,8 @@ func HandleCLI(args []string, db *database.DB) int {
 		return handleSpeakCLI(args[2:], tools)
 	case "i-start-session":
 		return handleStartSessionCLI(args[2:], tools)
+	case "i-get-ids":
+		return handleGetIDsCLI(args[2:], tools)
 	case "i-note", "i-note-add":
 		return handleNoteCLI(args[2:], tools)
 	case "i-log":
@@ -53,6 +55,7 @@ func printCLIUsage() {
 	fmt.Println("\nCommands:")
 	fmt.Println("  i-speak              Speak a message aloud")
 	fmt.Println("  i-start-session      Start a new agent session")
+	fmt.Println("  i-get-ids            Get session_id and agent_id from SESSION env var")
 	fmt.Println("  i-update-status      Update agent status")
 	fmt.Println("  i-action             Log an agent action")
 	fmt.Println("  i-note               Add a note")
@@ -332,5 +335,28 @@ func handleUpdateDescriptionCLI(args []string, tools *Tools) int {
 	}
 
 	fmt.Printf("✓ %s\n", result.Message)
+	return 0
+}
+
+func handleGetIDsCLI(args []string, tools *Tools) int {
+	// Read SESSION env var
+	sessionID := os.Getenv("SESSION")
+	if sessionID == "" {
+		fmt.Fprintln(os.Stderr, "Error: SESSION environment variable not set")
+		return 1
+	}
+
+	// Query database for agent with this session_id
+	query := `SELECT id FROM agents WHERE session_id = ? LIMIT 1`
+	var agentID string
+	err := tools.db.QueryRow(query, sessionID).Scan(&agentID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: No agent found for session %s: %v\n", sessionID, err)
+		return 1
+	}
+
+	// Output in lowercase
+	fmt.Printf("session_id=%s\n", strings.ToLower(sessionID))
+	fmt.Printf("agent_id=%s\n", strings.ToLower(agentID))
 	return 0
 }
