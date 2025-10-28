@@ -19,8 +19,14 @@ func RenderLogs(ctx *DataContext, overviewStyles OverviewStyles) string {
 	sb.WriteString(overviewStyles.Subtle.Render(strings.Repeat("─", 80)))
 	sb.WriteString("\n")
 
-	// Render logs
-	for _, log := range ctx.Logs {
+	// Render logs (limit to first 100)
+	displayCount := len(ctx.Logs)
+	if displayCount > 100 {
+		displayCount = 100
+	}
+
+	for i := 0; i < displayCount; i++ {
+		log := ctx.Logs[i]
 		timestamp := log.Timestamp.Format("15:04:05")
 		logType := log.Type
 		if len(logType) > 12 {
@@ -33,6 +39,11 @@ func RenderLogs(ctx *DataContext, overviewStyles OverviewStyles) string {
 
 		line := fmt.Sprintf("%-11s %-11s %s\n", timestamp, logType, message)
 		sb.WriteString(line)
+	}
+
+	if len(ctx.Logs) > 100 {
+		sb.WriteString("\n")
+		sb.WriteString(overviewStyles.Subtle.Render(fmt.Sprintf("... %d more logs (showing first 100)", len(ctx.Logs)-100)))
 	}
 
 	return sb.String()
