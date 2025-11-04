@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
+	"time"
 
 	"github.com/tacit7/eye-in-the-sky/internal/domain"
 )
@@ -18,41 +20,49 @@ func NewAgentStore(db *sql.DB) *agentStore {
 	return &agentStore{db: db}
 }
 
-// LoadAgents loads all active agents from the database
-func (s *agentStore) LoadAgents(ctx context.Context) ([]domain.Agent, error) {
+// LoadAgents loads agents from the database with optional filtering
+func (s *agentStore) LoadAgents(ctx context.Context, showAll bool) ([]domain.Agent, error) {
 	query := `
 		SELECT id, status, source, created_at, updated_at,
 		       git_worktree_path, feature_description, current_task,
 		       last_activity_at, window_id, terminal_application,
-		       description, project_name, session_id, parent_session_id, parent_agent_id, bookmarked
-		FROM agents
-		WHERE status IN ('active', 'working', 'idle', 'stale', 'unknown')
+		       description, project_name, session_id, parent_session_id, parent_agent_id
+		FROM agents`
+
+	if !showAll {
+		query += `
+		WHERE status IN ('active', 'working', 'idle', 'stale', 'unknown')`
+	}
+
+	query += `
 		ORDER BY
-			bookmarked DESC,
 			substr(session_id, 1, 8),
 			CASE WHEN parent_agent_id IS NULL THEN id ELSE parent_agent_id END,
 			CASE WHEN parent_agent_id IS NULL THEN 0 ELSE 1 END
 	`
 
+	log.Printf("[AGENTS] Executing LoadAgents query (showAll=%v)", showAll)
 	rows, err := s.db.QueryContext(ctx, query)
 	if err != nil {
+		log.Printf("[AGENTS] Query error: %v", err)
 		return nil, fmt.Errorf("query agents: %w", err)
 	}
 	defer rows.Close()
+	log.Printf("[AGENTS] Query executed successfully")
 
 	var agents []domain.Agent
 	for rows.Next() {
 		var a domain.Agent
 		var gitPath, featureDesc, currentTask, windowID, terminalApp, desc, projectName, sessionID, parentSessionID, parentAgentID sql.NullString
 		var lastActivity sql.NullTime
-		var bookmarked bool
 
 		err := rows.Scan(
 			&a.ID, &a.Status, &a.Source, &a.CreatedAt, &a.UpdatedAt,
 			&gitPath, &featureDesc, &currentTask, &lastActivity,
-			&windowID, &terminalApp, &desc, &projectName, &sessionID, &parentSessionID, &parentAgentID, &bookmarked,
+			&windowID, &terminalApp, &desc, &projectName, &sessionID, &parentSessionID, &parentAgentID,
 		)
 		if err != nil {
+			log.Printf("[AGENTS] Scan error: %v", err)
 			return nil, fmt.Errorf("scan agent: %w", err)
 		}
 
@@ -90,14 +100,33 @@ func (s *agentStore) LoadAgents(ctx context.Context) ([]domain.Agent, error) {
 		if parentAgentID.Valid {
 			a.ParentAgentID = parentAgentID.String
 		}
-		a.Bookmarked = bookmarked
+		// Bookmarked and LastLog not loaded in base query
+		a.Bookmarked = false
+		a.LastLog = ""
 
 		agents = append(agents, a)
 	}
 
 	if err := rows.Err(); err != nil {
+		log.Printf("[AGENTS] Rows error: %v", err)
 		return nil, fmt.Errorf("rows error: %w", err)
 	}
+
+	log.Printf("[AGENTS] Successfully loaded %d agents", len(agents))
+
+	// Load last log timestamp for each agent (separate query)
+	logQuery := `SELECT timestamp FROM logs WHERE session_id = ? ORDER BY timestamp DESC LIMIT 1`
+	for i := range agents {
+		if agents[i].SessionID != "" {
+			var lastLogTime sql.NullTime
+			err := s.db.QueryRowContext(ctx, logQuery, agents[i].SessionID).Scan(&lastLogTime)
+			if err == nil && lastLogTime.Valid {
+				// Format timestamp as relative time (e.g., "2m ago", "5h ago")
+				agents[i].LastLog = formatRelativeTime(lastLogTime.Time)
+			}
+		}
+	}
+	log.Printf("[AGENTS] Loaded last log timestamps for agents")
 
 	return agents, nil
 }
@@ -108,7 +137,7 @@ func (s *agentStore) LoadAgent(ctx context.Context, agentID domain.AgentID) (*do
 		SELECT id, status, source, created_at, updated_at,
 		       git_worktree_path, feature_description, current_task,
 		       last_activity_at, window_id, terminal_application,
-		       description, project_name, session_id, parent_session_id, parent_agent_id, bookmarked
+		       description, project_name, session_id, parent_session_id, parent_agent_id
 		FROM agents
 		WHERE id = ?
 	`
@@ -116,12 +145,11 @@ func (s *agentStore) LoadAgent(ctx context.Context, agentID domain.AgentID) (*do
 	var a domain.Agent
 	var gitPath, featureDesc, currentTask, windowID, terminalApp, desc, projectName, sessionID, parentSessionID, parentAgentID sql.NullString
 	var lastActivity sql.NullTime
-	var bookmarked bool
 
 	err := s.db.QueryRowContext(ctx, query, string(agentID)).Scan(
 		&a.ID, &a.Status, &a.Source, &a.CreatedAt, &a.UpdatedAt,
 		&gitPath, &featureDesc, &currentTask, &lastActivity,
-		&windowID, &terminalApp, &desc, &projectName, &sessionID, &parentSessionID, &parentAgentID, &bookmarked,
+		&windowID, &terminalApp, &desc, &projectName, &sessionID, &parentSessionID, &parentAgentID,
 	)
 
 	if err == sql.ErrNoRows {
@@ -165,7 +193,9 @@ func (s *agentStore) LoadAgent(ctx context.Context, agentID domain.AgentID) (*do
 	if parentAgentID.Valid {
 		a.ParentAgentID = parentAgentID.String
 	}
-	a.Bookmarked = bookmarked
+	// Bookmarked and LastLog not loaded in base query
+	a.Bookmarked = false
+	a.LastLog = ""
 
 	return &a, nil
 }
@@ -189,4 +219,19 @@ func (s *agentStore) UpdateStatus(ctx context.Context, agentID domain.AgentID, s
 	}
 
 	return nil
+}
+
+// formatRelativeTime formats a timestamp as relative time (e.g., "2m ago", "5h ago")
+func formatRelativeTime(t time.Time) string {
+	elapsed := time.Since(t)
+
+	if elapsed < time.Minute {
+		return "just now"
+	} else if elapsed < time.Hour {
+		return fmt.Sprintf("%dm ago", int(elapsed.Minutes()))
+	} else if elapsed < 24*time.Hour {
+		return fmt.Sprintf("%dh ago", int(elapsed.Hours()))
+	} else {
+		return fmt.Sprintf("%dd ago", int(elapsed.Hours()/24))
+	}
 }

@@ -8,14 +8,14 @@ import (
 
 // Tab index constants - keep explicit and frozen
 const (
-	tabBack     = 0 // iota // 0 ← back
-	tabOverview = 1 // 1
-	tabTasks    = 2 // 2
-	tabActions  = 3 // 3
-	tabLogs     = 4 // 4
-	tabCommits  = 5 // 5
-	tabNotes    = 6 // 6
-	tabProjects = 7 // 7
+	tabBack           = 0 // iota // 0 ← back
+	tabOverview       = 1 // 1
+	tabTasks          = 2 // 2
+	tabActions        = 3 // 3
+	tabLogs           = 4 // 4
+	tabCommits        = 5 // 5
+	tabNotes          = 6 // 6
+	tabSessionContext = 7 // 7
 )
 
 type Styles struct {

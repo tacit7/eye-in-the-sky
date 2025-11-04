@@ -115,13 +115,14 @@ type Model struct {
 	// Agent detail state
 	selectedAgent  *domain.Agent
 	detailOffset   int
-	actions        []domain.Action
-	commits        []domain.Commit
-	notes          []domain.Note
-	tasks          []domain.Task
-	logs           []Log // Keep Log as local type for now
-	sessionMetrics []domain.SessionMetric
-	projectTickets []domain.Task // Tickets for current agent's project
+	actions         []domain.Action
+	commits         []domain.Commit
+	notes           []domain.Note
+	tasks           []domain.Task
+	logs            []Log // Keep Log as local type for now
+	sessionMetrics  []domain.SessionMetric
+	sessionContexts []domain.SessionContext
+	projectTickets  []domain.Task // Tickets for current agent's project
 
 	// Overview state
 	allSessionMetrics  []domain.SessionMetric // All metrics from all agents
@@ -390,7 +391,7 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 
 	// Create tabs for agent detail view (← is back arrow, unicode 8678)
 	tabs := components.NewNavBar(
-		[]string{"← Back", "[O]verview", "[T]asks", "[A]ctions", "[L]ogs", "[C]ommits", "[N]otes"},
+		[]string{"← Back", "[O]verview", "[T]asks", "[A]ctions", "[L]ogs", "[C]ommits", "[N]otes", "[S]ession Context"},
 		theme.Colors.Active,
 		theme.Colors.Text,
 	)
@@ -589,7 +590,7 @@ func (m *Model) Init() tea.Cmd {
 
 	return tea.Batch(
 		overviewCmd,                   // Initialize overview view
-		loadAgentsCmd(m.data.Agents),  // Load initial agents (for old code, can be removed later)
+		loadAgentsCmd(m.data.Agents, m.showAll),  // Load initial agents (for old code, can be removed later)
 		m.loadClaudeFilesCmd(),        // Load Claude config files
 		m.tickCmd(),                   // Start ticker
 	)
@@ -617,7 +618,7 @@ func (m *Model) loadAgents() error {
 	defer cancel()
 
 	// Use the data store to load agents
-	agents, err := m.data.Agents.LoadAgents(ctx)
+	agents, err := m.data.Agents.LoadAgents(ctx, m.showAll)
 	if err != nil {
 		return err
 	}
@@ -757,6 +758,64 @@ func (m *Model) loadLogsIncremental() error {
 	m.lastFetchedAt = newLogs[len(newLogs)-1].Timestamp
 
 	return nil
+}
+
+// loadSessionContexts loads session contexts for the selected agent
+func (m *Model) loadSessionContexts() error {
+	if m.selectedAgent == nil {
+		m.sessionContexts = []domain.SessionContext{}
+		return nil
+	}
+
+	// Load session contexts from database
+	dbContexts, err := m.data.DB.GetSessionContextsForAgent(string(m.selectedAgent.ID))
+	if err != nil {
+		return err
+	}
+
+	// Convert database models to domain models
+	m.sessionContexts = make([]domain.SessionContext, len(dbContexts))
+	for i, dbCtx := range dbContexts {
+		m.sessionContexts[i] = domain.SessionContext{
+			ID:              dbCtx.ID,
+			AgentID:         domain.AgentID(dbCtx.AgentID),
+			SessionID:       dbCtx.SessionID,
+			CreatedAt:       dbCtx.CreatedAt,
+			UpdatedAt:       dbCtx.UpdatedAt,
+			CurrentPhase:    stringPtrToString(dbCtx.CurrentPhase),
+			OverallProgress: float32PtrToFloat32(dbCtx.OverallProgress),
+			PendingTasks:    stringPtrToString(dbCtx.PendingTasks),
+			CompletedTasks:  stringPtrToString(dbCtx.CompletedTasks),
+			NextActions:     stringPtrToString(dbCtx.NextActions),
+			Dependencies:    stringPtrToString(dbCtx.Dependencies),
+			ImportantFiles:  stringPtrToString(dbCtx.ImportantFiles),
+			Milestones:      stringPtrToString(dbCtx.Milestones),
+			CurrentGoals:    stringPtrToString(dbCtx.CurrentGoals),
+			Blockers:        stringPtrToString(dbCtx.Blockers),
+			KeyDecisions:    stringPtrToString(dbCtx.KeyDecisions),
+			Environment:     stringPtrToString(dbCtx.Environment),
+			Metrics:         stringPtrToString(dbCtx.Metrics),
+			AutoSave:        dbCtx.AutoSave,
+			LearnedContext:  stringPtrToString(dbCtx.LearnedContext),
+		}
+	}
+
+	return nil
+}
+
+// Helper functions for pointer conversions
+func stringPtrToString(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+func float32PtrToFloat32(f *float32) float32 {
+	if f == nil {
+		return 0.0
+	}
+	return *f
 }
 
 // loadMonthlyCosts loads all session metrics from the current month with timestamps
@@ -970,6 +1029,8 @@ func (m *Model) loadTabData() error {
 		return m.loadTasks()
 	case 4: // Logs tab
 		return m.loadLogs()
+	case 7: // Session Context tab
+		return m.loadSessionContexts()
 	default:
 		// Other tabs (Overview, Actions, Commits, Notes) already loaded by loadAgentDetails
 		return nil

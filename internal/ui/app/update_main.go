@@ -86,7 +86,7 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 			case "toggle_filter":
 				m.showAll = !m.showAll
-				return m, loadAgentsCmd(m.data.Agents)
+				return m, loadAgentsCmd(m.data.Agents, m.showAll)
 
 			case "continue_session":
 				agent := m.SelectedAgent()

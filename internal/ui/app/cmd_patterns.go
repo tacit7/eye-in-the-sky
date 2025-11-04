@@ -73,12 +73,12 @@ func withTimeout() (context.Context, context.CancelFunc) {
 }
 
 // loadAgentsCmd loads all agents
-func loadAgentsCmd(store AgentStore) tea.Cmd {
+func loadAgentsCmd(store AgentStore, showAll bool) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := withTimeout()
 		defer cancel()
 
-		agents, err := store.LoadAgents(ctx)
+		agents, err := store.LoadAgents(ctx, showAll)
 		if err != nil {
 			return ErrMsg{Error: err}
 		}
@@ -308,5 +308,21 @@ func createActionCmd(store ActionsStore, action domain.Action) tea.Cmd {
 		}
 		// After creating, reload actions
 		return loadActionsCmd(store, action.AgentID)()
+	}
+}
+
+// markSessionCompletedCmd marks an agent's session as completed
+func markSessionCompletedCmd(store AgentStore, agentID domain.AgentID) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := withTimeout()
+		defer cancel()
+
+		// Update agent status to "completed"
+		err := store.UpdateStatus(ctx, agentID, "completed")
+		if err != nil {
+			return ErrMsg{Error: err}
+		}
+		// After updating status, reload agents
+		return loadAgentsCmd(store, false)()
 	}
 }

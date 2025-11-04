@@ -24,10 +24,11 @@ type DataContext struct {
 	TaskNotes          []domain.TaskNote // Annotations for selected task
 	Actions            []domain.Action
 	Logs               []domain.Log
-	SelectedTaskIndex  int       // Index of selected task in tasks list
-	LogsListIndex      int       // Viewport scroll position for logs tab
-	LastFetchedAt      time.Time // Last timestamp for incremental log fetching
-	Width              int       // Terminal width for responsive layout
+	SessionContexts    []domain.SessionContext // Saved session contexts
+	SelectedTaskIndex  int                     // Index of selected task in tasks list
+	LogsListIndex      int                     // Viewport scroll position for logs tab
+	LastFetchedAt      time.Time               // Last timestamp for incremental log fetching
+	Width              int                     // Terminal width for responsive layout
 }
 
 // OverviewStyles is temporarily kept here to avoid cycles

@@ -54,7 +54,6 @@ func LoadKeybindingsDefaults() (*Resolver, error) {
 		"help":              {"?": true, "shift+h": true},
 		"toggle_filter":     {"a": true},
 		"continue_session":  {"c": true},
-		"start_session":     {"s": true},
 		"go_to_window":      {"w": true},
 		"archive":           {"d": true},
 	}

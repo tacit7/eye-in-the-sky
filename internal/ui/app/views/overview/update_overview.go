@@ -42,8 +42,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // handleKeyPress handles keyboard input
 func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Tab navigation (direct keys)
+	// Note: "right" is handled per-tab for Agents tab
 	switch msg.String() {
-	case "tab", "right":
+	case "tab":
 		m.tabs.Next()
 		return m, nil
 	case "shift+tab", "left":
@@ -70,6 +71,11 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleAgentsTabKeys handles keys for the agents list tab
 func (m Model) handleAgentsTabKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// If header is focused, handle header navigation
+	if m.headerFocused {
+		return m.handleHeaderKeys(msg)
+	}
+
 	switch msg.String() {
 	case "j", "down":
 		// Move selection down
@@ -81,10 +87,13 @@ func (m Model) handleAgentsTabKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "k", "up":
 		// Move selection up
-		if m.selectedIndex > 0 {
-			m.selectedIndex--
-			m.adjustListScroll()
+		// If at first row, move to header
+		if m.selectedIndex == 0 {
+			m.headerFocused = true
+			return m, nil
 		}
+		m.selectedIndex--
+		m.adjustListScroll()
 		return m, nil
 
 	case "g":
@@ -113,11 +122,20 @@ func (m Model) handleAgentsTabKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return NewSessionRequestMsg{}
 		}
 
-	case "enter", " ":
+	case "enter", " ", "right":
 		// Select agent - emit message for root to switch to detail view
 		if m.SelectedAgent() != nil {
 			return m, func() tea.Msg {
 				return SelectAgentMsg{Agent: m.SelectedAgent()}
+			}
+		}
+		return m, nil
+
+	case "c", "C":
+		// Mark current session as completed
+		if m.SelectedAgent() != nil {
+			return m, func() tea.Msg {
+				return MarkSessionCompletedMsg{Agent: m.SelectedAgent()}
 			}
 		}
 		return m, nil
@@ -178,6 +196,62 @@ func (m Model) handleConfigTabKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// handleHeaderKeys handles keyboard input when header is focused
+func (m Model) handleHeaderKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "h", "left":
+		// Move to previous column
+		if m.selectedColumn > 0 {
+			m.selectedColumn--
+		}
+		return m, nil
+
+	case "l", "right":
+		// Move to next column (5 columns: Status, LastActivity, Session, Task, Project)
+		if m.selectedColumn < 4 {
+			m.selectedColumn++
+		}
+		return m, nil
+
+	case "j", "down":
+		// Move back to first row
+		m.headerFocused = false
+		m.selectedIndex = 0
+		return m, nil
+
+	case "enter", " ":
+		// Sort by selected column
+		return m.sortByColumn()
+
+	case "esc":
+		// Exit header focus
+		m.headerFocused = false
+		return m, nil
+	}
+
+	return m, nil
+}
+
+// sortByColumn sorts agents by the selected column
+func (m Model) sortByColumn() (tea.Model, tea.Cmd) {
+	// Map column index to field name (matches order in renderHeaderRow)
+	columnFields := []string{"status", "lastlog", "session", "task", "project"}
+	newField := columnFields[m.selectedColumn]
+
+	// Toggle sort order if same field, otherwise default to ascending
+	if m.sortField == newField {
+		m.sortAscending = !m.sortAscending
+	} else {
+		m.sortField = newField
+		m.sortAscending = true
+	}
+
+	// Sort agents based on field and order
+	m.sortAgents()
+
+	return m, nil
+}
+
 // NewSessionRequestMsg is sent when user wants to create a new session
 // Root will handle this by opening a modal
 type NewSessionRequestMsg struct{}
@@ -185,5 +259,11 @@ type NewSessionRequestMsg struct{}
 // SelectAgentMsg is sent when user selects an agent
 // Root will handle this by switching to AgentDetailsView
 type SelectAgentMsg struct {
+	Agent *domain.Agent
+}
+
+// MarkSessionCompletedMsg is sent when user wants to mark a session as completed
+// Root will handle this by updating the agent status
+type MarkSessionCompletedMsg struct {
 	Agent *domain.Agent
 }

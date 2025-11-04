@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/tacit7/eye-in-the-sky/internal/ui/app/views/overview/tabs"
+	"github.com/tacit7/eye-in-the-sky/internal/ui/components"
 )
 
 // View renders the OverviewView
@@ -72,8 +73,16 @@ func (m *Model) renderAgentsTab() string {
 		ContentH: m.height - 8, // Reserve space for header (3 lines) + title bar + footer + borders
 	}
 
+	// Header state for sorting and focus
+	headerState := components.HeaderState{
+		HeaderFocused:  m.headerFocused,
+		SelectedColumn: m.selectedColumn,
+		SortField:      m.sortField,
+		SortAscending:  m.sortAscending,
+	}
+
 	// Pass styles directly - it implements components.Styles interface
-	return tabs.RenderAgentsTab(agents, m.selectedIndex, m.listOffset, m.styles, layout)
+	return tabs.RenderAgentsTab(agents, m.selectedIndex, m.listOffset, m.styles, layout, headerState)
 }
 
 // renderProjectTab renders the project tab

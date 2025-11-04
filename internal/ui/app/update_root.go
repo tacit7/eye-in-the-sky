@@ -158,7 +158,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		// Refresh data using command
 		cmds := []tea.Cmd{
-			loadAgentsCmd(m.data.Agents),
+			loadAgentsCmd(m.data.Agents, m.showAll),
 			m.tickCmd(), // Schedule next tick
 		}
 
@@ -221,7 +221,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusMsg = msg.message
 		}
 		// Refresh agent list after command using command pattern
-		return m, loadAgentsCmd(m.data.Agents)
+		return m, loadAgentsCmd(m.data.Agents, m.showAll)
 
 	case util.FocusResult:
 		// Handle window focus results
@@ -261,6 +261,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.tabs.Set(1) // Set to Overview tab in detail view (index 1, since 0 is back arrow)
 		// Load agent details
 		return m, loadAgentDetailsCmd(m.data, m.selectedAgent.ID)
+
+	case overview.MarkSessionCompletedMsg:
+		// User wants to mark session as completed
+		if msg.Agent != nil {
+			return m, markSessionCompletedCmd(m.data.Agents, msg.Agent.ID)
+		}
+		return m, nil
 
 	case TaskCountsLoadedMsg:
 		// Update task counts for each agent
@@ -494,18 +501,22 @@ type errMsg struct {
 // handleKeyPress processes keyboard input by routing to view-specific or global handlers
 func (m *Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// DEBUG: Verify handleKeyPress is being called
-	debugf("handleKeyPress() called with key: %s", msg.String())
+	log.Printf("[ROOT] handleKeyPress() called with key: %s, currentView: %v", msg.String(), m.currentView)
 
 	// Try global keys first
+	log.Printf("[ROOT] Trying global keys handler for key: %s", msg.String())
 	if newModel, cmd := m.handleGlobalKeys(msg); cmd != nil || newModel != m {
+		log.Printf("[ROOT] Global handler consumed key: %s", msg.String())
 		return newModel, cmd
 	}
 
 	// Then route to view-specific handler
+	log.Printf("[ROOT] Routing to view-specific handler for view: %v", m.currentView)
 	if handler, ok := viewHandlers[m.currentView]; ok {
 		return handler(m, msg)
 	}
 
+	log.Printf("[ROOT] No handler found for view: %v", m.currentView)
 	return m, nil
 }
 
@@ -542,7 +553,7 @@ func (m *Model) handleGlobalKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "refresh":
 		m.statusMsg = "Refreshing..."
-		return m, loadAgentsCmd(m.data.Agents)
+		return m, loadAgentsCmd(m.data.Agents, m.showAll)
 
 	default:
 		return m, nil

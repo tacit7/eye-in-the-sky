@@ -1,11 +1,15 @@
 package app
 
 import (
+	"log"
+
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 // handleDetailKeys handles keys in detail view
 func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	log.Printf("[DETAIL] handleDetailKeys: received key='%s'", msg.String())
+
 	// Use keybindings resolver for current tab context
 	if m.keybindResolver != nil {
 		currentTab := getCurrentDetailTabName(m.tabs.ActiveIndex)
@@ -21,14 +25,19 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Tab navigation (left/right arrow keys or tab/shift-tab)
+	log.Printf("[DETAIL] TAB Navigation Message: key='%s'", msg.String())
 	switch msg.String() {
 	case "tab", "right":
-		m.tabs.Next()
-		// If user navigated to index 0 (back arrow), go back to list
-		if m.tabs.ActiveIndex == 0 {
-			m.currentView = ViewList
-			m.detailOffset = 0
-			return m, nil
+		// Navigate forward, skipping tab 0 (back arrow)
+		// If on tab 7, go to tab 1; otherwise increment
+		if m.tabs.ActiveIndex == 7 {
+			m.tabs.Set(1)
+		} else {
+			m.tabs.Next()
+			// Skip tab 0 if we landed on it
+			if m.tabs.ActiveIndex == 0 {
+				m.tabs.Set(1)
+			}
 		}
 		// Load data for the new tab
 		if err := m.loadTabData(); err != nil {
@@ -36,12 +45,16 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "shift+tab", "left":
-		m.tabs.Prev()
-		// If user navigated to index 0 (back arrow), go back to list
-		if m.tabs.ActiveIndex == 0 {
-			m.currentView = ViewList
-			m.detailOffset = 0
-			return m, nil
+		// Navigate backward, skipping tab 0 (back arrow)
+		// If on tab 1, go to tab 7; otherwise decrement
+		if m.tabs.ActiveIndex == 1 {
+			m.tabs.Set(7)
+		} else {
+			m.tabs.Prev()
+			// Skip tab 0 if we landed on it
+			if m.tabs.ActiveIndex == 0 {
+				m.tabs.Set(7)
+			}
 		}
 		// Load data for the new tab
 		if err := m.loadTabData(); err != nil {
@@ -49,40 +62,55 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "O":
+		log.Printf("[DETAIL] KEY O PRESSED: Switching to Overview tab (1)")
 		m.tabs.Set(1) // Overview tab
 		if err := m.loadTabData(); err != nil {
 			m.err = err
 		}
 		return m, nil
 	case "T":
+		log.Printf("[DETAIL] KEY T PRESSED: Switching to Tasks tab (2)")
 		m.tabs.Set(2) // Tasks tab
 		// Trigger async task loading
 		m.taskState = TaskLoading
 		m.statusMsg = "Loading tasks..."
 		return m, m.loadTasksCmd()
 	case "A":
+		log.Printf("[DETAIL] KEY A PRESSED: Switching to Actions tab (3)")
 		m.tabs.Set(3) // Actions tab
 		if err := m.loadTabData(); err != nil {
 			m.err = err
 		}
 		return m, nil
 	case "L":
+		log.Printf("[DETAIL] KEY L PRESSED: Switching to Logs tab (4)")
 		m.tabs.Set(4) // Logs tab
 		if err := m.loadTabData(); err != nil {
 			m.err = err
 		}
 		return m, nil
 	case "C":
+		log.Printf("[DETAIL] KEY C PRESSED: Switching to Commits tab (5)")
 		m.tabs.Set(5) // Commits tab
 		if err := m.loadTabData(); err != nil {
 			m.err = err
 		}
 		return m, nil
 	case "N":
+		log.Printf("[DETAIL] KEY N PRESSED: Switching to Notes tab (6)")
 		m.tabs.Set(6) // Notes tab
 		if err := m.loadTabData(); err != nil {
 			m.err = err
 		}
+		return m, nil
+	case "S":
+		log.Printf("[DETAIL] KEY S PRESSED: Switching to Session Context tab (7)")
+		m.tabs.Set(7) // Session Context tab
+		if err := m.loadTabData(); err != nil {
+			m.err = err
+			log.Printf("[DETAIL] ERROR loading session context: %v", err)
+		}
+		log.Printf("[DETAIL] Tab set to: %d", m.tabs.ActiveIndex)
 		return m, nil
 	case "n":
 		// Create new note for current agent
@@ -221,22 +249,22 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // getCurrentDetailTabName returns the keybindings scope name for the current detail tab
 func getCurrentDetailTabName(tabIndex int) string {
 	switch tabIndex {
-	case 0:
+	case 0: // tabBack
 		return "back"
-	case 1:
+	case 1: // tabOverview
 		return "overview"
-	case 2:
-		return "commits"
-	case 3:
-		return "logs"
-	case 4:
-		return "notes"
-	case 5:
-		return "actions"
-	case 6:
+	case 2: // tabTasks
 		return "tasks"
-	case 7:
-		return "projects"
+	case 3: // tabActions
+		return "actions"
+	case 4: // tabLogs
+		return "logs"
+	case 5: // tabCommits
+		return "commits"
+	case 6: // tabNotes
+		return "notes"
+	case 7: // tabSessionContext
+		return "session_context"
 	default:
 		return "overview"
 	}

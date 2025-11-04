@@ -15,10 +15,16 @@ type Model struct {
 	dataClient DataClient
 
 	// Agent list state (owned by this view)
-	agents        []domain.Agent
-	selectedIndex int
-	listOffset    int
-	showAll       bool // Show all agents or only active ones
+	agents         []domain.Agent
+	selectedIndex  int
+	listOffset     int
+	showAll        bool // Show all agents or only active ones
+
+	// Header sorting state
+	headerFocused  bool   // True when header is focused for sorting
+	selectedColumn int    // Which column is selected in header (0-4: Status, Session, ID, Task, Source)
+	sortField      string // Current sort field: "status", "session", "id", "task", "source"
+	sortAscending  bool   // Sort order
 
 	// Tab navigation
 	tabs components.NavBar
@@ -40,7 +46,7 @@ type Model struct {
 // DataClient interface for data access
 // Root will inject an implementation that wraps the database layer
 type DataClient interface {
-	LoadAgents() ([]domain.Agent, error)
+	LoadAgents(showAll bool) ([]domain.Agent, error)
 }
 
 // ErrMsg is sent when an error occurs
@@ -93,18 +99,90 @@ func (m *Model) SelectedAgent() *domain.Agent {
 
 // GetVisibleAgents returns the agents to display based on showAll filter
 func (m *Model) GetVisibleAgents() []domain.Agent {
-	if m.showAll {
-		return m.agents
-	}
-
-	// Filter for active, working, and idle agents
+	// Always show all agents except deleted ones
+	// The showAll flag is kept for potential future use
 	var visible []domain.Agent
 	for _, agent := range m.agents {
-		if agent.Status == "active" || agent.Status == "working" || agent.Status == "idle" {
+		if agent.Status != "deleted" {
 			visible = append(visible, agent)
 		}
 	}
 	return visible
+}
+
+// sortAgents sorts the agents list by the current sort field and order
+func (m *Model) sortAgents() {
+	if m.sortField == "" {
+		return
+	}
+
+	agents := m.agents
+	field := m.sortField
+	ascending := m.sortAscending
+
+	// Custom sort based on field
+	for i := 0; i < len(agents); i++ {
+		for j := i + 1; j < len(agents); j++ {
+			var swap bool
+			switch field {
+			case "status":
+				if ascending {
+					swap = agents[i].Status > agents[j].Status
+				} else {
+					swap = agents[i].Status < agents[j].Status
+				}
+			case "session":
+				if ascending {
+					swap = agents[i].SessionID > agents[j].SessionID
+				} else {
+					swap = agents[i].SessionID < agents[j].SessionID
+				}
+			case "id":
+				if ascending {
+					swap = string(agents[i].ID) > string(agents[j].ID)
+				} else {
+					swap = string(agents[i].ID) < string(agents[j].ID)
+				}
+			case "task":
+				task1 := agents[i].FeatureDesc
+				if task1 == "" {
+					task1 = agents[i].CurrentTask
+				}
+				task2 := agents[j].FeatureDesc
+				if task2 == "" {
+					task2 = agents[j].CurrentTask
+				}
+				if ascending {
+					swap = task1 > task2
+				} else {
+					swap = task1 < task2
+				}
+			case "source":
+				if ascending {
+					swap = string(agents[i].Source) > string(agents[j].Source)
+				} else {
+					swap = string(agents[i].Source) < string(agents[j].Source)
+				}
+			case "project":
+				if ascending {
+					swap = agents[i].ProjectName > agents[j].ProjectName
+				} else {
+					swap = agents[i].ProjectName < agents[j].ProjectName
+				}
+			case "lastlog":
+				if ascending {
+					swap = agents[i].LastLog > agents[j].LastLog
+				} else {
+					swap = agents[i].LastLog < agents[j].LastLog
+				}
+			}
+
+			if swap {
+				agents[i], agents[j] = agents[j], agents[i]
+			}
+		}
+	}
+	m.agents = agents
 }
 
 // adjustListScroll adjusts the list offset to keep selected item visible
@@ -131,7 +209,7 @@ func (m *Model) adjustListScroll() {
 // loadAgentsCmd loads agents from the data client
 func (m *Model) loadAgentsCmd() tea.Cmd {
 	return func() tea.Msg {
-		agents, err := m.dataClient.LoadAgents()
+		agents, err := m.dataClient.LoadAgents(m.showAll)
 		if err != nil {
 			return ErrMsg{Error: err}
 		}

@@ -6,11 +6,18 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/lipgloss/table"
 	"github.com/tacit7/eye-in-the-sky/internal/domain"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/config"
 	"github.com/tacit7/eye-in-the-sky/internal/utils"
 )
+
+// HeaderState contains header focus and sorting state
+type HeaderState struct {
+	HeaderFocused  bool
+	SelectedColumn int
+	SortField      string
+	SortAscending  bool
+}
 
 // Styles interface defines the styling methods needed by AgentLineRenderer
 type Styles interface {
@@ -23,16 +30,24 @@ type Styles interface {
 	GetSelected() lipgloss.Style
 }
 
+// AgentTableColumn defines a column in the agent table with dynamic width support
+type AgentTableColumn struct {
+	Title  string
+	Hidden *bool
+	Width  *int
+	Grow   *bool
+}
+
 // ColumnConfig controls which columns are visible in the agent table
 type ColumnConfig struct {
 	Icon         bool
 	Status       bool
-	ID           bool
 	Task         bool
 	Source       bool
 	Session      bool
 	LastActivity bool
 	ProjectName  bool
+	LastLog      bool
 }
 
 // DefaultColumnConfig returns the default column configuration
@@ -40,7 +55,6 @@ func DefaultColumnConfig() ColumnConfig {
 	return ColumnConfig{
 		Icon:    true,
 		Status:  true,
-		ID:      true,
 		Task:    true,
 		Source:  true,
 		Session: true,
@@ -79,14 +93,17 @@ func (r *AgentLineRenderer) RenderHeaders() []string {
 	if r.Columns.Status {
 		headers = append(headers, " Status  ")
 	}
+	if r.Columns.LastLog {
+		headers = append(headers, "Last Activity ")
+	}
 	if r.Columns.Session {
 		headers = append(headers, "Session  ")
 	}
-	if r.Columns.ID {
-		headers = append(headers, "Agent ID  ")
-	}
 	if r.Columns.Task {
 		headers = append(headers, "Description  ")
+	}
+	if r.Columns.ProjectName {
+		headers = append(headers, "Project ")
 	}
 	if r.Columns.Source {
 		headers = append(headers, "Source ")
@@ -113,16 +130,19 @@ func (r *AgentLineRenderer) RenderAgent(agent domain.Agent, selected bool) []str
 		cells = append(cells, " "+status+"  ")
 	}
 
+	// LastLog column (timestamp) - right after Status
+	if r.Columns.LastLog {
+		lastLog := agent.LastLog
+		if lastLog == "" {
+			lastLog = "-"
+		}
+		cells = append(cells, lastLog+"  ")
+	}
+
 	// Session column with padding
 	if r.Columns.Session {
 		session := utils.TruncateID(agent.SessionID, 8)
 		cells = append(cells, session+"  ")
-	}
-
-	// ID column with padding
-	if r.Columns.ID {
-		id := utils.TruncateID(string(agent.ID), 8)
-		cells = append(cells, id+"  ")
 	}
 
 	// Task column with padding
@@ -131,7 +151,16 @@ func (r *AgentLineRenderer) RenderAgent(agent domain.Agent, selected bool) []str
 		cells = append(cells, task+"  ")
 	}
 
-	// Source column (last column gets trailing space)
+	// ProjectName column (replaces Source)
+	if r.Columns.ProjectName {
+		projectName := agent.ProjectName
+		if projectName == "" {
+			projectName = "-"
+		}
+		cells = append(cells, projectName+"  ")
+	}
+
+	// Source column
 	if r.Columns.Source {
 		source := string(agent.Source)
 		cells = append(cells, source+" ")
@@ -141,15 +170,6 @@ func (r *AgentLineRenderer) RenderAgent(agent domain.Agent, selected bool) []str
 	if r.Columns.LastActivity {
 		lastActivity := r.formatLastActivity(agent.LastActivityAt)
 		cells = append(cells, lastActivity)
-	}
-
-	// ProjectName column
-	if r.Columns.ProjectName {
-		projectName := agent.ProjectName
-		if projectName == "" {
-			projectName = "-"
-		}
-		cells = append(cells, projectName)
 	}
 
 	return cells
@@ -250,14 +270,17 @@ func (r *AgentLineRenderer) getColumnWidths() []int {
 	if r.Columns.Status {
 		widths = append(widths, 12)
 	}
-	if r.Columns.Session {
-		widths = append(widths, 10)
+	if r.Columns.LastLog {
+		widths = append(widths, 15)
 	}
-	if r.Columns.ID {
+	if r.Columns.Session {
 		widths = append(widths, 10)
 	}
 	if r.Columns.Task {
 		widths = append(widths, 40)
+	}
+	if r.Columns.ProjectName {
+		widths = append(widths, 20)
 	}
 	if r.Columns.Source {
 		widths = append(widths, 30)
@@ -297,53 +320,209 @@ func (r *AgentLineRenderer) CreateTableBuilder(styles Styles) *TableBuilder {
 	return tb
 }
 
-// RenderAgentTable renders a complete table of agents using lipgloss table
-func (r *AgentLineRenderer) RenderAgentTable(agents []domain.Agent, selectedIndex int) string {
-	// Build headers
-	headers := r.RenderHeaders()
+// GetTableColumns returns column definitions with dynamic width support
+func (r *AgentLineRenderer) GetTableColumns() []AgentTableColumn {
+	hiddenFalse := false
 
-	// Build rows
-	var rows [][]string
-	for _, agent := range agents {
-		row := r.RenderAgent(agent, false)
-		rows = append(rows, row)
+	columns := []AgentTableColumn{}
+
+	if r.Columns.Status {
+		columns = append(columns, AgentTableColumn{
+			Title:  " Status  ",
+			Width:  intPtr(15),
+			Hidden: &hiddenFalse,
+		})
+	}
+	if r.Columns.LastLog {
+		columns = append(columns, AgentTableColumn{
+			Title:  "Last Activity ",
+			Width:  intPtr(15), // Fixed width for timestamp
+			Hidden: &hiddenFalse,
+		})
+	}
+	if r.Columns.Session {
+		columns = append(columns, AgentTableColumn{
+			Title:  "Session  ",
+			Width:  intPtr(12),
+			Hidden: &hiddenFalse,
+		})
+	}
+	if r.Columns.Task {
+		columns = append(columns, AgentTableColumn{
+			Title:  "Description  ",
+			Grow:   boolPtr(true), // This column grows to fill space
+			Hidden: &hiddenFalse,
+		})
+	}
+	if r.Columns.ProjectName {
+		columns = append(columns, AgentTableColumn{
+			Title:  "Project ",
+			Width:  intPtr(20),
+			Hidden: &hiddenFalse,
+		})
+	}
+	if r.Columns.Source {
+		columns = append(columns, AgentTableColumn{
+			Title:  "Source ",
+			Width:  intPtr(12),
+			Hidden: &hiddenFalse,
+		})
 	}
 
-	// Choose border based on font mode
+	return columns
+}
+
+// RenderAgentTable renders a complete table of agents using dynamic column widths
+func (r *AgentLineRenderer) RenderAgentTable(agents []domain.Agent, selectedIndex int, width int, headerState HeaderState) string {
+	columns := r.GetTableColumns()
+
+	// Render header
+	header := r.renderHeaderRow(columns, width, headerState)
+
+	// Render rows
+	var rowStrings []string
+	for i, agent := range agents {
+		isSelected := i == selectedIndex
+		rowStr := r.renderAgentRow(agent, columns, width, isSelected)
+		rowStrings = append(rowStrings, rowStr)
+	}
+
+	// Join all rows
+	body := lipgloss.JoinVertical(lipgloss.Left, rowStrings...)
+
+	// Add border around entire table
 	border := lipgloss.RoundedBorder()
 	if !config.UseNerdFonts {
 		border = lipgloss.ASCIIBorder()
 	}
 
-	// Create lipgloss table with outside border (no top - connects to tabs)
-	t := table.New().
+	tableStyle := lipgloss.NewStyle().
 		Border(border).
-		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("#4A5057"))).
+		BorderForeground(lipgloss.Color("cyan")).
 		BorderTop(false).
-		BorderBottom(true).
-		BorderLeft(true).
-		BorderRight(true).
-		BorderHeader(false).
-		BorderColumn(false).
-		BorderRow(false).
-		Headers(headers...).
-		Rows(rows...)
+		Width(width)
 
-	// Style header and selection
-	t.StyleFunc(func(row, col int) lipgloss.Style {
-		if row == table.HeaderRow {
-			return r.Styles.GetPrimary().Bold(true)
-		}
-		// Apply selection style to entire row
-		if row == selectedIndex {
-			return r.Styles.GetSelected()
-		}
-		// No background - use terminal default
-		return lipgloss.NewStyle()
-	})
-
-	return t.Render()
+	content := header + "\n" + body
+	return tableStyle.Render(content)
 }
+
+// renderHeaderRow renders the table header with dynamic column widths
+func (r *AgentLineRenderer) renderHeaderRow(columns []AgentTableColumn, tableWidth int, headerState HeaderState) string {
+	renderedColumns := r.computeColumnWidths(columns, tableWidth)
+
+	// Map columns to field names for sort indicator
+	columnFields := []string{"status", "lastlog", "session", "task", "project"}
+
+	var headerCells []string
+	for i, col := range columns {
+		if col.Hidden != nil && *col.Hidden {
+			continue
+		}
+		width := renderedColumns[i]
+
+		// Add sort indicator if this column is sorted
+		title := col.Title
+		if i < len(columnFields) && columnFields[i] == headerState.SortField {
+			if headerState.SortAscending {
+				title = title + " ↑"
+			} else {
+				title = title + " ↓"
+			}
+		}
+
+		// Highlight selected column if header is focused
+		style := r.Styles.GetPrimary().Bold(true)
+		if headerState.HeaderFocused && i == headerState.SelectedColumn {
+			style = r.Styles.GetSelected().Bold(true)
+		}
+
+		cell := style.
+			Width(width).
+			MaxWidth(width).
+			Render(title)
+		headerCells = append(headerCells, cell)
+	}
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, headerCells...)
+}
+
+// renderAgentRow renders a single agent row with dynamic column widths
+func (r *AgentLineRenderer) renderAgentRow(agent domain.Agent, columns []AgentTableColumn, tableWidth int, isSelected bool) string {
+	renderedColumns := r.computeColumnWidths(columns, tableWidth)
+	cellData := r.RenderAgent(agent, isSelected)
+
+	var cells []string
+	for i, data := range cellData {
+		if i >= len(renderedColumns) {
+			break
+		}
+		width := renderedColumns[i]
+
+		style := lipgloss.NewStyle()
+		if isSelected {
+			style = r.Styles.GetSelected()
+		}
+
+		cell := style.
+			Width(width).
+			MaxWidth(width).
+			Render(data)
+		cells = append(cells, cell)
+	}
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, cells...)
+}
+
+// computeColumnWidths calculates actual widths for each column including growing columns
+func (r *AgentLineRenderer) computeColumnWidths(columns []AgentTableColumn, tableWidth int) []int {
+	widths := make([]int, len(columns))
+	takenWidth := 0
+	numGrowingColumns := 0
+
+	// First pass: calculate fixed widths
+	for i, col := range columns {
+		if col.Hidden != nil && *col.Hidden {
+			continue
+		}
+
+		if col.Grow != nil && *col.Grow {
+			numGrowingColumns++
+			continue
+		}
+
+		if col.Width != nil {
+			widths[i] = *col.Width
+			takenWidth += *col.Width
+			continue
+		}
+
+		// Use title width as default
+		widths[i] = lipgloss.Width(col.Title)
+		takenWidth += widths[i]
+	}
+
+	// Second pass: distribute remaining width to growing columns
+	if numGrowingColumns > 0 {
+		leftoverWidth := tableWidth - takenWidth - 4 // Reserve 4 for border padding
+		if leftoverWidth < 0 {
+			leftoverWidth = 20 // Minimum width
+		}
+		growWidth := leftoverWidth / numGrowingColumns
+
+		for i, col := range columns {
+			if col.Grow != nil && *col.Grow {
+				widths[i] = growWidth
+			}
+		}
+	}
+
+	return widths
+}
+
+// Helper functions
+func intPtr(i int) *int          { return &i }
+func boolPtr(b bool) *bool       { return &b }
+func stringPtr(s string) *string { return &s }
 
 // ConfigureColumns sets which columns are visible
 func (r *AgentLineRenderer) ConfigureColumns(config ColumnConfig) {

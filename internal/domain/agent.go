@@ -26,4 +26,5 @@ type Agent struct {
 	CompletedAt         *time.Time
 	TaskCount           int    // Number of tasks from TaskWarrior
 	Bookmarked          bool   // Pinned/bookmarked agents appear at top
+	LastLog             string // Most recent log message for this agent
 }

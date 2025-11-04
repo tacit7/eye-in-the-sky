@@ -29,8 +29,8 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		case "n":
 			m.tabs.Set(tabNotes)
 			return m, nil
-		case "p":
-			m.tabs.Set(tabProjects)
+		case "s":
+			m.tabs.Set(tabSessionContext)
 			return m, nil
 
 		// Back to overview

@@ -13,7 +13,7 @@ func (m *Model) View() string {
 	}
 
 	// Render tabs bar using theme styles
-	tabNames := []string{"← Back", "[O]verview", "[T]asks", "[A]ctions", "[L]ogs", "[C]ommits", "[N]otes", "[P]rojects"}
+	tabNames := []string{"← Back", "[O]verview", "[T]asks", "[A]ctions", "[L]ogs", "[C]ommits", "[N]otes", "[S]ession Context"}
 	var renderedTabs []string
 	for i, name := range tabNames {
 		if i == m.tabs.ActiveIndex {
@@ -41,8 +41,8 @@ func (m *Model) View() string {
 		content = m.renderCommitsTab()
 	case tabNotes:
 		content = m.renderNotesTab()
-	case tabProjects:
-		content = m.renderProjectsTab()
+	case tabSessionContext:
+		content = m.renderSessionContextTab()
 	default:
 		content = ""
 	}
@@ -90,4 +90,9 @@ func (m *Model) renderNotesTab() string {
 // renderProjectsTab renders the projects tab
 func (m *Model) renderProjectsTab() string {
 	return tabs.RenderProjects(m.ctx, m.styles.OverviewStyles)
+}
+
+// renderSessionContextTab renders the session context tab
+func (m *Model) renderSessionContextTab() string {
+	return tabs.RenderSessionContext(m.ctx, m.styles.OverviewStyles)
 }

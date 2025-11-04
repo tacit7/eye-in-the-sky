@@ -13,7 +13,7 @@ type LayoutInfo struct {
 }
 
 // RenderAgentsTab renders the agents list tab using lipgloss table with borders
-func RenderAgentsTab(agents []domain.Agent, selectedIndex int, listOffset int, styles components.Styles, layout LayoutInfo) string {
+func RenderAgentsTab(agents []domain.Agent, selectedIndex int, listOffset int, styles components.Styles, layout LayoutInfo, headerState components.HeaderState) string {
 	// Create agent renderer with proper styles
 	renderer := components.NewAgentLineRenderer(styles)
 
@@ -21,12 +21,12 @@ func RenderAgentsTab(agents []domain.Agent, selectedIndex int, listOffset int, s
 	renderer.ConfigureColumns(components.ColumnConfig{
 		Icon:         false,
 		Status:       true,
-		ID:           true,
 		Task:         true,
-		Source:       true,
+		Source:       false,
 		Session:      true,
 		LastActivity: false,
-		ProjectName:  false,
+		ProjectName:  true,
+		LastLog:      true,
 	})
 
 	// Calculate viewport
@@ -45,6 +45,6 @@ func RenderAgentsTab(agents []domain.Agent, selectedIndex int, listOffset int, s
 	// Adjust selected index to be relative to visible slice
 	adjustedSelectedIndex := selectedIndex - listOffset
 
-	// Render the table using lipgloss table with borders
-	return renderer.RenderAgentTable(visibleAgents, adjustedSelectedIndex)
+	// Render the table using dynamic column system
+	return renderer.RenderAgentTable(visibleAgents, adjustedSelectedIndex, layout.Width, headerState)
 }

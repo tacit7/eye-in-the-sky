@@ -108,7 +108,6 @@ func (m *Model) renderAgentTable(agents []domain.Agent, config TableConfig) stri
 	renderer.ConfigureColumns(components.ColumnConfig{
 		Icon:    config.ShowIcons,
 		Status:  config.ShowStatus,
-		ID:      config.ShowID,
 		Task:    config.ShowTask,
 		Source:  config.ShowSource,
 		Session: config.ShowSession,

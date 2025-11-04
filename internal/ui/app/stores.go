@@ -9,7 +9,7 @@ import (
 
 // AgentStore handles agent data operations
 type AgentStore interface {
-	LoadAgents(ctx context.Context) ([]domain.Agent, error)
+	LoadAgents(ctx context.Context, showAll bool) ([]domain.Agent, error)
 	LoadAgent(ctx context.Context, agentID domain.AgentID) (*domain.Agent, error)
 	UpdateStatus(ctx context.Context, agentID domain.AgentID, status string) error
 }
