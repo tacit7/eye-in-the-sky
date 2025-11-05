@@ -29,7 +29,7 @@ Commands:
   help                          Show this help message
 
 Global Options:
-  --db PATH        Database path (default: ~/.config/eye-in-the-sky/agents.db)
+  --db PATH        Database path (default: ~/.config/eye-in-the-sky/eits.db)
   --json           Output JSON instead of human-readable text
   --help           Show help
 
@@ -90,7 +90,7 @@ func main() {
 		if err != nil {
 			fatal("Failed to get home directory: %v", err)
 		}
-		global.dbPath = filepath.Join(homeDir, ".config", "eye-in-the-sky", "agents.db")
+		global.dbPath = filepath.Join(homeDir, ".config", "eye-in-the-sky", "eits.db")
 	}
 
 	// Initialize database

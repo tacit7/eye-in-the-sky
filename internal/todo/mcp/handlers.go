@@ -45,6 +45,8 @@ type CreateRequest struct {
 	Tags        []string `json:"tags,omitempty"`
 	StateID     *int     `json:"state_id,omitempty"`
 	DueAt       *string  `json:"due_at,omitempty"` // ISO 8601 timestamp
+	SessionID   *string  `json:"session_id,omitempty"` // Session to link task to
+	AgentID     *string  `json:"agent_id,omitempty"`   // Agent to link task to
 }
 
 func (h *Handler) HandleCreate(ctx context.Context, args json.RawMessage) (interface{}, error) {
@@ -85,6 +87,8 @@ func (h *Handler) HandleCreate(ctx context.Context, args json.RawMessage) (inter
 		Priority:    req.Priority,
 		StateID:     req.StateID,
 		DueAt:       dueAt,
+		SessionID:   req.SessionID,
+		AgentID:     req.AgentID,
 	}
 
 	task, err := h.svc.GetTasksRepo().CreateTask(req.ProjectID, input)
@@ -494,6 +498,32 @@ func (h *Handler) HandleVacuum(ctx context.Context, args json.RawMessage) (inter
 		return nil, fmt.Errorf("failed to vacuum: %w", err)
 	}
 	return OKResponse{OK: true}, nil
+}
+
+// ============================================================================
+// todo.get-project - Detect and return current project
+// ============================================================================
+
+type GetProjectResponse struct {
+	ProjectID  string  `json:"project_id"`
+	Name       string  `json:"name"`
+	Path       *string `json:"path,omitempty"`
+	RemoteURL  *string `json:"remote_url,omitempty"`
+}
+
+func (h *Handler) HandleGetProject(ctx context.Context, args json.RawMessage) (interface{}, error) {
+	// Auto-detect current project using git repository info
+	project, err := h.svc.DetectCurrentProject()
+	if err != nil {
+		return nil, fmt.Errorf("failed to detect current project: %w", err)
+	}
+
+	return GetProjectResponse{
+		ProjectID: project.ID,
+		Name:      project.Name,
+		Path:      project.Path,
+		RemoteURL: project.RemoteURL,
+	}, nil
 }
 
 // ============================================================================

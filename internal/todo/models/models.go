@@ -5,19 +5,14 @@ import (
 )
 
 // Project represents a project with tasks and workflow states.
+// Note: eits.db uses INTEGER autoincrement for ID
 type Project struct {
-	ID            string     `json:"id"`
-	Name          string     `json:"name"`
-	Path          *string    `json:"path,omitempty"`
-	RemoteURL     *string    `json:"remote_url,omitempty"`
-	Subpath       *string    `json:"subpath,omitempty"`
-	Module        *string    `json:"module,omitempty"`
-	Salt          *string    `json:"salt,omitempty"`
-	IDAlgorithm   string     `json:"id_algorithm"`
-	CreatedAt     time.Time  `json:"created_at"`
-	UpdatedAt     time.Time  `json:"updated_at"`
-	LastCommit    *string    `json:"last_commit,omitempty"`
-	Active        bool       `json:"active"`
+	ID        int        `json:"id"`
+	Name      string     `json:"name"`
+	Path      *string    `json:"path,omitempty"`
+	RemoteURL *string    `json:"remote_url,omitempty"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
 }
 
 // WorkflowState represents a state in the workflow (e.g., "todo", "in_progress", "done").
@@ -34,7 +29,7 @@ type Task struct {
 	Title       string     `json:"title"`
 	Description *string    `json:"description,omitempty"`
 	StateID     *int       `json:"state_id,omitempty"`
-	ProjectID   string     `json:"project_id"`
+	ProjectID   int        `json:"project_id"` // Changed from string to int for eits.db
 	Priority    int        `json:"priority"`
 	DueAt       *time.Time `json:"due_at,omitempty"`
 	CompletedAt *time.Time `json:"completed_at,omitempty"`

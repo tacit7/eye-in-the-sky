@@ -58,7 +58,7 @@ func DefaultConfig() Config {
 	homeDir, _ := os.UserHomeDir()
 	return Config{
 		RefreshInterval: 5,
-		DatabasePath:    filepath.Join(homeDir, ".config", "eye-in-the-sky", "agents.db"),
+		DatabasePath:    filepath.Join(homeDir, ".config", "eye-in-the-sky", "eits.db"),
 		DefaultView:     "list",
 		ShowAllAgents:   false,
 		Theme:           "default",

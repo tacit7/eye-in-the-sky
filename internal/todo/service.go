@@ -1,7 +1,10 @@
 package todo
 
 import (
+	"fmt"
+
 	"github.com/tacit7/eye-in-the-sky/internal/database"
+	"github.com/tacit7/eye-in-the-sky/internal/gitinfo"
 	"github.com/tacit7/eye-in-the-sky/internal/todo/models"
 	"github.com/tacit7/eye-in-the-sky/internal/todo/repository"
 	"github.com/tacit7/eye-in-the-sky/internal/todo/util"
@@ -81,6 +84,37 @@ func (s *Service) ListProjects() ([]models.Project, error) {
 // UpdateProject updates a project's metadata.
 func (s *Service) UpdateProject(projectID string, updates map[string]interface{}) (*models.Project, error) {
 	return s.projects.UpdateProject(projectID, updates)
+}
+
+// DetectCurrentProject auto-detects the current project based on git repository info.
+// It tries to match by remote_url first (more reliable), then falls back to path matching.
+func (s *Service) DetectCurrentProject() (*models.Project, error) {
+	// Try to get git remote URL (more reliable as it's unique across clones)
+	remoteURL, err := gitinfo.RemoteURL()
+	if err == nil && remoteURL != "" {
+		project, err := s.projects.GetProjectByRemoteURL(remoteURL)
+		if err == nil {
+			return project, nil
+		}
+		// If no match by remote URL, continue to try path
+	}
+
+	// Fallback to path matching
+	repoPath, err := gitinfo.RepoPath()
+	if err != nil {
+		return nil, fmt.Errorf("not in a git repository or failed to detect repo info: %w", err)
+	}
+
+	if repoPath == "" {
+		return nil, fmt.Errorf("could not determine git repository path")
+	}
+
+	project, err := s.projects.GetProjectByPath(repoPath)
+	if err != nil {
+		return nil, fmt.Errorf("no project found for current directory (path: %s): %w", repoPath, err)
+	}
+
+	return project, nil
 }
 
 // ============================================================================

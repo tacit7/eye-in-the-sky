@@ -23,7 +23,7 @@ func isRunningAsMCP() bool {
 func main() {
 	var (
 		help   = flag.Bool("help", false, "Show help")
-		dbPath = flag.String("db", "", "Database path (default: ~/.config/eye-in-the-sky/agents.db)")
+		dbPath = flag.String("db", "", "Database path (default: ~/.config/eye-in-the-sky/eits.db)")
 	)
 	flag.Parse()
 
@@ -40,7 +40,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("Failed to get home directory: %v", err)
 		}
-		*dbPath = filepath.Join(homeDir, ".config", "eye-in-the-sky", "agents.db")
+		*dbPath = filepath.Join(homeDir, ".config", "eye-in-the-sky", "eits.db")
 	}
 
 	// Ensure config directory exists

@@ -16,7 +16,7 @@ import (
 
 func main() {
 	// Command line flags
-	dbPath := flag.String("db", "./data/agents.db", "Path to the SQLite database")
+	dbPath := flag.String("db", "./data/eits.db", "Path to the SQLite database")
 	help := flag.Bool("help", false, "Show help")
 	flag.Parse()
 

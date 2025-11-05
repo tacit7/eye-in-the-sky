@@ -23,7 +23,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to get home directory: %v", err)
 	}
-	dbPath := filepath.Join(home, ".config", "eye-in-the-sky", "agents.db")
+	dbPath := filepath.Join(home, ".config", "eye-in-the-sky", "eits.db")
 
 	db, err := database.New(dbPath)
 	if err != nil {

@@ -20,26 +20,33 @@ func NewProjectRepo(database *database.DB) *ProjectRepo {
 }
 
 // CreateProject creates a new project.
-func (pr *ProjectRepo) CreateProject(id, name string) (*models.Project, error) {
-	_, err := pr.db.Exec(
-		"INSERT INTO projects (id, name, id_algorithm, created_at, updated_at, active) VALUES (?, ?, ?, ?, ?, ?)",
-		id, name, "uuidv5", time.Now(), time.Now(), 1,
+// Note: eits.db uses INTEGER autoincrement for id, so we don't pass id parameter
+func (pr *ProjectRepo) CreateProject(name string, path *string, remoteURL *string) (*models.Project, error) {
+	result, err := pr.db.Exec(
+		"INSERT INTO projects (name, path, remote_url, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+		name, path, remoteURL, time.Now(), time.Now(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to insert project: %w", err)
 	}
 
-	return pr.GetProjectByID(id)
+	// Get the auto-generated ID
+	id, err := result.LastInsertId()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get last insert id: %w", err)
+	}
+
+	return pr.GetProjectByID(int(id))
 }
 
 // GetProjectByID retrieves a project by ID.
-func (pr *ProjectRepo) GetProjectByID(id string) (*models.Project, error) {
+func (pr *ProjectRepo) GetProjectByID(id int) (*models.Project, error) {
 	project := &models.Project{}
 	err := pr.db.QueryRow(
-		`SELECT id, name, path, remote_url, subpath, module, salt, id_algorithm, created_at, updated_at, last_commit, active
+		`SELECT id, name, path, remote_url, created_at, updated_at
 		 FROM projects WHERE id = ?`,
 		id,
-	).Scan(&project.ID, &project.Name, &project.Path, &project.RemoteURL, &project.Subpath, &project.Module, &project.Salt, &project.IDAlgorithm, &project.CreatedAt, &project.UpdatedAt, &project.LastCommit, &project.Active)
+	).Scan(&project.ID, &project.Name, &project.Path, &project.RemoteURL, &project.CreatedAt, &project.UpdatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("project not found")
@@ -52,11 +59,11 @@ func (pr *ProjectRepo) GetProjectByID(id string) (*models.Project, error) {
 	return project, nil
 }
 
-// ListProjects returns all active projects.
+// ListProjects returns all projects.
 func (pr *ProjectRepo) ListProjects() ([]models.Project, error) {
 	rows, err := pr.db.Query(
-		`SELECT id, name, path, remote_url, subpath, module, salt, id_algorithm, created_at, updated_at, last_commit, active
-		 FROM projects WHERE active = 1 ORDER BY created_at DESC`,
+		`SELECT id, name, path, remote_url, created_at, updated_at
+		 FROM projects ORDER BY created_at DESC`,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query projects: %w", err)
@@ -66,7 +73,7 @@ func (pr *ProjectRepo) ListProjects() ([]models.Project, error) {
 	var projects []models.Project
 	for rows.Next() {
 		project := models.Project{}
-		if err := rows.Scan(&project.ID, &project.Name, &project.Path, &project.RemoteURL, &project.Subpath, &project.Module, &project.Salt, &project.IDAlgorithm, &project.CreatedAt, &project.UpdatedAt, &project.LastCommit, &project.Active); err != nil {
+		if err := rows.Scan(&project.ID, &project.Name, &project.Path, &project.RemoteURL, &project.CreatedAt, &project.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("failed to scan project: %w", err)
 		}
 		projects = append(projects, project)
@@ -76,7 +83,7 @@ func (pr *ProjectRepo) ListProjects() ([]models.Project, error) {
 }
 
 // UpdateProject updates a project's metadata.
-func (pr *ProjectRepo) UpdateProject(id string, updates map[string]interface{}) (*models.Project, error) {
+func (pr *ProjectRepo) UpdateProject(id int, updates map[string]interface{}) (*models.Project, error) {
 	// Build dynamic UPDATE query
 	query := "UPDATE projects SET updated_at = ?"
 	args := []interface{}{time.Now()}
@@ -93,10 +100,6 @@ func (pr *ProjectRepo) UpdateProject(id string, updates map[string]interface{}) 
 		query += ", remote_url = ?"
 		args = append(args, remoteURL)
 	}
-	if lastCommit, ok := updates["last_commit"].(string); ok {
-		query += ", last_commit = ?"
-		args = append(args, lastCommit)
-	}
 
 	query += " WHERE id = ?"
 	args = append(args, id)
@@ -107,6 +110,46 @@ func (pr *ProjectRepo) UpdateProject(id string, updates map[string]interface{}) 
 	}
 
 	return pr.GetProjectByID(id)
+}
+
+// GetProjectByPath retrieves a project by its path.
+func (pr *ProjectRepo) GetProjectByPath(path string) (*models.Project, error) {
+	project := &models.Project{}
+	err := pr.db.QueryRow(
+		`SELECT id, name, path, remote_url, created_at, updated_at
+		 FROM projects WHERE path = ?`,
+		path,
+	).Scan(&project.ID, &project.Name, &project.Path, &project.RemoteURL, &project.CreatedAt, &project.UpdatedAt)
+
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("project not found for path: %s", path)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to query project by path: %w", err)
+	}
+
+	return project, nil
+}
+
+// GetProjectByRemoteURL retrieves a project by its remote URL.
+func (pr *ProjectRepo) GetProjectByRemoteURL(remoteURL string) (*models.Project, error) {
+	project := &models.Project{}
+	err := pr.db.QueryRow(
+		`SELECT id, name, path, remote_url, created_at, updated_at
+		 FROM projects WHERE remote_url = ?`,
+		remoteURL,
+	).Scan(&project.ID, &project.Name, &project.Path, &project.RemoteURL, &project.CreatedAt, &project.UpdatedAt)
+
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("project not found for remote URL: %s", remoteURL)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to query project by remote URL: %w", err)
+	}
+
+	return project, nil
 }
 
 // GetWorkflowStates returns all workflow states (global, not per-project).
