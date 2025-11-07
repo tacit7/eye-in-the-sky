@@ -80,7 +80,7 @@ func (nr *NoteRepo) GetLatestNoteByTaskID(taskID string) (*models.Note, error) {
 }
 
 // GetNotesByProjectID retrieves all notes in a project across all tasks.
-func (nr *NoteRepo) GetNotesByProjectID(projectID string) ([]models.Note, error) {
+func (nr *NoteRepo) GetNotesByProjectID(projectID int) ([]models.Note, error) {
 	rows, err := nr.db.Query(
 		`SELECT tn.id, tn.task_id, tn.author, tn.body, tn.created_at
 		 FROM task_notes tn
@@ -159,7 +159,7 @@ type NoteStats struct {
 }
 
 // GetProjectNoteStats returns note statistics for a project.
-func (nr *NoteRepo) GetProjectNoteStats(projectID string) (*NoteStats, error) {
+func (nr *NoteRepo) GetProjectNoteStats(projectID int) (*NoteStats, error) {
 	stats := &NoteStats{}
 
 	// Count total notes
@@ -190,7 +190,7 @@ func (nr *NoteRepo) GetProjectNoteStats(projectID string) (*NoteStats, error) {
 }
 
 // SearchNotes performs full-text search on note content within a project.
-func (nr *NoteRepo) SearchNotes(projectID string, query string, limit, offset int) ([]models.Note, error) {
+func (nr *NoteRepo) SearchNotes(projectID int, query string, limit, offset int) ([]models.Note, error) {
 	rows, err := nr.db.Query(
 		`SELECT tn.id, tn.task_id, tn.author, tn.body, tn.created_at
 		 FROM task_notes tn

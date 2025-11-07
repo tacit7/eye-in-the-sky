@@ -197,57 +197,6 @@ type CreatePersonaResult struct {
 	Message string `json:"message"`
 }
 
-// GetPersonaArgs represents the arguments for i-persona-get tool
-type GetPersonaArgs struct {
-	ID string `json:"id" jsonschema:"description:Persona identifier"`
-}
-
-type GetPersonaResult struct {
-	Success        bool    `json:"success"`
-	Message        string  `json:"message"`
-	ID             string  `json:"id,omitempty"`
-	Name           string  `json:"name,omitempty"`
-	Description    string  `json:"description,omitempty"`
-	Expertise      string  `json:"expertise,omitempty"`
-	InitialContext string  `json:"initial_context,omitempty"`
-	PreferredTools *string `json:"preferred_tools,omitempty"`
-	Specialization *string `json:"specialization,omitempty"`
-}
-
-// ListPersonasArgs represents the arguments for i-persona-list tool
-type ListPersonasArgs struct {
-	Specialization *string `json:"specialization,omitempty" jsonschema:"description:Filter by specialization (optional)"`
-}
-
-type ListPersonasResult struct {
-	Success  bool              `json:"success"`
-	Message  string            `json:"message"`
-	Personas []PersonaSummary  `json:"personas,omitempty"`
-}
-
-type PersonaSummary struct {
-	ID             string  `json:"id"`
-	Name           string  `json:"name"`
-	Description    string  `json:"description"`
-	Specialization *string `json:"specialization,omitempty"`
-}
-
-// SnapshotExpertiseArgs represents arguments for capturing current agent expertise
-type SnapshotExpertiseArgs struct {
-	PersonaID      string  `json:"persona_id" jsonschema:"description:Unique ID for the persona (e.g., 'payment-flow-expert')"`
-	PersonaName    string  `json:"persona_name" jsonschema:"description:Human-readable name"`
-	ExpertiseAreas string  `json:"expertise_areas" jsonschema:"description:JSON array of expertise areas the agent has learned"`
-	CurrentContext string  `json:"current_context" jsonschema:"description:The agent's current understanding and knowledge - provide detailed context about what you've learned"`
-	Specialization *string `json:"specialization,omitempty" jsonschema:"description:Primary domain (optional)"`
-	PreferredTools *string `json:"preferred_tools,omitempty" jsonschema:"description:JSON array of tools used (optional)"`
-}
-
-type SnapshotExpertiseResult struct {
-	Success   bool   `json:"success"`
-	Message   string `json:"message"`
-	PersonaID string `json:"persona_id,omitempty"`
-}
-
 // GetContextArgs represents arguments for retrieving stored context
 type GetContextArgs struct {
 	AgentID string `json:"agent_id" jsonschema:"description:Agent ID to get context from"`
@@ -284,20 +233,6 @@ type SessionSummary struct {
 	CurrentTask        *string `json:"current_task,omitempty"`
 	ProjectName        *string `json:"project_name,omitempty"`
 	IsActive           bool    `json:"is_active"`
-}
-
-// LogCompactionArgs represents the arguments for i-log-compaction tool
-type LogCompactionArgs struct {
-	AgentID   string  `json:"agent_id" jsonschema:"description:Agent UUID identifier"`
-	SessionID string  `json:"session_id" jsonschema:"description:Session ID that was compacted"`
-	Summary   *string `json:"summary,omitempty" jsonschema:"description:Compaction summary text (optional)"`
-}
-
-type LogCompactionResult struct {
-	Success         bool   `json:"success"`
-	Message         string `json:"message"`
-	CompactionID    int    `json:"compaction_id,omitempty"`
-	JsonlBackupPath string `json:"jsonl_backup_path,omitempty"`
 }
 
 // LogSessionCostArgs represents the arguments for i-log-session-cost tool

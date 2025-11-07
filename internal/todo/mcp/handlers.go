@@ -38,7 +38,7 @@ type SearchTaskResponse struct {
 // ============================================================================
 
 type CreateRequest struct {
-	ProjectID   string   `json:"project_id"`
+	ProjectID   int      `json:"project_id"`
 	Title       string   `json:"title"`
 	Description *string  `json:"description,omitempty"`
 	Priority    *int     `json:"priority,omitempty"`
@@ -334,7 +334,7 @@ func (h *Handler) HandleTag(ctx context.Context, args json.RawMessage) (interfac
 // ============================================================================
 
 type ListRequest struct {
-	ProjectID string    `json:"project_id"`
+	ProjectID int       `json:"project_id"`
 	Filters   *Filters  `json:"filters,omitempty"`
 	Limit     int       `json:"limit,omitempty"`
 }
@@ -399,7 +399,7 @@ func (h *Handler) HandleList(ctx context.Context, args json.RawMessage) (interfa
 // ============================================================================
 
 type SearchRequest struct {
-	ProjectID string `json:"project_id"`
+	ProjectID int    `json:"project_id"`
 	Query     string `json:"query"`
 	Limit     int    `json:"limit,omitempty"`
 }
@@ -505,7 +505,7 @@ func (h *Handler) HandleVacuum(ctx context.Context, args json.RawMessage) (inter
 // ============================================================================
 
 type GetProjectResponse struct {
-	ProjectID  string  `json:"project_id"`
+	ProjectID  int     `json:"project_id"`
 	Name       string  `json:"name"`
 	Path       *string `json:"path,omitempty"`
 	RemoteURL  *string `json:"remote_url,omitempty"`
@@ -531,7 +531,7 @@ func (h *Handler) HandleGetProject(ctx context.Context, args json.RawMessage) (i
 // ============================================================================
 
 type ProjectSyncRequest struct {
-	ProjectID string `json:"project_id"`
+	ProjectID int    `json:"project_id"`
 	YAML      string `json:"yaml"`
 }
 

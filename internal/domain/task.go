@@ -10,7 +10,7 @@ type Task struct {
 	ID          TaskID
 	Title       string
 	Description string
-	ProjectID   string
+	ProjectID   int
 	StateID     int       // Workflow state: 1=todo, 2=in_progress, 3=done
 	Priority    int       // 0-5 priority level
 	DueAt       time.Time // Optional due date

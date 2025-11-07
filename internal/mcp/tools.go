@@ -1,13 +1,10 @@
 package mcp
 
 import (
-	"bufio"
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -521,25 +518,12 @@ COMPACTION TRACKING
 When Claude detects a conversation compaction (indicated by system message
 'This session is being continued from a previous conversation'), call:
 
-i-log-compaction({
-  "agent_id": "your-agent-id",
-  "session_id": "session-id-that-was-compacted",
-  "summary": "compaction summary text (optional)"
-})
-
-This backs up the JSONL conversation file to data/compactions/ directory.
-The session continues with the same ID, just with compacted (summarized) messages.
-
 ═══════════════════════════════════════════════════════════════
 ADDITIONAL TOOLS
 ═══════════════════════════════════════════════════════════════
 
 i-save-context - Save session state for resumption
-i-load-context - Load previous session context
-i-note - Add contextual notes to session
-i-persona-get - Get persona details
-i-persona-list - List available personas
-i-snapshot-expertise - Save current expertise as persona
+i-note-add - Add contextual notes to session
 
 ═══════════════════════════════════════════════════════════════
 DASHBOARD & TUI
@@ -644,18 +628,6 @@ func (t *Tools) StartSession(args StartSessionArgs) (StartSessionResult, error) 
 	// Always generate a new UUID agent ID
 	agentID := utils.GenerateGitStyleAgentID()
 
-	// Load persona if provided
-	var initialContext string
-	var personaID *string
-	if args.PersonaID != nil && *args.PersonaID != "" {
-		persona, err := t.db.GetPersona(*args.PersonaID)
-		if err != nil {
-			return StartSessionResult{}, fmt.Errorf("failed to load persona %s: %w", *args.PersonaID, err)
-		}
-		initialContext = persona.InitialContext
-		personaID = args.PersonaID
-	}
-
 	// Detect window ID on macOS
 	var windowID *string
 	var terminalApp *string
@@ -682,7 +654,6 @@ func (t *Tools) StartSession(args StartSessionArgs) (StartSessionResult, error) 
 		GitWorktreePath:     args.WorktreePath,
 		FeatureDescription:  &args.Description,
 		ProjectName:         args.ProjectName,
-		PersonaID:           personaID,
 		WindowID:            windowID,
 		TerminalApplication: terminalApp,
 		ParentAgentID:       args.ParentAgentID,
@@ -708,12 +679,7 @@ func (t *Tools) StartSession(args StartSessionArgs) (StartSessionResult, error) 
 	}
 
 	// Log initial entry
-	var logMessage string
-	if personaID != nil {
-		logMessage = fmt.Sprintf("Started session with persona '%s': %s", *personaID, args.Description)
-	} else {
-		logMessage = fmt.Sprintf("Started session: %s", args.Description)
-	}
+	logMessage := fmt.Sprintf("Started session: %s", args.Description)
 
 	log := &database.Log{
 		SessionID: sessionID,
@@ -731,19 +697,13 @@ func (t *Tools) StartSession(args StartSessionArgs) (StartSessionResult, error) 
 		return StartSessionResult{}, fmt.Errorf("failed to update current session: %w", err)
 	}
 
-	var message string
-	if personaID != nil {
-		message = fmt.Sprintf("Session %s started for agent %s with persona '%s' loaded", sessionID, agentID, *personaID)
-	} else {
-		message = fmt.Sprintf("Session %s started for agent %s", sessionID, agentID)
-	}
+	message := fmt.Sprintf("Session %s started for agent %s", sessionID, agentID)
 
 	return StartSessionResult{
-		Success:        true,
-		Message:        message,
-		AgentID:        agentID,
-		SessionID:      sessionID,
-		InitialContext: initialContext,
+		Success:   true,
+		Message:   message,
+		AgentID:   agentID,
+		SessionID: sessionID,
 	}, nil
 }
 
@@ -854,134 +814,6 @@ func (t *Tools) GetSession(args GetSessionArgs) (GetSessionResult, error) {
 	}, nil
 }
 
-// CreatePersona implements the i-persona-create MCP tool
-func (t *Tools) CreatePersona(args CreatePersonaArgs) (CreatePersonaResult, error) {
-	// Check if persona already exists
-	existing, _ := t.db.GetPersona(args.ID)
-	if existing != nil {
-		return CreatePersonaResult{
-			Success: false,
-			Message: fmt.Sprintf("Persona %s already exists", args.ID),
-		}, nil
-	}
-
-	persona := &database.Persona{
-		ID:             args.ID,
-		Name:           args.Name,
-		Description:    args.Description,
-		Expertise:      args.Expertise,
-		InitialContext: args.InitialContext,
-		PreferredTools: args.PreferredTools,
-		Specialization: args.Specialization,
-	}
-
-	if err := t.db.CreatePersona(persona); err != nil {
-		return CreatePersonaResult{
-			Success: false,
-			Message: fmt.Sprintf("Failed to create persona: %v", err),
-		}, fmt.Errorf("database error: %w", err)
-	}
-
-	return CreatePersonaResult{
-		Success: true,
-		Message: fmt.Sprintf("Persona %s created successfully", args.ID),
-	}, nil
-}
-
-// GetPersona implements the i-persona-get MCP tool
-func (t *Tools) GetPersona(args GetPersonaArgs) (GetPersonaResult, error) {
-	persona, err := t.db.GetPersona(args.ID)
-	if err != nil {
-		return GetPersonaResult{
-			Success: false,
-			Message: fmt.Sprintf("Persona not found: %s", args.ID),
-		}, nil
-	}
-
-	return GetPersonaResult{
-		Success:        true,
-		Message:        "Persona retrieved successfully",
-		ID:             persona.ID,
-		Name:           persona.Name,
-		Description:    persona.Description,
-		Expertise:      persona.Expertise,
-		InitialContext: persona.InitialContext,
-		PreferredTools: persona.PreferredTools,
-		Specialization: persona.Specialization,
-	}, nil
-}
-
-// ListPersonas implements the i-persona-list MCP tool
-func (t *Tools) ListPersonas(args ListPersonasArgs) (ListPersonasResult, error) {
-	var specialization string
-	if args.Specialization != nil {
-		specialization = *args.Specialization
-	}
-
-	personas, err := t.db.ListPersonas(specialization)
-	if err != nil {
-		return ListPersonasResult{
-			Success: false,
-			Message: fmt.Sprintf("Failed to list personas: %v", err),
-		}, fmt.Errorf("database error: %w", err)
-	}
-
-	summaries := make([]PersonaSummary, len(personas))
-	for i, p := range personas {
-		summaries[i] = PersonaSummary{
-			ID:             p.ID,
-			Name:           p.Name,
-			Description:    p.Description,
-			Specialization: p.Specialization,
-		}
-	}
-
-	return ListPersonasResult{
-		Success:  true,
-		Message:  fmt.Sprintf("Found %d personas", len(personas)),
-		Personas: summaries,
-	}, nil
-}
-
-// SnapshotExpertise implements the i-snapshot-expertise MCP tool
-// The agent provides its current learned context/expertise to create a reusable persona
-func (t *Tools) SnapshotExpertise(args SnapshotExpertiseArgs) (SnapshotExpertiseResult, error) {
-	// Check if persona already exists
-	existing, _ := t.db.GetPersona(args.PersonaID)
-	if existing != nil {
-		return SnapshotExpertiseResult{
-			Success: false,
-			Message: fmt.Sprintf("Persona %s already exists", args.PersonaID),
-		}, nil
-	}
-
-	description := fmt.Sprintf("Expert persona created from learned context on %s",
-		time.Now().Format("2006-01-02"))
-
-	persona := &database.Persona{
-		ID:             args.PersonaID,
-		Name:           args.PersonaName,
-		Description:    description,
-		Expertise:      args.ExpertiseAreas,
-		InitialContext: args.CurrentContext,
-		PreferredTools: args.PreferredTools,
-		Specialization: args.Specialization,
-	}
-
-	if err := t.db.CreatePersona(persona); err != nil {
-		return SnapshotExpertiseResult{
-			Success: false,
-			Message: fmt.Sprintf("Failed to create persona: %v", err),
-		}, fmt.Errorf("database error: %w", err)
-	}
-
-	return SnapshotExpertiseResult{
-		Success:   true,
-		Message:   fmt.Sprintf("Persona %s created successfully. Use persona_id='%s' when starting new sessions to load this expertise.", args.PersonaName, args.PersonaID),
-		PersonaID: args.PersonaID,
-	}, nil
-}
-
 // ListSessions implements the i-list-sessions MCP tool
 func (t *Tools) ListSessions(args ListSessionsArgs) (ListSessionsResult, error) {
 	var agentID string
@@ -1043,108 +875,6 @@ func strPtrOrEmpty(s *string) string {
 		return "N/A"
 	}
 	return *s
-}
-
-// LogCompaction logs a conversation compaction event and backs up the JSONL file
-func (t *Tools) LogCompaction(args LogCompactionArgs) (LogCompactionResult, error) {
-	// Validate agent exists
-	agent, err := t.db.GetAgent(args.AgentID)
-	if err != nil {
-		return LogCompactionResult{Success: false, Message: fmt.Sprintf("Agent not found: %s", args.AgentID)}, nil
-	}
-
-	// Get project path from agent
-	var projectPath string
-	if agent.GitWorktreePath != nil {
-		projectPath = *agent.GitWorktreePath
-	} else {
-		return LogCompactionResult{Success: false, Message: "Agent does not have a project path - cannot locate JSONL file"}, nil
-	}
-
-	// Construct path to JSONL file
-	// Pattern: ~/.claude/projects/-Users-...-<project-name>/<session-id>.jsonl
-	homeDir := os.Getenv("HOME")
-	claudeProjectsDir := filepath.Join(homeDir, ".claude", "projects")
-
-	// Convert project path to Claude's format (replace / with - and prepend -)
-	projectDirName := "-" + strings.ReplaceAll(strings.TrimPrefix(projectPath, "/"), "/", "-")
-	jsonlPath := filepath.Join(claudeProjectsDir, projectDirName, args.SessionID+".jsonl")
-
-	// Check if JSONL file exists
-	fileInfo, err := os.Stat(jsonlPath)
-	if err != nil {
-		return LogCompactionResult{Success: false, Message: fmt.Sprintf("JSONL file not found: %s", jsonlPath)}, nil
-	}
-
-	// Create compactions directory if it doesn't exist
-	compactionsDir := filepath.Join(homeDir, "projects", "eye-in-the-sky", "data", "compactions")
-	if err := os.MkdirAll(compactionsDir, 0755); err != nil {
-		return LogCompactionResult{Success: false, Message: fmt.Sprintf("Failed to create compactions directory: %v", err)}, nil
-	}
-
-	// Copy JSONL file to compactions directory
-	backupPath := filepath.Join(compactionsDir, args.SessionID+".jsonl")
-	if err := copyFile(jsonlPath, backupPath); err != nil {
-		return LogCompactionResult{Success: false, Message: fmt.Sprintf("Failed to copy JSONL file: %v", err)}, nil
-	}
-
-	// Count messages in JSONL file (optional, for metadata)
-	messageCount, _ := countJSONLLines(backupPath)
-	fileSize := fileInfo.Size()
-
-	// Create compaction record
-	compaction := &database.Compaction{
-		AgentID:       args.AgentID,
-		SessionID:     args.SessionID,
-		Summary:       args.Summary,
-		JsonlFilePath: &backupPath,
-		JsonlFileSize: &fileSize,
-		MessageCount:  &messageCount,
-	}
-
-	if err := t.db.CreateCompaction(compaction); err != nil {
-		return LogCompactionResult{Success: false, Message: fmt.Sprintf("Failed to log compaction: %v", err)}, nil
-	}
-
-	return LogCompactionResult{
-		Success:         true,
-		Message:         fmt.Sprintf("Compaction logged successfully for session %s", args.SessionID),
-		JsonlBackupPath: backupPath,
-	}, nil
-}
-
-// copyFile copies a file from src to dst
-func copyFile(src, dst string) error {
-	sourceFile, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer sourceFile.Close()
-
-	destFile, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer destFile.Close()
-
-	_, err = io.Copy(destFile, sourceFile)
-	return err
-}
-
-// countJSONLLines counts lines in a JSONL file
-func countJSONLLines(path string) (int, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return 0, err
-	}
-	defer file.Close()
-
-	count := 0
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		count++
-	}
-	return count, scanner.Err()
 }
 
 // ISpeak implements the i-speak tool for text-to-speech output

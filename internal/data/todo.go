@@ -143,7 +143,7 @@ func (s *todoStore) LoadByAgent(ctx context.Context, agentID domain.AgentID, lim
 			stateID       int
 			workflowName  *string
 			workflowColor *string
-			projectID     *string
+			projectID     *int
 			projectName   *string
 			priority      int
 			createdAt     string
@@ -169,13 +169,18 @@ func (s *todoStore) LoadByAgent(ctx context.Context, agentID domain.AgentID, lim
 			updatedTime = createdTime
 		}
 
+		projectIDVal := 0
+		if projectID != nil {
+			projectIDVal = *projectID
+		}
+
 		task := domain.Task{
 			ID:               domain.TaskID(id),
 			Title:            title,
 			Description:      derefString(description),
 			StateID:          stateID,
 			WorkflowStatus:   derefString(workflowName),
-			ProjectID:        derefString(projectID),
+			ProjectID:        projectIDVal,
 			Priority:         priority,
 			CreatedAt:        createdTime,
 			UpdatedAt:        updatedTime,
@@ -265,7 +270,7 @@ func (s *todoStore) LoadByProject(ctx context.Context, projectName string, limit
 		return nil, fmt.Errorf("failed to list projects: %w", err)
 	}
 
-	var projectID string
+	var projectID int
 	for _, p := range projects {
 		if p.Name == projectName {
 			projectID = p.ID
@@ -273,7 +278,7 @@ func (s *todoStore) LoadByProject(ctx context.Context, projectName string, limit
 		}
 	}
 
-	if projectID == "" {
+	if projectID == 0 {
 		return []domain.Task{}, nil // Project not found, return empty
 	}
 

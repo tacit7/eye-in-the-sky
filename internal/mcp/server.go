@@ -117,11 +117,6 @@ func (s *Server) registerTools() {
 	}, s.handleSaveSessionContext)
 
 	mcp.AddTool(s.mcp, &mcp.Tool{
-		Name:        "i-log-compaction",
-		Description: "Log conversation compaction and backup JSONL file",
-	}, s.handleLogCompaction)
-
-	mcp.AddTool(s.mcp, &mcp.Tool{
 		Name:        "i-window",
 		Description: "Get current active window info (macOS)",
 	}, s.handleGetCurrentWindow)
@@ -151,15 +146,6 @@ func (s *Server) registerTools() {
 	// 	Name:        "i-update-description",
 	// 	Description: "Update session feature description",
 	// }, s.handleUpdateFeatureDescription)
-
-	// Persona Management Tools
-	mcp.AddTool(s.mcp, &mcp.Tool{
-		Name:        "i-snapshot-expertise",
-		Description: "Save current agent expertise as a reusable persona",
-	}, s.handleSnapshotExpertise)
-
-	// NOTE: i-persona-get and i-persona-list kept internal-only
-	// Available via HandleTool() for dashboard/internal use
 
 	// Todo Management Tools
 	if s.todoRegistry != nil {
@@ -530,60 +516,8 @@ func (s *Server) handleGetSession(ctx context.Context, req *mcp.CallToolRequest,
 	}, result, nil
 }
 
-func (s *Server) handleSnapshotExpertise(ctx context.Context, req *mcp.CallToolRequest, args SnapshotExpertiseArgs) (*mcp.CallToolResult, any, error) {
-	result, err := s.tools.SnapshotExpertise(args)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: result.Message},
-		},
-	}, result, nil
-}
-
-func (s *Server) handleGetPersona(ctx context.Context, req *mcp.CallToolRequest, args GetPersonaArgs) (*mcp.CallToolResult, any, error) {
-	result, err := s.tools.GetPersona(args)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: result.Message},
-		},
-	}, result, nil
-}
-
-func (s *Server) handleListPersonas(ctx context.Context, req *mcp.CallToolRequest, args ListPersonasArgs) (*mcp.CallToolResult, any, error) {
-	result, err := s.tools.ListPersonas(args)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: result.Message},
-		},
-	}, result, nil
-}
-
 func (s *Server) handleListSessions(ctx context.Context, req *mcp.CallToolRequest, args ListSessionsArgs) (*mcp.CallToolResult, any, error) {
 	result, err := s.tools.ListSessions(args)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: result.Message},
-		},
-	}, result, nil
-}
-
-func (s *Server) handleLogCompaction(ctx context.Context, req *mcp.CallToolRequest, args LogCompactionArgs) (*mcp.CallToolResult, any, error) {
-	result, err := s.tools.LogCompaction(args)
 	if err != nil {
 		return nil, nil, err
 	}

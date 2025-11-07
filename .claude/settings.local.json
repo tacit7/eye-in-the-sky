@@ -8,7 +8,8 @@
       "Bash(mkdir:*)",
       "Bash(sqlite3:*)",
       "mcp__eye-in-the-sky__i-end-session",
-      "Bash(go build:*)"
+      "Bash(go build:*)",
+      "Bash(go test:*)"
     ],
     "deny": [],
     "ask": []

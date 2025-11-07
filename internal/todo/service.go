@@ -64,15 +64,15 @@ func (s *Service) GetNotesRepo() *repository.NoteRepo {
 // ============================================================================
 
 // CreateProject creates a new project.
-func (s *Service) CreateProject(uuid, name string) (*models.Project, error) {
+func (s *Service) CreateProject(name string, path *string, remoteURL *string) (*models.Project, error) {
 	if err := util.ValidateProjectName(name); err != nil {
 		return nil, err
 	}
-	return s.projects.CreateProject(uuid, name)
+	return s.projects.CreateProject(name, path, remoteURL)
 }
 
 // GetProject retrieves a project by ID.
-func (s *Service) GetProject(projectID string) (*models.Project, error) {
+func (s *Service) GetProject(projectID int) (*models.Project, error) {
 	return s.projects.GetProjectByID(projectID)
 }
 
@@ -82,7 +82,7 @@ func (s *Service) ListProjects() ([]models.Project, error) {
 }
 
 // UpdateProject updates a project's metadata.
-func (s *Service) UpdateProject(projectID string, updates map[string]interface{}) (*models.Project, error) {
+func (s *Service) UpdateProject(projectID int, updates map[string]interface{}) (*models.Project, error) {
 	return s.projects.UpdateProject(projectID, updates)
 }
 
@@ -131,7 +131,7 @@ func (s *Service) GetWorkflow() ([]models.WorkflowState, error) {
 // ============================================================================
 
 // CreateTask creates a new task in a project.
-func (s *Service) CreateTask(projectID string, title string) (*models.Task, error) {
+func (s *Service) CreateTask(projectID int, title string) (*models.Task, error) {
 	if err := util.ValidateDescription(title); err != nil {
 		return nil, err
 	}
@@ -149,7 +149,7 @@ func (s *Service) GetTask(taskID string) (*models.Task, error) {
 }
 
 // ListTasks retrieves tasks for a project with optional filters.
-func (s *Service) ListTasks(projectID string, filters *models.Filters) ([]models.Task, error) {
+func (s *Service) ListTasks(projectID int, filters *models.Filters) ([]models.Task, error) {
 	if filters == nil {
 		filters = &models.Filters{IsActive: true}
 	}
@@ -157,7 +157,7 @@ func (s *Service) ListTasks(projectID string, filters *models.Filters) ([]models
 }
 
 // ListTasksWithSort retrieves tasks for a project sorted by a specific field.
-func (s *Service) ListTasksWithSort(projectID string, filters models.Filters, sortBy models.SortOrder) ([]models.Task, error) {
+func (s *Service) ListTasksWithSort(projectID int, filters models.Filters, sortBy models.SortOrder) ([]models.Task, error) {
 	return s.tasks.List(projectID, filters, sortBy)
 }
 
@@ -172,7 +172,7 @@ func (s *Service) HardDeleteTask(taskID string) error {
 }
 
 // SearchTasks performs full-text search on tasks.
-func (s *Service) SearchTasks(projectID string, query string, limit, offset int) ([]models.SearchResult, error) {
+func (s *Service) SearchTasks(projectID int, query string, limit, offset int) ([]models.SearchResult, error) {
 	if err := util.ValidateSearchQuery(query); err != nil {
 		return nil, err
 	}
@@ -235,7 +235,7 @@ func (s *Service) DeleteNote(noteID int) error {
 }
 
 // GetProjectNoteStats returns note statistics for a project.
-func (s *Service) GetProjectNoteStats(projectID string) (*repository.NoteStats, error) {
+func (s *Service) GetProjectNoteStats(projectID int) (*repository.NoteStats, error) {
 	return s.notes.GetProjectNoteStats(projectID)
 }
 

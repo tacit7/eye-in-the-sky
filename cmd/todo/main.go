@@ -97,8 +97,7 @@ func handleProject(svc *todo.Service, args []string) {
 			return
 		}
 		name := args[1]
-		uuid := fmt.Sprintf("project-%d", os.Getpid()) // Placeholder UUID
-		project, err := svc.CreateProject(uuid, name)
+		project, err := svc.CreateProject(name, nil, nil)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -137,7 +136,7 @@ func handleTask(svc *todo.Service, args []string) {
 		fmt.Sscanf(args[1], "%d", &projectID)
 		description := args[2]
 
-		task, err := svc.CreateTask(projectID, description, nil)
+		task, err := svc.CreateTask(projectID, description)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -165,8 +164,7 @@ func handleTask(svc *todo.Service, args []string) {
 			fmt.Println("Usage: todo task get <task_id>")
 			return
 		}
-		taskID := 0
-		fmt.Sscanf(args[1], "%d", &taskID)
+		taskID := args[1]
 
 		task, err := svc.GetTask(taskID)
 		if err != nil {
@@ -179,8 +177,7 @@ func handleTask(svc *todo.Service, args []string) {
 			fmt.Println("Usage: todo task add-tag <task_id> <tag_name>")
 			return
 		}
-		taskID := 0
-		fmt.Sscanf(args[1], "%d", &taskID)
+		taskID := args[1]
 		tagName := args[2]
 
 		tag, err := svc.AddTaskTag(taskID, tagName)
@@ -194,8 +191,7 @@ func handleTask(svc *todo.Service, args []string) {
 			fmt.Println("Usage: todo task add-note <task_id> <note_text>")
 			return
 		}
-		taskID := 0
-		fmt.Sscanf(args[1], "%d", &taskID)
+		taskID := args[1]
 		noteText := args[2]
 
 		note, err := svc.AddTaskNote(taskID, noteText)
@@ -223,16 +219,15 @@ func handleNote(svc *todo.Service, args []string) {
 			fmt.Println("Usage: todo note get <task_id>")
 			return
 		}
-		taskID := 0
-		fmt.Sscanf(args[1], "%d", &taskID)
+		taskID := args[1]
 
 		notes, err := svc.GetNotesByTask(taskID)
 		if err != nil {
 			log.Fatal(err)
 		}
-		fmt.Printf("Notes for task %d:\n", taskID)
+		fmt.Printf("Notes for task %s:\n", taskID)
 		for _, n := range notes {
-			fmt.Printf("  [%d] %s\n", n.ID, n.BodyMarkdown)
+			fmt.Printf("  [%d] %s\n", n.ID, n.Body)
 		}
 
 	default:

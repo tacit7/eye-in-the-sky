@@ -22,7 +22,7 @@ func NewTaskRepo(database *database.DB) *TaskRepo {
 }
 
 // CreateTask creates a new task in a project.
-func (tr *TaskRepo) CreateTask(projectID string, input models.CreateTaskInput) (*models.Task, error) {
+func (tr *TaskRepo) CreateTask(projectID int, input models.CreateTaskInput) (*models.Task, error) {
 	// Validate input
 	if strings.TrimSpace(input.Title) == "" {
 		return nil, fmt.Errorf("title cannot be empty")
@@ -278,7 +278,7 @@ func (tr *TaskRepo) MoveToState(taskID string, stateID int) (*models.Task, error
 }
 
 // List retrieves tasks for a project with filters and ordering.
-func (tr *TaskRepo) List(projectID string, filters models.Filters, sortBy models.SortOrder) ([]models.Task, error) {
+func (tr *TaskRepo) List(projectID int, filters models.Filters, sortBy models.SortOrder) ([]models.Task, error) {
 	query := `SELECT id, project_id, title, description, state_id, priority, due_at, completed_at, session_id, agent_id, created_at, updated_at, archived
 	          FROM tasks WHERE project_id = ?`
 
@@ -358,7 +358,7 @@ func (tr *TaskRepo) List(projectID string, filters models.Filters, sortBy models
 }
 
 // Search performs full-text search on tasks using FTS5.
-func (tr *TaskRepo) Search(projectID string, searchQuery string, limit, offset int) ([]models.SearchResult, error) {
+func (tr *TaskRepo) Search(projectID int, searchQuery string, limit, offset int) ([]models.SearchResult, error) {
 	// Use CTE to get FTS5 results with rank, then join with tasks
 	rows, err := tr.db.Query(
 		`WITH fts_results AS (
