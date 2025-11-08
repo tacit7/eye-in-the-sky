@@ -21,10 +21,10 @@ func NewCommitsStore(db *sql.DB) *commitsStore {
 // LoadByAgent loads commits for a specific agent
 func (s *commitsStore) LoadByAgent(ctx context.Context, agentID domain.AgentID) ([]domain.Commit, error) {
 	query := `
-		SELECT id, agent_id, hash, message, timestamp
+		SELECT id, agent_id, commit_hash, commit_message, created_at
 		FROM commits
 		WHERE agent_id = ?
-		ORDER BY timestamp DESC
+		ORDER BY created_at DESC
 	`
 
 	rows, err := s.db.QueryContext(ctx, query, string(agentID))
@@ -49,9 +49,9 @@ func (s *commitsStore) LoadByAgent(ctx context.Context, agentID domain.AgentID) 
 // LoadRecent loads the most recent commits across all agents
 func (s *commitsStore) LoadRecent(ctx context.Context, limit int) ([]domain.Commit, error) {
 	query := `
-		SELECT id, agent_id, hash, message, timestamp
+		SELECT id, agent_id, commit_hash, commit_message, created_at
 		FROM commits
-		ORDER BY timestamp DESC
+		ORDER BY created_at DESC
 		LIMIT ?
 	`
 
@@ -83,10 +83,10 @@ func (s *commitsStore) LoadByAgentHierarchy(ctx context.Context, agentID domain.
 			SELECT a.id FROM agents a
 			INNER JOIN agent_hierarchy ah ON a.parent_agent_id = ah.id
 		)
-		SELECT c.id, c.agent_id, c.hash, c.message, c.timestamp
+		SELECT c.id, c.agent_id, c.commit_hash, c.commit_message, c.created_at
 		FROM commits c
 		WHERE c.agent_id IN (SELECT id FROM agent_hierarchy)
-		ORDER BY c.timestamp DESC
+		ORDER BY c.created_at DESC
 		LIMIT ?
 	`
 
