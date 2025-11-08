@@ -31,10 +31,16 @@ func (tr *TaskRepo) CreateTask(projectID int, input models.CreateTaskInput) (*mo
 	// Generate UUID for task ID
 	taskID := uuid.New().String()
 
+	// Default to state_id = 1 (todo) if not provided
+	stateID := 1
+	if input.StateID != nil {
+		stateID = *input.StateID
+	}
+
 	_, err := tr.db.Exec(
 		`INSERT INTO tasks (id, project_id, title, description, state_id, priority, due_at, session_id, agent_id, created_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		taskID, projectID, input.Title, input.Description, input.StateID, input.Priority, input.DueAt, input.SessionID, input.AgentID, time.Now(),
+		taskID, projectID, input.Title, input.Description, stateID, input.Priority, input.DueAt, input.SessionID, input.AgentID, time.Now(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to insert task: %w", err)
@@ -47,7 +53,7 @@ func (tr *TaskRepo) CreateTask(projectID int, input models.CreateTaskInput) (*mo
 func (tr *TaskRepo) FindByID(id string) (*models.Task, error) {
 	task := &models.Task{}
 	err := tr.db.QueryRow(
-		`SELECT id, project_id, title, description, state_id, priority, due_at, completed_at, session_id, agent_id, created_at, updated_at, archived
+		`SELECT id, project_id, title, description, state_id, COALESCE(priority, 0), due_at, completed_at, session_id, agent_id, created_at, updated_at, COALESCE(archived, 0)
 		 FROM tasks WHERE id = ?`,
 		id,
 	).Scan(&task.ID, &task.ProjectID, &task.Title, &task.Description, &task.StateID, &task.Priority, &task.DueAt, &task.CompletedAt, &task.SessionID, &task.AgentID, &task.CreatedAt, &task.UpdatedAt, &task.Archived)
@@ -279,7 +285,7 @@ func (tr *TaskRepo) MoveToState(taskID string, stateID int) (*models.Task, error
 
 // List retrieves tasks for a project with filters and ordering.
 func (tr *TaskRepo) List(projectID int, filters models.Filters, sortBy models.SortOrder) ([]models.Task, error) {
-	query := `SELECT id, project_id, title, description, state_id, priority, due_at, completed_at, session_id, agent_id, created_at, updated_at, archived
+	query := `SELECT id, project_id, title, description, state_id, COALESCE(priority, 0), due_at, completed_at, session_id, agent_id, created_at, updated_at, COALESCE(archived, 0)
 	          FROM tasks WHERE project_id = ?`
 
 	args := []interface{}{projectID}
@@ -364,7 +370,7 @@ func (tr *TaskRepo) Search(projectID int, searchQuery string, limit, offset int)
 		`WITH fts_results AS (
 			SELECT task_id, rank FROM task_search WHERE task_search MATCH ?
 		)
-		SELECT t.id, t.project_id, t.title, t.description, t.state_id, t.priority, t.due_at, t.completed_at, t.session_id, t.agent_id, t.created_at, t.updated_at, t.archived, fts_results.rank
+		SELECT t.id, t.project_id, t.title, t.description, t.state_id, COALESCE(t.priority, 0), t.due_at, t.completed_at, t.session_id, t.agent_id, t.created_at, t.updated_at, COALESCE(t.archived, 0), fts_results.rank
 		FROM fts_results
 		JOIN tasks t ON t.id = fts_results.task_id
 		WHERE t.project_id = ?
