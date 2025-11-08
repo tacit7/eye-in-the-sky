@@ -262,6 +262,43 @@ func (s *todoStore) MarkDone(ctx context.Context, taskID domain.TaskID) error {
 	return nil
 }
 
+func (s *todoStore) MarkTodo(ctx context.Context, taskID domain.TaskID) error {
+	// Get the task first to find the "todo" state ID
+	repo := s.svc.GetTasksRepo()
+	_, err := repo.FindByID(string(taskID))
+	if err != nil {
+		return fmt.Errorf("task not found: %w", err)
+	}
+
+	// Get workflow states to find "todo" state
+	states, err := s.svc.GetProjectsRepo().GetWorkflowStates()
+	if err != nil {
+		return fmt.Errorf("failed to get workflow states: %w", err)
+	}
+
+	var todoStateID *int
+	for _, state := range states {
+		if state.Name == "todo" {
+			todoStateID = &state.ID
+			break
+		}
+	}
+
+	if todoStateID == nil {
+		// Default to state_id 1 if "todo" state not found
+		id := 1
+		todoStateID = &id
+	}
+
+	// Update task to todo state
+	_, err = repo.MoveToState(string(taskID), *todoStateID)
+	if err != nil {
+		return fmt.Errorf("failed to mark task todo: %w", err)
+	}
+
+	return nil
+}
+
 // LoadByProject loads tasks for a specific project
 func (s *todoStore) LoadByProject(ctx context.Context, projectName string, limit int) ([]domain.Task, error) {
 	// Find project by name
@@ -379,6 +416,69 @@ func (s *todoStore) getWorkflowStatusForState(stateID int) string {
 	}
 
 	return ""
+}
+
+// LoadTaskNotes loads task notes (annotations) for a specific task
+func (s *todoStore) LoadTaskNotes(ctx context.Context, taskID domain.TaskID) ([]domain.TaskNote, error) {
+	if s.svc == nil {
+		return []domain.TaskNote{}, nil
+	}
+
+	query := `
+		SELECT id, task_id, author, body, created_at
+		FROM task_notes
+		WHERE task_id = ?
+		ORDER BY created_at ASC
+	`
+
+	rows, err := s.svc.GetDB().Query(query, string(taskID))
+	if err != nil {
+		return nil, fmt.Errorf("failed to query task notes: %w", err)
+	}
+	defer rows.Close()
+
+	var notes []domain.TaskNote
+	for rows.Next() {
+		var (
+			id        int
+			taskIDStr string
+			author    *string
+			body      string
+			createdAt string
+		)
+
+		if err := rows.Scan(&id, &taskIDStr, &author, &body, &createdAt); err != nil {
+			return nil, fmt.Errorf("failed to scan task note row: %w", err)
+		}
+
+		createdTime, _ := time.Parse(time.RFC3339, createdAt)
+
+		note := domain.TaskNote{
+			ID:        id,
+			TaskID:    domain.TaskID(taskIDStr),
+			Author:    derefString(author),
+			Body:      body,
+			CreatedAt: createdTime,
+		}
+
+		notes = append(notes, note)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error reading task note rows: %w", err)
+	}
+
+	return notes, nil
+}
+
+// AddTaskNote adds an annotation to a task
+func (s *todoStore) AddTaskNote(ctx context.Context, taskID domain.TaskID, body string) error {
+	if s.svc == nil {
+		return fmt.Errorf("todo service not available")
+	}
+
+	_, err := s.svc.AddTaskNote(string(taskID), body)
+	return err
 }
 
 // Helper function to dereference string pointers

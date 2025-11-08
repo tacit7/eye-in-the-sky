@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os/exec"
+	"sort"
 	"strings"
 	"time"
 
@@ -227,9 +228,10 @@ type Model struct {
 	claudeShowingContent bool
 
 	// Modal system
-	modalManager *modal.Modal
-	noteModal    components.NoteModal
-	keybindResolver *keybindings.Resolver
+	modalManager         *modal.Modal
+	noteModal            components.NoteModal
+	taskAnnotationModal  components.TaskAnnotationModal
+	keybindResolver      *keybindings.Resolver
 
 	// Config tab state
 	keybindingsYAML     string // Current YAML content
@@ -391,7 +393,7 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 
 	// Create tabs for agent detail view (← is back arrow, unicode 8678)
 	tabs := components.NewNavBar(
-		[]string{"← Back", "[O]verview", "[T]asks", "[A]ctions", "[L]ogs", "[C]ommits", "[N]otes", "[S]ession Context"},
+		[]string{"← Back", "[O]verview", "[T]asks", "[L]ogs", "[C]ommits", "[N]otes", "[S]ession Context"},
 		theme.Colors.Active,
 		theme.Colors.Text,
 	)
@@ -478,12 +480,13 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 		usageDirty:     true, // Start dirty to force initial build
 		claudeFiles:    []ClaudeFile{},
 		claudeShowingContent: false,
-		modalManager: modalManager,
-		noteModal:    components.NewNoteModal(80, 24), // Initialize with default size
-		keybindResolver: keybindResolver,
-		keybindingsError: keybindingsError,
-		overviewStyles: NewOverviewStyles(styles),
-		overviewDirty:  true, // Start dirty to force initial render
+		modalManager:         modalManager,
+		noteModal:            components.NewNoteModal(80, 24), // Initialize with default size
+		taskAnnotationModal:  components.NewTaskAnnotationModal(80, 24),
+		keybindResolver:      keybindResolver,
+		keybindingsError:     keybindingsError,
+		overviewStyles:       NewOverviewStyles(styles),
+		overviewDirty:        true, // Start dirty to force initial render
 	}
 
 	// Initialize view renderers map
@@ -971,6 +974,24 @@ func (m *Model) loadTasks() error {
 		return err
 	}
 
+	// Sort tasks by priority, status, and creation date (same logic as renderTaskList)
+	sort.Slice(tasks, func(i, j int) bool {
+		// Archived tasks to bottom
+		if tasks[i].Archived != tasks[j].Archived {
+			return !tasks[i].Archived
+		}
+		// Higher priority first
+		if tasks[i].Priority != tasks[j].Priority {
+			return tasks[i].Priority > tasks[j].Priority
+		}
+		// Earlier state first (todo < in_progress < done)
+		if tasks[i].StateID != tasks[j].StateID {
+			return tasks[i].StateID < tasks[j].StateID
+		}
+		// Newer first
+		return tasks[i].CreatedAt.After(tasks[j].CreatedAt)
+	})
+
 	elapsed := time.Since(start)
 	endTime := time.Now().Format("15:04:05.000")
 	log.Printf("[PERF][%s] loadTasks() sync complete in %v", endTime, elapsed)
@@ -1004,7 +1025,7 @@ func (m *Model) loadTasksCmd() tea.Cmd {
 		if err := m.loadTasks(); err != nil {
 			return TasksErrorMsg{Error: err}
 		}
-		return nil
+		return TasksLoadedMsg{Tasks: m.tasks}
 	}
 }
 
@@ -1027,12 +1048,12 @@ func (m *Model) loadTabData() error {
 	switch m.tabs.ActiveIndex {
 	case 2: // Tasks tab
 		return m.loadTasks()
-	case 4: // Logs tab
+	case 3: // Logs tab
 		return m.loadLogs()
-	case 7: // Session Context tab
+	case 6: // Session Context tab
 		return m.loadSessionContexts()
 	default:
-		// Other tabs (Overview, Actions, Commits, Notes) already loaded by loadAgentDetails
+		// Other tabs (Overview, Commits, Notes) already loaded by loadAgentDetails
 		return nil
 	}
 }

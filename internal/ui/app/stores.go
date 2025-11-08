@@ -31,8 +31,17 @@ type TaskStore interface {
 	// MarkDone marks a task as completed
 	MarkDone(ctx context.Context, taskID domain.TaskID) error
 
+	// MarkTodo marks a task as todo
+	MarkTodo(ctx context.Context, taskID domain.TaskID) error
+
 	// LoadByProject returns tasks for a specific project
 	LoadByProject(ctx context.Context, projectName string, limit int) ([]domain.Task, error)
+
+	// LoadTaskNotes returns annotations for a specific task
+	LoadTaskNotes(ctx context.Context, taskID domain.TaskID) ([]domain.TaskNote, error)
+
+	// AddTaskNote adds an annotation to a task
+	AddTaskNote(ctx context.Context, taskID domain.TaskID, body string) error
 }
 
 // MetricsStore handles session metrics operations

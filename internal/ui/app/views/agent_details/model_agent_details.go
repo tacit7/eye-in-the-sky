@@ -11,11 +11,11 @@ const (
 	tabBack           = 0 // iota // 0 ← back
 	tabOverview       = 1 // 1
 	tabTasks          = 2 // 2
-	tabActions        = 3 // 3
-	tabLogs           = 4 // 4
-	tabCommits        = 5 // 5
-	tabNotes          = 6 // 6
-	tabSessionContext = 7 // 7
+	tabActions        = 3 // 3 (removed from UI but kept for compatibility)
+	tabLogs           = 3 // 3 (was 4)
+	tabCommits        = 4 // 4 (was 5)
+	tabNotes          = 5 // 5 (was 6)
+	tabSessionContext = 6 // 6 (was 7)
 )
 
 type Styles struct {

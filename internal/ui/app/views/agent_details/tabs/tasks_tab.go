@@ -28,20 +28,20 @@ func RenderTasksSplitPane(ctx *DataContext, overviewStyles OverviewStyles, selec
 		return theme.TextMuted.Render("\n  No tasks found for this agent\n")
 	}
 
-	// Sort tasks
-	sortedTasks := sortTasks(ctx.Tasks)
+	// Tasks are already sorted in model.loadTasks()
+	tasks := ctx.Tasks
 
 	// Calculate split widths
 	leftWidth := width / 2
 	rightWidth := width - leftWidth - 1
 
 	// Render left pane (task list)
-	leftPane := renderTaskList(sortedTasks, selectedIndex, leftWidth)
+	leftPane := renderTaskList(tasks, selectedIndex, leftWidth)
 
 	// Render right pane (selected task details)
 	rightPane := ""
-	if selectedIndex >= 0 && selectedIndex < len(sortedTasks) {
-		rightPane = renderTaskDetails(sortedTasks[selectedIndex], ctx.TaskNotes, rightWidth)
+	if selectedIndex >= 0 && selectedIndex < len(tasks) {
+		rightPane = renderTaskDetails(tasks[selectedIndex], ctx.TaskNotes, rightWidth, ctx.MarkdownRenderer)
 	} else {
 		rightPane = theme.TextMuted.Copy().
 			Width(rightWidth).
@@ -58,7 +58,7 @@ func RenderTasksSplitPane(ctx *DataContext, overviewStyles OverviewStyles, selec
 
 	renderTime := time.Since(start)
 	endTime := time.Now().Format("15:04:05.000")
-	log.Printf("[PERF][%s] Task render complete (%d tasks) took %v", endTime, len(sortedTasks), renderTime)
+	log.Printf("[PERF][%s] Task render complete (%d tasks) took %v", endTime, len(tasks), renderTime)
 	return result
 }
 
@@ -91,27 +91,30 @@ func sortTasks(tasks []domain.Task) []domain.Task {
 func renderTaskList(tasks []domain.Task, selectedIndex int, width int) string {
 	var sb strings.Builder
 
-	// Header
-	sb.WriteString(theme.TextSubtitle.Render("Tasks"))
-	sb.WriteString("\n")
-	sb.WriteString(theme.TextMuted.Render(strings.Repeat("─", width-2)))
-	sb.WriteString("\n\n")
-
 	// Task items
 	for i, task := range tasks {
 		isSelected := i == selectedIndex
+
+		// Cursor indicator
+		cursor := "  "
+		if isSelected {
+			cursor = "> "
+		}
+
+		// Status icon
+		statusIcon := getTaskStateIcon(task.StateID)
 
 		// Priority indicator
 		priDisplay := formatPriority(task.Priority)
 
 		// Title with truncation
 		title := task.Title
-		if len(title) > width-20 {
-			title = title[:width-23] + "..."
+		if len(title) > width-12 {
+			title = title[:width-15] + "..."
 		}
 
-		// Build line
-		line := fmt.Sprintf("%s %s", priDisplay, title)
+		// Build line: cursor status priority title
+		line := fmt.Sprintf("%s%s %s %s", cursor, statusIcon, priDisplay, title)
 
 		// Apply style
 		if isSelected {
@@ -128,31 +131,14 @@ func renderTaskList(tasks []domain.Task, selectedIndex int, width int) string {
 }
 
 // renderTaskDetails renders the right pane with description and annotations
-func renderTaskDetails(task domain.Task, taskNotes []domain.TaskNote, width int) string {
+func renderTaskDetails(task domain.Task, taskNotes []domain.TaskNote, width int, mdRenderer MarkdownRenderer) string {
 	var sb strings.Builder
 
 	// Task header
 	sb.WriteString(theme.TextTitle.Copy().Width(width-4).Render(task.Title))
 	sb.WriteString("\n\n")
 
-	// Status and priority
-	statusLine := fmt.Sprintf("%s  %s",
-		theme.TextLabel.Render("Status:"),
-		theme.TextValue.Render(task.WorkflowStatus))
-	sb.WriteString(statusLine)
-	sb.WriteString("\n")
-
-	priLine := fmt.Sprintf("%s  %s",
-		theme.TextLabel.Render("Priority:"),
-		theme.TextValue.Render(formatPriorityText(task.Priority)))
-	sb.WriteString(priLine)
-	sb.WriteString("\n\n")
-
-	// Description section
-	sb.WriteString(theme.TextSubtitle.Render("Description"))
-	sb.WriteString("\n")
-	sb.WriteString(theme.TextMuted.Render(strings.Repeat("─", width-4)))
-	sb.WriteString("\n")
+	// Description
 	descStyle := theme.TextNormal.Copy().Width(width - 4)
 	sb.WriteString(descStyle.Render(task.Description))
 	sb.WriteString("\n\n")
@@ -175,7 +161,18 @@ func renderTaskDetails(task domain.Task, taskNotes []domain.TaskNote, width int)
 			noteHeader := fmt.Sprintf("[%s] %s:", timestamp, author)
 			sb.WriteString(theme.TextTimestamp.Render(noteHeader))
 			sb.WriteString("\n")
-			sb.WriteString(theme.TextNormal.Copy().Width(width-4).Render(note.Body))
+
+			// Render markdown if renderer available, otherwise plain text
+			renderedBody := note.Body
+			if mdRenderer != nil {
+				rendered, err := mdRenderer.Render(note.Body)
+				if err == nil {
+					renderedBody = rendered
+				}
+				// On error, fall back to plain text
+			}
+
+			sb.WriteString(renderedBody)
 			sb.WriteString("\n\n")
 		}
 	}
@@ -187,17 +184,17 @@ func renderTaskDetails(task domain.Task, taskNotes []domain.TaskNote, width int)
 func formatPriority(priority int) string {
 	switch priority {
 	case 5:
-		return theme.TextError.Render("█████")
+		return theme.TextError.Render("C") // Critical
 	case 4:
-		return theme.TextWarning.Render("████░")
+		return theme.TextWarning.Render("H") // High
 	case 3:
-		return theme.TextHighlight.Render("███░░")
+		return theme.TextHighlight.Render("H") // High
 	case 2:
-		return theme.TextValue.Render("██░░░")
+		return theme.TextValue.Render("M") // Medium
 	case 1:
-		return theme.TextMuted.Render("█░░░░")
+		return theme.TextMuted.Render("L") // Low
 	default:
-		return theme.TextMuted.Render("░░░░░")
+		return theme.TextMuted.Render("-") // None
 	}
 }
 
@@ -216,6 +213,20 @@ func formatPriorityText(priority int) string {
 		return "LOW"
 	default:
 		return "NONE"
+	}
+}
+
+// getTaskStateIcon returns an icon for the task state
+func getTaskStateIcon(stateID int) string {
+	switch stateID {
+	case 1:
+		return "⬜" // todo
+	case 2:
+		return "▶️" // in progress
+	case 3:
+		return "✅" // done
+	default:
+		return "❓"
 	}
 }
 

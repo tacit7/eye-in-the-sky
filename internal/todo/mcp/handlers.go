@@ -80,6 +80,9 @@ func (h *Handler) HandleCreate(ctx context.Context, args json.RawMessage) (inter
 	}
 	defer tx.Rollback()
 
+	// Create transaction-scoped repository
+	txRepo := h.svc.GetTasksRepo().WithTx(tx)
+
 	// Create task
 	input := models.CreateTaskInput{
 		Title:       req.Title,
@@ -91,7 +94,7 @@ func (h *Handler) HandleCreate(ctx context.Context, args json.RawMessage) (inter
 		AgentID:     req.AgentID,
 	}
 
-	task, err := h.svc.GetTasksRepo().CreateTask(req.ProjectID, input)
+	task, err := txRepo.CreateTask(req.ProjectID, input)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create task: %w", err)
 	}
@@ -101,7 +104,7 @@ func (h *Handler) HandleCreate(ctx context.Context, args json.RawMessage) (inter
 		if err := util.ValidateTagName(tagName); err != nil {
 			return nil, err
 		}
-		if _, err := h.svc.GetTasksRepo().AddTag(task.ID, tagName); err != nil {
+		if _, err := txRepo.AddTag(task.ID, tagName); err != nil {
 			return nil, fmt.Errorf("failed to add tag: %w", err)
 		}
 	}
@@ -144,14 +147,17 @@ func (h *Handler) HandleAnnotate(ctx context.Context, args json.RawMessage) (int
 	}
 	defer tx.Rollback()
 
+	// Create transaction-scoped repository
+	txRepo := h.svc.GetTasksRepo().WithTx(tx)
+
 	// Add note
-	_, err = h.svc.GetTasksRepo().AddNote(req.TaskID, req.Body)
+	_, err = txRepo.AddNote(req.TaskID, req.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to add note: %w", err)
 	}
 
 	// Get task for response
-	task, err := h.svc.GetTasksRepo().FindByID(req.TaskID)
+	task, err := txRepo.FindByID(req.TaskID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve task: %w", err)
 	}
@@ -187,8 +193,11 @@ func (h *Handler) HandleStart(ctx context.Context, args json.RawMessage) (interf
 	}
 	defer tx.Rollback()
 
+	// Create transaction-scoped repository
+	txRepo := h.svc.GetTasksRepo().WithTx(tx)
+
 	// State ID 2 = "in_progress" (from migration defaults)
-	task, err := h.svc.GetTasksRepo().MoveToState(req.TaskID, 2)
+	task, err := txRepo.MoveToState(req.TaskID, 2)
 	if err != nil {
 		return nil, fmt.Errorf("failed to move task to in_progress: %w", err)
 	}
@@ -220,8 +229,11 @@ func (h *Handler) HandleDone(ctx context.Context, args json.RawMessage) (interfa
 	}
 	defer tx.Rollback()
 
+	// Create transaction-scoped repository
+	txRepo := h.svc.GetTasksRepo().WithTx(tx)
+
 	// State ID 3 = "done" (from migration defaults)
-	task, err := h.svc.GetTasksRepo().MoveToState(req.TaskID, 3)
+	task, err := txRepo.MoveToState(req.TaskID, 3)
 	if err != nil {
 		return nil, fmt.Errorf("failed to move task to done: %w", err)
 	}
@@ -258,7 +270,10 @@ func (h *Handler) HandleStatus(ctx context.Context, args json.RawMessage) (inter
 	}
 	defer tx.Rollback()
 
-	task, err := h.svc.GetTasksRepo().MoveToState(req.TaskID, req.StateID)
+	// Create transaction-scoped repository
+	txRepo := h.svc.GetTasksRepo().WithTx(tx)
+
+	task, err := txRepo.MoveToState(req.TaskID, req.StateID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to move task to state %d: %w", req.StateID, err)
 	}
@@ -296,24 +311,27 @@ func (h *Handler) HandleTag(ctx context.Context, args json.RawMessage) (interfac
 	}
 	defer tx.Rollback()
 
+	// Create transaction-scoped repository
+	txRepo := h.svc.GetTasksRepo().WithTx(tx)
+
 	// Add tags
 	for _, tagName := range req.Add {
 		if err := util.ValidateTagName(tagName); err != nil {
 			return nil, err
 		}
-		if _, err := h.svc.GetTasksRepo().AddTag(req.TaskID, tagName); err != nil {
+		if _, err := txRepo.AddTag(req.TaskID, tagName); err != nil {
 			return nil, fmt.Errorf("failed to add tag: %w", err)
 		}
 	}
 
 	// Remove tags
 	for _, tagName := range req.Remove {
-		if err := h.svc.GetTasksRepo().RemoveTag(req.TaskID, tagName); err != nil {
+		if err := txRepo.RemoveTag(req.TaskID, tagName); err != nil {
 			return nil, fmt.Errorf("failed to remove tag: %w", err)
 		}
 	}
 
-	task, err := h.svc.GetTasksRepo().FindByID(req.TaskID)
+	task, err := txRepo.FindByID(req.TaskID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve task: %w", err)
 	}
@@ -463,7 +481,10 @@ func (h *Handler) HandleDelete(ctx context.Context, args json.RawMessage) (inter
 	}
 	defer tx.Rollback()
 
-	if err := h.svc.HardDeleteTask(req.TaskID); err != nil {
+	// Create transaction-scoped repository
+	txRepo := h.svc.GetTasksRepo().WithTx(tx)
+
+	if err := txRepo.HardDelete(req.TaskID); err != nil {
 		return nil, fmt.Errorf("failed to delete task: %w", err)
 	}
 

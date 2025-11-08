@@ -24,8 +24,8 @@ func (s *notesStore) LoadByAgent(ctx context.Context, agentID domain.AgentID, se
 	query := `
 		SELECT id, parent_id, parent_type, body, created_at
 		FROM notes
-		WHERE (parent_id = ? AND parent_type = 'agents')
-		   OR (parent_id = ? AND parent_type = 'sessions')
+		WHERE (parent_id = ? AND parent_type = 'agent')
+		   OR (parent_id = ? AND parent_type = 'session')
 		ORDER BY created_at DESC
 	`
 

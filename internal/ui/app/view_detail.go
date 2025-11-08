@@ -1,6 +1,8 @@
 package app
 
 import (
+	"context"
+
 	"github.com/tacit7/eye-in-the-sky/internal/domain"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/app/views/agent_details"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/app/views/agent_details/tabs"
@@ -12,18 +14,30 @@ func (m *Model) renderDetail() string {
 		return "No agent selected"
 	}
 
+	// Load task notes for the selected task
+	var taskNotes []domain.TaskNote
+	if m.tasksIndex >= 0 && m.tasksIndex < len(m.tasks) {
+		selectedTask := m.tasks[m.tasksIndex]
+		notes, err := m.data.Tasks.LoadTaskNotes(context.Background(), selectedTask.ID)
+		if err == nil {
+			taskNotes = notes
+		}
+	}
+
 	// Create context for agent details
 	ctx := &agent_details.DataContext{
 		Agent:             m.selectedAgent,
 		Commits:           m.commits,
 		Notes:             m.notes,
 		Tasks:             m.tasks,
-		TaskNotes:         []domain.TaskNote{}, // TODO: Load based on selected task
+		TaskNotes:         taskNotes,
 		Actions:           m.actions,
 		Logs:              m.logs,
 		SessionContexts:   m.sessionContexts,
 		SelectedTaskIndex: m.tasksIndex,
+		NotesIndex:        m.notesIndex,
 		Width:             m.width,
+		MarkdownRenderer:  m.mdRenderer,
 	}
 
 	// Create styles wrapper - convert app.OverviewStyles to tabs.OverviewStyles

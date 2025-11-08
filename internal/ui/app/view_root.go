@@ -28,6 +28,11 @@ func (m *Model) View() string {
 		return m.noteModal.View()
 	}
 
+	// Render task annotation modal if visible
+	if m.taskAnnotationModal.Visible {
+		return m.taskAnnotationModal.View()
+	}
+
 	// Render modal if active
 	if m.modalManager.IsActive() {
 		return m.renderModalOverlay()

@@ -3,73 +3,121 @@ package tabs
 import (
 	"fmt"
 	"strings"
+
+	"github.com/charmbracelet/lipgloss"
+	"github.com/tacit7/eye-in-the-sky/internal/domain"
+	"github.com/tacit7/eye-in-the-sky/internal/ui/theme"
 )
 
-// RenderNotes renders the notes tab content with markdown support
+// RenderNotes renders the notes tab with split-pane view
 func RenderNotes(ctx *DataContext, overviewStyles OverviewStyles) string {
+	return RenderNotesSplitPane(ctx, overviewStyles, ctx.NotesIndex, ctx.Width)
+}
+
+// RenderNotesSplitPane renders notes in split-pane layout
+func RenderNotesSplitPane(ctx *DataContext, overviewStyles OverviewStyles, selectedIndex int, width int) string {
 	if len(ctx.Notes) == 0 {
-		return overviewStyles.Subtle.Render("\n  No notes available for this agent\n")
+		return theme.TextMuted.Render("\n  No notes available for this session\n")
 	}
 
+	// Calculate split widths
+	leftWidth := width / 2
+	rightWidth := width - leftWidth - 1
+
+	// Render left pane (note list)
+	leftPane := renderNoteList(ctx.Notes, selectedIndex, leftWidth)
+
+	// Render right pane (selected note details)
+	rightPane := ""
+	if selectedIndex >= 0 && selectedIndex < len(ctx.Notes) {
+		rightPane = renderNoteDetails(ctx.Notes[selectedIndex], rightWidth, ctx.MarkdownRenderer)
+	} else {
+		rightPane = theme.TextMuted.Copy().
+			Width(rightWidth).
+			Render("Select a note to view details")
+	}
+
+	// Join panes horizontally
+	result := lipgloss.JoinHorizontal(
+		lipgloss.Top,
+		leftPane,
+		theme.PanelSidebar.Copy().Height(30).Render(""),
+		rightPane,
+	)
+
+	return result
+}
+
+// renderNoteList renders the left pane note list
+func renderNoteList(notes []domain.Note, selectedIndex int, width int) string {
 	var sb strings.Builder
 
-	// Header with columns: Time | Scope | Content Preview
-	sb.WriteString(overviewStyles.Primary.Render("Time        Scope        Content"))
-	sb.WriteString("\n")
-	sb.WriteString(overviewStyles.Subtle.Render(strings.Repeat("─", 80)))
-	sb.WriteString("\n")
+	// Note items
+	for i, note := range notes {
+		isSelected := i == selectedIndex
 
-	// Render notes with scope indication
-	for _, note := range ctx.Notes {
-		// Timestamp (HH:MM:SS format)
-		timestamp := note.CreatedAt.Format("15:04:05")
-
-		// Scope indicator (from parent_type)
-		scope := getScopeLabel(note.ParentType)
-
-		// Content preview (first line, max 45 chars)
-		preview := strings.Split(note.Body, "\n")[0]
-		if len(preview) > 45 {
-			preview = preview[:42] + "..."
+		// Cursor indicator
+		cursor := "  "
+		if isSelected {
+			cursor = "> "
 		}
 
-		line := fmt.Sprintf("%-11s %-12s %s\n", timestamp, scope, preview)
+		// Timestamp: "Mon, Jan 2, 3:04 PM"
+		timestamp := note.CreatedAt.Format("Mon, Jan 2, 3:04 PM")
+
+		// First line preview
+		lines := strings.Split(note.Body, "\n")
+		preview := ""
+		if len(lines) > 0 {
+			preview = strings.TrimSpace(lines[0])
+			// Remove markdown headers
+			preview = strings.TrimPrefix(preview, "# ")
+			preview = strings.TrimPrefix(preview, "## ")
+			preview = strings.TrimPrefix(preview, "### ")
+
+			maxLen := width - len(cursor) - len(timestamp) - 5
+			if len(preview) > maxLen {
+				preview = preview[:maxLen-3] + "..."
+			}
+		}
+
+		// Build line: cursor timestamp preview
+		line := fmt.Sprintf("%s%-23s %s", cursor, timestamp, preview)
+
+		// Apply style
+		if isSelected {
+			line = theme.ListItemSelected.Copy().Width(width - 2).Render(line)
+		} else {
+			line = theme.ListItem.Copy().Width(width - 2).Render(line)
+		}
+
 		sb.WriteString(line)
+		sb.WriteString("\n")
 	}
 
-	return sb.String()
+	return theme.List.Copy().Width(width).Render(sb.String())
 }
 
-// getScopeLabel returns a human-readable label for the note scope
-func getScopeLabel(parentType string) string {
-	switch parentType {
-	case "global":
-		return "🌐 Global"
-	case "projects":
-		return "📁 Project"
-	case "agents":
-		return "🤖 Agent"
-	case "sessions":
-		return "💼 Session"
-	default:
-		return "❓ Unknown"
+// renderNoteDetails renders the right pane with full note content
+func renderNoteDetails(note domain.Note, width int, mdRenderer MarkdownRenderer) string {
+	var sb strings.Builder
+
+	// Note header (timestamp)
+	timestamp := note.CreatedAt.Format("Monday, January 2, 2006 at 3:04 PM")
+	sb.WriteString(theme.TextSubtitle.Render(timestamp))
+	sb.WriteString("\n\n")
+
+	// Render markdown if renderer available, otherwise plain text
+	renderedBody := note.Body
+	if mdRenderer != nil {
+		rendered, err := mdRenderer.Render(note.Body)
+		if err == nil {
+			renderedBody = rendered
+		}
+		// On error, fall back to plain text
 	}
+
+	sb.WriteString(renderedBody)
+
+	return theme.PanelNoBorder.Copy().Width(width).Render(sb.String())
 }
-
-// TODO: Split-pane view with note details requires state migration
-/*
-// renderNoteDetails renders details for a single note
-func renderNoteDetails(note domain.Note, styles OverviewStyles) string {
-	var b strings.Builder
-
-	// Note header
-	b.WriteString(styles.Primary.Render("Created: "))
-	b.WriteString(note.CreatedAt.Format("2006-01-02 15:04:05"))
-	b.WriteString("\n\n")
-
-	// Content
-	b.WriteString(note.Content)
-
-	return b.String()
-}
-*/

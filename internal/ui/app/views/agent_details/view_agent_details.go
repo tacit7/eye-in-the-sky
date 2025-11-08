@@ -13,7 +13,7 @@ func (m *Model) View() string {
 	}
 
 	// Render tabs bar using theme styles
-	tabNames := []string{"← Back", "[O]verview", "[T]asks", "[A]ctions", "[L]ogs", "[C]ommits", "[N]otes", "[S]ession Context"}
+	tabNames := []string{"← Back", "[O]verview", "[T]asks", "[L]ogs", "[C]ommits", "[N]otes", "[S]ession Context"}
 	var renderedTabs []string
 	for i, name := range tabNames {
 		if i == m.tabs.ActiveIndex {
@@ -33,8 +33,6 @@ func (m *Model) View() string {
 		content = m.renderOverviewTab()
 	case tabTasks:
 		content = m.renderTasksTab()
-	case tabActions:
-		content = m.renderActionsTab()
 	case tabLogs:
 		content = m.renderLogsTab()
 	case tabCommits:

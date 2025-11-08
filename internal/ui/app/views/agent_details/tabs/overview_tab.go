@@ -26,9 +26,16 @@ type DataContext struct {
 	Logs               []domain.Log
 	SessionContexts    []domain.SessionContext // Saved session contexts
 	SelectedTaskIndex  int                     // Index of selected task in tasks list
+	NotesIndex         int                     // Index of selected note in notes list
 	LogsListIndex      int                     // Viewport scroll position for logs tab
 	LastFetchedAt      time.Time               // Last timestamp for incremental log fetching
 	Width              int                     // Terminal width for responsive layout
+	MarkdownRenderer   MarkdownRenderer        // Markdown renderer for formatting
+}
+
+// MarkdownRenderer is an interface for rendering markdown
+type MarkdownRenderer interface {
+	Render(in string) (string, error)
 }
 
 // OverviewStyles is temporarily kept here to avoid cycles

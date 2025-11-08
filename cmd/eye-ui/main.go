@@ -90,7 +90,6 @@ func main() {
 	p := tea.NewProgram(
 		model,
 		tea.WithAltScreen(),
-		tea.WithMouseCellMotion(),
 	)
 
 	// Run program

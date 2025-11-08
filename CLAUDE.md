@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is the **Claude Code Multi-Agent Management System** (Eye in the Sky) - a developer tool that provides real-time visibility and control over multiple concurrent Claude Code instances. The system tracks AI agents working across different git worktrees and provides a centralized dashboard showing what each agent is currently doing.
+This is the **Eye in the Sky Claude Code MCP Server** - a Model Context Protocol (MCP) server that provides real-time visibility and control over multiple concurrent Claude Code instances. The system tracks AI agents working across different git worktrees and provides a centralized TUI dashboard showing what each agent is currently doing.
 
 ## Architecture
 
@@ -255,32 +255,30 @@ When finishing work:
 ## Development Workflow
 
 ### Task Management
-- **Taskwarrior** is the primary persistent task tracking system
-- **TodoWrite** mirrors Taskwarrior tasks for current session visibility
-- Annotate Taskwarrior with progress as work happens: `task <id> annotate "message"`
-- Keep both systems in sync throughout the session
-- Tasks remain `pending` until explicitly marked done by the user
+- **Eye in the Sky MCP tools** (`i-todo-create`, `i-todo-start`, `i-todo-done`, etc.) are the primary task tracking system
+- **TodoWrite** mirrors Eye in the Sky tasks for current session visibility in Claude Code
+- Annotate tasks with progress using `i-todo-annotate` as work happens
+- Tasks remain in their current state until explicitly moved to the next state
 - Only the user decides when work is complete
 
 ### Information Tracking
-- Use **logs** (via `i-log` MCP) for tracking session information by default
-- Only add notes when the user explicitly requests them
-- Logs are persistent and searchable across sessions
+- Use **logs** for tracking session information by default
+- Use **notes** (`i-note-add`) when the user explicitly requests them
+- Both logs and notes are persistent and searchable across sessions
 
 ### Eye-in-the-Sky MCP Integration
-- Use `i-start-session`, `i-update-status`, `i-log-commits` for agent/session lifecycle
-- Handles agent tracking, commit logging, and session management
-- Separate from Taskwarrior; complements task management
+- Use `i-start-session` to begin work and receive an agent_id
+- Use `i-todo-create`, `i-todo-start`, `i-todo-done` for task lifecycle management
+- Use `i-commits` to track git commits
+- Use `i-end-session` when work is complete
 
 ### Work Flow Pattern
-1. Work on code changes
-2. Annotate Taskwarrior with progress: `task <id> annotate "progress notes"`
-3. Update TodoWrite to mirror Taskwarrior state
-4. Commit code with meaningful messages
-5. Log session information as needed
-6. Wait for user confirmation to mark tasks done
-
-### Sync Pattern
-- Work happens → annotate Taskwarrior → update TodoWrite
-- Both systems stay in sync throughout session
-- User controls completion state across both systems
+1. Start session with `i-start-session`
+2. Create tasks with `i-todo-create`
+3. Work on code changes
+4. Annotate tasks with progress using `i-todo-annotate`
+5. Update TodoWrite to reflect task state
+6. Commit code with meaningful messages
+7. Track commits with `i-commits`
+8. Mark tasks done with `i-todo-done`
+9. End session with `i-end-session`

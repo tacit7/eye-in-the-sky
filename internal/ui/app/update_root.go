@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os/exec"
@@ -33,6 +34,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.noteModal.Visible {
 		var cmd tea.Cmd
 		m.noteModal, cmd = m.noteModal.Update(msg)
+		return m, cmd
+	}
+
+	// Task annotation modal gate: if task annotation modal is visible, route messages to it first
+	if m.taskAnnotationModal.Visible {
+		var cmd tea.Cmd
+		m.taskAnnotationModal, cmd = m.taskAnnotationModal.Update(msg)
 		return m, cmd
 	}
 
@@ -71,8 +79,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
     m.height = msg.Height
     // Old help.Width removed - using new modal-based help system
 
-    // Update note modal dimensions
+    // Update modal dimensions
     m.noteModal = components.NewNoteModal(msg.Width, msg.Height)
+    m.taskAnnotationModal = components.NewTaskAnnotationModal(msg.Width, msg.Height)
 
     // Forward window size to overview view
     if m.currentView == ViewList {
@@ -408,6 +417,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return model, tea.Batch(cmd, loadAgentDetailsCmd(m.data, m.selectedAgent.ID))
 		}
 		return model, cmd
+
+	case components.TaskAnnotationSubmitMsg:
+		// Handle task annotation submission
+		return m.handleTaskAnnotationSubmission(msg)
 	}
 
 	return m, nil
@@ -841,4 +854,25 @@ func (m *Model) handleNoteSubmission(msg components.NoteSubmitMsg) (tea.Model, t
 	}
 
 	return m, nil
+}
+
+// handleTaskAnnotationSubmission handles task annotation submission
+func (m *Model) handleTaskAnnotationSubmission(msg components.TaskAnnotationSubmitMsg) (tea.Model, tea.Cmd) {
+	if msg.Body == "" {
+		m.statusMsg = "Annotation body cannot be empty"
+		return m, nil
+	}
+
+	ctx := context.Background()
+	err := m.data.Tasks.AddTaskNote(ctx, msg.TaskID, msg.Body)
+	if err != nil {
+		m.statusMsg = fmt.Sprintf("Failed to add annotation: %v", err)
+		return m, nil
+	}
+
+	m.statusMsg = "Task annotation added"
+
+	// Reload tasks to refresh the annotation display
+	m.taskState = TaskLoading
+	return m, m.loadTasksCmd()
 }
