@@ -216,6 +216,35 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// Overview-specific commands (only when on Overview tab)
+	if m.tabs.ActiveIndex == 1 { // Overview tab
+		switch msg.String() {
+		case "d":
+			// Mark session as done
+			if m.selectedAgent != nil {
+				ctx := context.Background()
+				err := m.data.Agents.MarkComplete(ctx, m.selectedAgent.ID)
+				if err != nil {
+					m.statusMsg = fmt.Sprintf("Failed to mark session complete: %v", err)
+					return m, nil
+				}
+				m.statusMsg = "Session marked complete"
+				// Reload agent to show updated status
+				agent, err := m.data.Agents.LoadAgent(ctx, m.selectedAgent.ID)
+				if err != nil {
+					m.statusMsg = fmt.Sprintf("Session marked complete, but failed to reload: %v", err)
+					return m, nil
+				}
+				m.selectedAgent = agent
+				// Reload tab data to refresh the overview
+				if err := m.loadTabData(); err != nil {
+					m.err = err
+				}
+				return m, nil
+			}
+		}
+	}
+
 	// Task-specific commands (only when on Tasks tab)
 	if m.tabs.ActiveIndex == 2 { // Tasks tab
 		switch msg.String() {

@@ -26,7 +26,8 @@ func (s *agentStore) LoadAgents(ctx context.Context, showAll bool) ([]domain.Age
 		SELECT id, status, source, created_at, updated_at,
 		       git_worktree_path, feature_description, current_task,
 		       last_activity_at, window_id, terminal_application,
-		       description, project_name, session_id, parent_session_id, parent_agent_id
+		       description, project_name, session_id, parent_session_id, parent_agent_id,
+		       completed_at
 		FROM agents`
 
 	if !showAll {
@@ -54,12 +55,13 @@ func (s *agentStore) LoadAgents(ctx context.Context, showAll bool) ([]domain.Age
 	for rows.Next() {
 		var a domain.Agent
 		var gitPath, featureDesc, currentTask, windowID, terminalApp, desc, projectName, sessionID, parentSessionID, parentAgentID sql.NullString
-		var lastActivity sql.NullTime
+		var lastActivity, completedAt sql.NullTime
 
 		err := rows.Scan(
 			&a.ID, &a.Status, &a.Source, &a.CreatedAt, &a.UpdatedAt,
 			&gitPath, &featureDesc, &currentTask, &lastActivity,
 			&windowID, &terminalApp, &desc, &projectName, &sessionID, &parentSessionID, &parentAgentID,
+			&completedAt,
 		)
 		if err != nil {
 			log.Printf("[AGENTS] Scan error: %v", err)
@@ -100,6 +102,9 @@ func (s *agentStore) LoadAgents(ctx context.Context, showAll bool) ([]domain.Age
 		if parentAgentID.Valid {
 			a.ParentAgentID = parentAgentID.String
 		}
+		if completedAt.Valid {
+			a.CompletedAt = &completedAt.Time
+		}
 		// Bookmarked and LastLog not loaded in base query
 		a.Bookmarked = false
 		a.LastLog = ""
@@ -137,19 +142,21 @@ func (s *agentStore) LoadAgent(ctx context.Context, agentID domain.AgentID) (*do
 		SELECT id, status, source, created_at, updated_at,
 		       git_worktree_path, feature_description, current_task,
 		       last_activity_at, window_id, terminal_application,
-		       description, project_name, session_id, parent_session_id, parent_agent_id
+		       description, project_name, session_id, parent_session_id, parent_agent_id,
+		       completed_at
 		FROM agents
 		WHERE id = ?
 	`
 
 	var a domain.Agent
 	var gitPath, featureDesc, currentTask, windowID, terminalApp, desc, projectName, sessionID, parentSessionID, parentAgentID sql.NullString
-	var lastActivity sql.NullTime
+	var lastActivity, completedAt sql.NullTime
 
 	err := s.db.QueryRowContext(ctx, query, string(agentID)).Scan(
 		&a.ID, &a.Status, &a.Source, &a.CreatedAt, &a.UpdatedAt,
 		&gitPath, &featureDesc, &currentTask, &lastActivity,
 		&windowID, &terminalApp, &desc, &projectName, &sessionID, &parentSessionID, &parentAgentID,
+		&completedAt,
 	)
 
 	if err == sql.ErrNoRows {
@@ -193,6 +200,9 @@ func (s *agentStore) LoadAgent(ctx context.Context, agentID domain.AgentID) (*do
 	if parentAgentID.Valid {
 		a.ParentAgentID = parentAgentID.String
 	}
+	if completedAt.Valid {
+		a.CompletedAt = &completedAt.Time
+	}
 	// Bookmarked and LastLog not loaded in base query
 	a.Bookmarked = false
 	a.LastLog = ""
@@ -207,6 +217,27 @@ func (s *agentStore) UpdateStatus(ctx context.Context, agentID domain.AgentID, s
 	result, err := s.db.ExecContext(ctx, query, status, string(agentID))
 	if err != nil {
 		return fmt.Errorf("update status: %w", err)
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("rows affected: %w", err)
+	}
+
+	if rows == 0 {
+		return fmt.Errorf("agent not found: %s", agentID)
+	}
+
+	return nil
+}
+
+// MarkComplete marks an agent as completed with timestamp
+func (s *agentStore) MarkComplete(ctx context.Context, agentID domain.AgentID) error {
+	query := `UPDATE agents SET status = 'completed', completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+
+	result, err := s.db.ExecContext(ctx, query, string(agentID))
+	if err != nil {
+		return fmt.Errorf("mark complete: %w", err)
 	}
 
 	rows, err := result.RowsAffected()
