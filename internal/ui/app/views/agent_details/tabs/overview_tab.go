@@ -184,7 +184,7 @@ func renderCommitsSection(commits []domain.Commit, styles OverviewStyles) string
 		commit := commits[i]
 		elapsed := time.Since(commit.Timestamp)
 		commitLine := fmt.Sprintf("  %s %s - %s\n",
-			styles.Git.Render(string(commit.Hash)[:8]),
+			styles.Git.Render(truncateID(string(commit.Hash), 8)),
 			styles.Subtle.Render(fmt.Sprintf("(%s ago)", presenters.FormatDuration(elapsed))),
 			commit.Message)
 		sb.WriteString(commitLine)
