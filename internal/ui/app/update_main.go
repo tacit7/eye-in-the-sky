@@ -48,10 +48,14 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.listTabs.Prev()
 		return m, nil
 	case "i", "I":
-		// Initialize CCUsage database (only in Usage tab when empty)
-		if m.listTabs.ActiveIndex == 3 && m.ccusageDB != nil && m.ccusageEntryCount == 0 && !m.ccusageSyncing {
+		// Initialize/Sync CCUsage database (in Usage tab only)
+		if m.listTabs.ActiveIndex == 3 && m.ccusageDB != nil && !m.ccusageSyncing {
 			m.ccusageSyncing = true
-			m.ccusageSyncStatus = "Initializing database..."
+			if m.ccusageEntryCount == 0 {
+				m.ccusageSyncStatus = "Initializing database..."
+			} else {
+				m.ccusageSyncStatus = "Syncing database..."
+			}
 			return m, tea.Batch(
 				m.initCCUsageCmd(),
 				m.tickCmd(),

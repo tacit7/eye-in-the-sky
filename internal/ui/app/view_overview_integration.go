@@ -1,6 +1,8 @@
 package app
 
 import (
+	"time"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/app/views/overview"
 )
@@ -66,16 +68,45 @@ func (m *Model) handleOverviewUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, viewportCmd
 
+	case overview.SyncCCUsageRequestMsg:
+		// User requested CCUsage sync from overview view
+		if m.ccusageDB != nil && !m.ccusageSyncing {
+			m.ccusageSyncing = true
+			if m.ccusageEntryCount == 0 {
+				m.ccusageSyncStatus = "Initializing database..."
+			} else {
+				m.ccusageSyncStatus = "Syncing database..."
+			}
+			return m, tea.Batch(
+				m.initCCUsageCmd(),
+				m.tickCmd(),
+			)
+		}
+		return m, nil
+
 	case overview.TabChangedMsg:
 		// Tab changed in overview view - trigger refresh if it's the usage tab
 		if msg.NewTabIndex == 3 {
-			// Token Usage tab - load data if not loaded yet, then refresh viewport
-			// If data hasn't been synced yet, load it now (async)
-			if m.ccusageDB != nil && m.lastCCUsageSync.IsZero() {
-				return m, m.loadCCUsageDataCmd()
+			// Token Usage tab - check if we need to sync or load data
+			// If data hasn't been synced yet or is stale (>24 hours), trigger sync
+			if m.ccusageDB != nil {
+				if m.lastCCUsageSync.IsZero() {
+					// Never synced - load existing data async
+					return m, m.loadCCUsageDataCmd()
+				} else if time.Since(m.lastCCUsageSync) > 24*time.Hour {
+					// Data is stale - trigger sync
+					if !m.ccusageSyncing {
+						m.ccusageSyncing = true
+						m.ccusageSyncStatus = "Auto-syncing stale data..."
+						return m, tea.Batch(
+							m.initCCUsageCmd(),
+							m.tickCmd(),
+						)
+					}
+				}
 			}
 
-			// Data already loaded, just refresh
+			// Data is recent, just refresh
 			return m, func() tea.Msg {
 				return RefreshUsageMsg{}
 			}

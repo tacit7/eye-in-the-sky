@@ -14,3 +14,7 @@ type ViewportUpdateMsg struct {
 type TabChangedMsg struct {
 	NewTabIndex int // The new active tab index
 }
+
+// SyncCCUsageRequestMsg is sent when user requests CCUsage database sync
+// Root Model will handle this by triggering the sync command
+type SyncCCUsageRequestMsg struct{}

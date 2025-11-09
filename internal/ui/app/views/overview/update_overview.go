@@ -190,11 +190,16 @@ func (m Model) handleClaudeTabKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleUsageTabKeys handles keys for the token usage tab
 func (m Model) handleUsageTabKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Forward navigation keys to usage viewport
 	switch msg.String() {
 	case "j", "k", "down", "up", "pgdown", "pgup", "home", "end":
+		// Forward navigation keys to usage viewport
 		return m, func() tea.Msg {
 			return ViewportUpdateMsg{Target: "usage", Msg: msg}
+		}
+	case "i", "I":
+		// Request CCUsage sync - emit message for root to handle
+		return m, func() tea.Msg {
+			return SyncCCUsageRequestMsg{}
 		}
 	}
 	return m, nil
