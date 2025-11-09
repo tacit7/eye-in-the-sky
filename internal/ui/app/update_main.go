@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"path/filepath"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -133,6 +134,26 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return m, m.archiveAgentCmd(string(agent.ID))
 			}
 		}
+	}
+
+	// Direct key handlers (not in resolver)
+	switch msg.String() {
+	case "d":
+		// Mark session as done
+		agent := m.SelectedAgent()
+		if agent == nil {
+			m.statusMsg = "No agent selected"
+			return m, nil
+		}
+		ctx := context.Background()
+		err := m.data.Agents.MarkComplete(ctx, agent.ID)
+		if err != nil {
+			m.statusMsg = "Failed to mark session complete: " + err.Error()
+			return m, nil
+		}
+		m.statusMsg = "Session marked complete"
+		// Reload agents to show updated status
+		return m, loadAgentsCmd(m.data.Agents, m.showAll)
 	}
 
 	// Navigation for Overview tab (tab 0) using resolver
