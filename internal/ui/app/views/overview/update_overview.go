@@ -131,7 +131,7 @@ func (m Model) handleAgentsTabKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case "c", "C":
+	case "c", "C", "d", "D":
 		// Mark current session as completed
 		if m.SelectedAgent() != nil {
 			return m, func() tea.Msg {

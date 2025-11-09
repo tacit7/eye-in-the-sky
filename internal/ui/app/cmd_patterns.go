@@ -317,8 +317,8 @@ func markSessionCompletedCmd(store AgentStore, agentID domain.AgentID) tea.Cmd {
 		ctx, cancel := withTimeout()
 		defer cancel()
 
-		// Update agent status to "completed"
-		err := store.UpdateStatus(ctx, agentID, "completed")
+		// Mark agent as completed (sets status and completed_at timestamp)
+		err := store.MarkComplete(ctx, agentID)
 		if err != nil {
 			return ErrMsg{Error: err}
 		}
