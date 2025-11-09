@@ -36,6 +36,7 @@ func (m *Model) renderDetail() string {
 		SessionContexts:   m.sessionContexts,
 		SelectedTaskIndex: m.tasksIndex,
 		NotesIndex:        m.notesIndex,
+		CommitsIndex:      m.commitsIndex,
 		Width:             m.width,
 		MarkdownRenderer:  m.mdRenderer,
 	}

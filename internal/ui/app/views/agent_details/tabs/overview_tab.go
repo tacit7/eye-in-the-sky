@@ -27,6 +27,7 @@ type DataContext struct {
 	SessionContexts    []domain.SessionContext // Saved session contexts
 	SelectedTaskIndex  int                     // Index of selected task in tasks list
 	NotesIndex         int                     // Index of selected note in notes list
+	CommitsIndex       int                     // Index of selected commit in commits list
 	LogsListIndex      int                     // Viewport scroll position for logs tab
 	LastFetchedAt      time.Time               // Last timestamp for incremental log fetching
 	Width              int                     // Terminal width for responsive layout
