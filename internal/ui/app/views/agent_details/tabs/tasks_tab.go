@@ -29,14 +29,21 @@ func RenderTasksSplitPane(ctx *DataContext, overviewStyles OverviewStyles, selec
 	}
 
 	// Tasks are already sorted in model.loadTasks()
-	tasks := ctx.Tasks
+	allTasks := ctx.Tasks
+	totalCount := len(allTasks)
+
+	// Limit to last 5 tasks for display
+	tasks := allTasks
+	if len(allTasks) > 5 {
+		tasks = allTasks[:5]
+	}
 
 	// Calculate split widths
 	leftWidth := width / 2
 	rightWidth := width - leftWidth - 1
 
-	// Render left pane (task list)
-	leftPane := renderTaskList(tasks, selectedIndex, leftWidth)
+	// Render left pane (task list with count header)
+	leftPane := renderTaskList(tasks, selectedIndex, leftWidth, totalCount)
 
 	// Render right pane (selected task details)
 	rightPane := ""
@@ -88,8 +95,15 @@ func sortTasks(tasks []domain.Task) []domain.Task {
 }
 
 // renderTaskList renders the left pane task list
-func renderTaskList(tasks []domain.Task, selectedIndex int, width int) string {
+func renderTaskList(tasks []domain.Task, selectedIndex int, width int, totalCount int) string {
 	var sb strings.Builder
+
+	// Add count header
+	countHeader := fmt.Sprintf("Showing %d of %d tasks", len(tasks), totalCount)
+	sb.WriteString(theme.TextSubtitle.Render(countHeader))
+	sb.WriteString("\n")
+	sb.WriteString(theme.TextMuted.Render(strings.Repeat("─", width-4)))
+	sb.WriteString("\n\n")
 
 	// Task items
 	for i, task := range tasks {
