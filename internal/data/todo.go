@@ -64,10 +64,16 @@ func (s *todoStore) LoadCountsByAgent(ctx context.Context, agents []domain.Agent
 				continue
 			}
 
-			// Count tasks belonging to this agent (session_id or agent_id match)
+			// Count tasks belonging to this agent (session_ids contains agent.SessionID or agent_id match)
 			for _, task := range tasks {
-				if (task.SessionID != nil && *task.SessionID == agent.SessionID) ||
-					(task.AgentID != nil && *task.AgentID == string(agent.ID)) {
+				sessionMatches := false
+				for _, sid := range task.SessionIDs {
+					if sid == agent.SessionID {
+						sessionMatches = true
+						break
+					}
+				}
+				if sessionMatches || (task.AgentID != nil && *task.AgentID == string(agent.ID)) {
 					count++
 				}
 			}
@@ -372,8 +378,9 @@ func (s *todoStore) toDomainTask(t models.Task) domain.Task {
 		task.UpdatedAt = t.CreatedAt // Fallback to created_at
 	}
 
-	if t.SessionID != nil {
-		task.SessionID = *t.SessionID
+	// Take first session ID if available (domain.Task uses single SessionID)
+	if len(t.SessionIDs) > 0 {
+		task.SessionID = t.SessionIDs[0]
 	}
 
 	if t.AgentID != nil {

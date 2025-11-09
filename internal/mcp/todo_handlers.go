@@ -165,6 +165,48 @@ func (s *Server) handleTodoDelete(ctx context.Context, req *mcp.CallToolRequest,
 	}, result, nil
 }
 
+func (s *Server) handleTodoAddSession(ctx context.Context, req *mcp.CallToolRequest, args todo_mcp.AddSessionRequest) (*mcp.CallToolResult, any, error) {
+	jsonArgs, _ := json.Marshal(args)
+	result, err := s.todoRegistry.Execute(ctx, "i-todo-add-session", jsonArgs)
+	if err != nil {
+		return nil, nil, err
+	}
+	resultJSON, _ := json.Marshal(result)
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: string(resultJSON)},
+		},
+	}, result, nil
+}
+
+func (s *Server) handleTodoRemoveSession(ctx context.Context, req *mcp.CallToolRequest, args todo_mcp.RemoveSessionRequest) (*mcp.CallToolResult, any, error) {
+	jsonArgs, _ := json.Marshal(args)
+	result, err := s.todoRegistry.Execute(ctx, "i-todo-remove-session", jsonArgs)
+	if err != nil {
+		return nil, nil, err
+	}
+	resultJSON, _ := json.Marshal(result)
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: string(resultJSON)},
+		},
+	}, result, nil
+}
+
+func (s *Server) handleTodoBulkAddSession(ctx context.Context, req *mcp.CallToolRequest, args todo_mcp.BulkAddSessionRequest) (*mcp.CallToolResult, any, error) {
+	jsonArgs, _ := json.Marshal(args)
+	result, err := s.todoRegistry.Execute(ctx, "i-todo-add-session-to-tasks", jsonArgs)
+	if err != nil {
+		return nil, nil, err
+	}
+	resultJSON, _ := json.Marshal(result)
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: string(resultJSON)},
+		},
+	}, result, nil
+}
+
 func (s *Server) handleTodoReindex(ctx context.Context, req *mcp.CallToolRequest, args todo_mcp.ReindexRequest) (*mcp.CallToolResult, any, error) {
 	jsonArgs, _ := json.Marshal(args)
 	result, err := s.todoRegistry.Execute(ctx, "i-todo-reindex", jsonArgs)

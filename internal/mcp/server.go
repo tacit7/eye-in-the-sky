@@ -111,10 +111,31 @@ func (s *Server) registerTools() {
 		Description: "Complete agent session",
 	}, s.handleEndSession)
 
+	// Deprecated: Use i-save-session-context instead
+	// mcp.AddTool(s.mcp, &mcp.Tool{
+	// 	Name:        "i-save-context",
+	// 	Description: "Save session state for resumption (DEPRECATED - use i-save-session-context)",
+	// }, s.handleSaveSessionContextOld)
+
 	mcp.AddTool(s.mcp, &mcp.Tool{
-		Name:        "i-save-context",
-		Description: "Save session state for resumption",
+		Name:        "i-save-agent-context",
+		Description: "Save agent-specific context in markdown format to agent_context table",
+	}, s.handleSaveAgentContext)
+
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "i-save-session-context",
+		Description: "Save session context in markdown format to session_context table",
 	}, s.handleSaveSessionContext)
+
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "i-load-agent-context",
+		Description: "Load agent-specific context from agent_context table",
+	}, s.handleLoadAgentContext)
+
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "i-load-session-context",
+		Description: "Load session context from session_context table",
+	}, s.handleLoadSessionContext)
 
 	mcp.AddTool(s.mcp, &mcp.Tool{
 		Name:        "i-window",
@@ -205,6 +226,21 @@ func (s *Server) registerTools() {
 		}, s.handleTodoDelete)
 
 		mcp.AddTool(s.mcp, &mcp.Tool{
+			Name:        "i-todo-add-session",
+			Description: "Add a task to a session",
+		}, s.handleTodoAddSession)
+
+		mcp.AddTool(s.mcp, &mcp.Tool{
+			Name:        "i-todo-remove-session",
+			Description: "Remove a task from a session",
+		}, s.handleTodoRemoveSession)
+
+		mcp.AddTool(s.mcp, &mcp.Tool{
+			Name:        "i-todo-add-session-to-tasks",
+			Description: "Add all tasks from source session to target session (bulk operation)",
+		}, s.handleTodoBulkAddSession)
+
+		mcp.AddTool(s.mcp, &mcp.Tool{
 			Name:        "i-todo-reindex",
 			Description: "Rebuild the FTS5 search index",
 		}, s.handleTodoReindex)
@@ -268,6 +304,21 @@ func (s *Server) handleLogCommits(ctx context.Context, req *mcp.CallToolRequest,
 	}, result, nil
 }
 
+// Handler for new simplified agent context
+func (s *Server) handleSaveAgentContext(ctx context.Context, req *mcp.CallToolRequest, args SaveAgentContextArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.SaveAgentContext(args)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to save agent context: %w", err)
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: result.Message},
+		},
+	}, result, nil
+}
+
+// Handler for new simplified session context
 func (s *Server) handleSaveSessionContext(ctx context.Context, req *mcp.CallToolRequest, args SaveSessionContextArgs) (*mcp.CallToolResult, any, error) {
 	result, err := s.tools.SaveSessionContext(args)
 	if err != nil {
@@ -281,23 +332,43 @@ func (s *Server) handleSaveSessionContext(ctx context.Context, req *mcp.CallTool
 	}, result, nil
 }
 
-func (s *Server) handleLoadSessionContext(ctx context.Context, req *mcp.CallToolRequest, args LoadSessionContextArgs) (*mcp.CallToolResult, any, error) {
-	// For now, return a simple success message - session context can be implemented later
+// Handler for loading agent context
+func (s *Server) handleLoadAgentContext(ctx context.Context, req *mcp.CallToolRequest, args LoadAgentContextArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.LoadAgentContext(args)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to load agent context: %w", err)
+	}
+
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
-			&mcp.TextContent{Text: "Session context loaded successfully"},
+			&mcp.TextContent{Text: result.Message},
 		},
-	}, map[string]interface{}{"success": true, "message": "Session context loaded"}, nil
+	}, result, nil
 }
 
-func (s *Server) handleAddSessionNote(ctx context.Context, req *mcp.CallToolRequest, args AddSessionNoteArgs) (*mcp.CallToolResult, any, error) {
-	// For now, return a simple success message - session notes can be implemented later
+// Handler for loading session context
+func (s *Server) handleLoadSessionContext(ctx context.Context, req *mcp.CallToolRequest, args LoadSessionContextArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.LoadSessionContext(args)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to load session context: %w", err)
+	}
+
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
-			&mcp.TextContent{Text: "Session note added successfully"},
+			&mcp.TextContent{Text: result.Message},
 		},
-	}, map[string]interface{}{"success": true, "message": "Session note added"}, nil
+	}, result, nil
 }
+
+// Commented out - AddSessionNoteArgs was in old session_context.go
+// func (s *Server) handleAddSessionNote(ctx context.Context, req *mcp.CallToolRequest, args AddSessionNoteArgs) (*mcp.CallToolResult, any, error) {
+// 	// For now, return a simple success message - session notes can be implemented later
+// 	return &mcp.CallToolResult{
+// 		Content: []mcp.Content{
+// 			&mcp.TextContent{Text: "Session note added successfully"},
+// 		},
+// 	}, map[string]interface{}{"success": true, "message": "Session note added"}, nil
+// }
 
 func (s *Server) handleGetCurrentWindow(ctx context.Context, req *mcp.CallToolRequest, args GetCurrentWindowArgs) (*mcp.CallToolResult, any, error) {
 	result, err := s.tools.GetCurrentWindow(args)

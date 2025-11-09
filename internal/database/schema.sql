@@ -42,27 +42,14 @@ CREATE TABLE IF NOT EXISTS commits (
     FOREIGN KEY (agent_id) REFERENCES agents(id)
 );
 
+-- Simplified session_context table using markdown format
 CREATE TABLE IF NOT EXISTS session_context (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     agent_id TEXT NOT NULL,
     session_id TEXT NOT NULL,
+    context TEXT NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    current_phase TEXT,
-    overall_progress REAL DEFAULT 0.0,
-    pending_tasks TEXT,
-    completed_tasks TEXT,
-    next_actions TEXT,
-    dependencies TEXT,
-    important_files TEXT,
-    milestones TEXT,
-    current_goals TEXT,
-    blockers TEXT,
-    key_decisions TEXT,
-    environment TEXT,
-    metrics TEXT,
-    auto_save BOOLEAN DEFAULT 0,
-    learned_context TEXT,
     FOREIGN KEY (agent_id) REFERENCES agents(id)
 );
 
@@ -202,7 +189,6 @@ CREATE TABLE IF NOT EXISTS tasks (
     priority INTEGER DEFAULT 0,
     due_at DATETIME,
     completed_at DATETIME,
-    session_id TEXT,
     agent_id TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME,
@@ -233,6 +219,15 @@ CREATE TABLE IF NOT EXISTS task_tags (
     PRIMARY KEY (task_id, tag_id),
     FOREIGN KEY (task_id) REFERENCES tasks(id),
     FOREIGN KEY (tag_id) REFERENCES tags(id)
+);
+
+CREATE TABLE IF NOT EXISTS task_sessions (
+    task_id TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (task_id, session_id),
+    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS task_events (
@@ -307,11 +302,12 @@ CREATE INDEX IF NOT EXISTS idx_session_metrics_session_ts ON session_metrics(ses
 CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_state ON tasks(state_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_due ON tasks(due_at);
-CREATE INDEX IF NOT EXISTS idx_tasks_session ON tasks(session_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_agent ON tasks(agent_id);
 CREATE INDEX IF NOT EXISTS idx_task_notes_task_id ON task_notes(task_id);
 CREATE INDEX IF NOT EXISTS idx_task_tags_task ON task_tags(task_id);
 CREATE INDEX IF NOT EXISTS idx_task_tags_tag ON task_tags(tag_id);
+CREATE INDEX IF NOT EXISTS idx_task_sessions_task ON task_sessions(task_id);
+CREATE INDEX IF NOT EXISTS idx_task_sessions_session ON task_sessions(session_id);
 CREATE INDEX IF NOT EXISTS idx_task_events_task ON task_events(task_id);
 CREATE INDEX IF NOT EXISTS idx_commit_tasks_commit ON commit_tasks(commit_id);
 CREATE INDEX IF NOT EXISTS idx_commit_tasks_task ON commit_tasks(task_id);

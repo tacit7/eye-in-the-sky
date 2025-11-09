@@ -33,8 +33,8 @@ type Task struct {
 	Priority    int        `json:"priority"`
 	DueAt       *time.Time `json:"due_at,omitempty"`
 	CompletedAt *time.Time `json:"completed_at,omitempty"`
-	SessionID   *string    `json:"session_id,omitempty"` // Eye-in-the-Sky session ID
-	AgentID     *string    `json:"agent_id,omitempty"`   // Eye-in-the-Sky agent ID
+	SessionIDs  []string   `json:"session_ids,omitempty"` // Eye-in-the-Sky session IDs (many-to-many via task_sessions)
+	AgentID     *string    `json:"agent_id,omitempty"`    // Eye-in-the-Sky agent ID
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   *time.Time `json:"updated_at,omitempty"`
 	Archived    bool       `json:"archived"`
@@ -109,8 +109,8 @@ type CreateTaskInput struct {
 	StateID     *int
 	Priority    *int
 	DueAt       *time.Time
-	SessionID   *string // Eye-in-the-Sky session ID
-	AgentID     *string // Eye-in-the-Sky agent ID
+	SessionIDs  []string // Eye-in-the-Sky session IDs (many-to-many)
+	AgentID     *string  // Eye-in-the-Sky agent ID
 }
 
 // UpdateTaskInput is the input for updating a task.

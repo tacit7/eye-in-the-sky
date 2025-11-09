@@ -44,9 +44,9 @@ type CreateRequest struct {
 	Priority    *int     `json:"priority,omitempty"`
 	Tags        []string `json:"tags,omitempty"`
 	StateID     *int     `json:"state_id,omitempty"`
-	DueAt       *string  `json:"due_at,omitempty"` // ISO 8601 timestamp
-	SessionID   *string  `json:"session_id,omitempty"` // Session to link task to
-	AgentID     *string  `json:"agent_id,omitempty"`   // Agent to link task to
+	DueAt       *string  `json:"due_at,omitempty"`  // ISO 8601 timestamp
+	SessionIDs  []string `json:"session_ids,omitempty"` // Sessions to link task to (many-to-many)
+	AgentID     *string  `json:"agent_id,omitempty"`    // Agent to link task to
 }
 
 func (h *Handler) HandleCreate(ctx context.Context, args json.RawMessage) (interface{}, error) {
@@ -90,7 +90,7 @@ func (h *Handler) HandleCreate(ctx context.Context, args json.RawMessage) (inter
 		Priority:    req.Priority,
 		StateID:     req.StateID,
 		DueAt:       dueAt,
-		SessionID:   req.SessionID,
+		SessionIDs:  req.SessionIDs,
 		AgentID:     req.AgentID,
 	}
 
@@ -683,6 +683,167 @@ func (h *Handler) HandleProjectSync(ctx context.Context, args json.RawMessage) (
 	// Workflows are now global, not per-project
 	// This endpoint is kept for backward compatibility but does nothing
 	return OKResponse{OK: true}, nil
+}
+
+// ============================================================================
+// todo.add-session - Add a task to a session
+// ============================================================================
+
+type AddSessionRequest struct {
+	TaskID    string `json:"task_id"`
+	SessionID string `json:"session_id"`
+}
+
+func (h *Handler) HandleAddSession(ctx context.Context, args json.RawMessage) (interface{}, error) {
+	var req AddSessionRequest
+	if err := json.Unmarshal(args, &req); err != nil {
+		return nil, fmt.Errorf("invalid add-session request: %w", err)
+	}
+
+	if req.TaskID == "" {
+		return nil, fmt.Errorf("task_id is required")
+	}
+
+	if req.SessionID == "" {
+		return nil, fmt.Errorf("session_id is required")
+	}
+
+	tx, err := h.svc.GetDB().BeginTx(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to start transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Create transaction-scoped repository
+	txRepo := h.svc.GetTasksRepo().WithTx(tx)
+
+	// Add session to task
+	if err := txRepo.AddSession(req.TaskID, req.SessionID); err != nil {
+		return nil, fmt.Errorf("failed to add session: %w", err)
+	}
+
+	// Get task for response
+	task, err := txRepo.FindByID(req.TaskID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve task: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return TaskResponse{
+		TaskID:      task.ID,
+		Description: task.Title,
+		UUIDShort:   generateUUIDShort(task.ID),
+	}, nil
+}
+
+// ============================================================================
+// todo.remove-session - Remove a task from a session
+// ============================================================================
+
+type RemoveSessionRequest struct {
+	TaskID    string `json:"task_id"`
+	SessionID string `json:"session_id"`
+}
+
+func (h *Handler) HandleRemoveSession(ctx context.Context, args json.RawMessage) (interface{}, error) {
+	var req RemoveSessionRequest
+	if err := json.Unmarshal(args, &req); err != nil {
+		return nil, fmt.Errorf("invalid remove-session request: %w", err)
+	}
+
+	if req.TaskID == "" {
+		return nil, fmt.Errorf("task_id is required")
+	}
+
+	if req.SessionID == "" {
+		return nil, fmt.Errorf("session_id is required")
+	}
+
+	tx, err := h.svc.GetDB().BeginTx(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to start transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Create transaction-scoped repository
+	txRepo := h.svc.GetTasksRepo().WithTx(tx)
+
+	// Remove session from task
+	if err := txRepo.RemoveSession(req.TaskID, req.SessionID); err != nil {
+		return nil, fmt.Errorf("failed to remove session: %w", err)
+	}
+
+	// Get task for response
+	task, err := txRepo.FindByID(req.TaskID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve task: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return TaskResponse{
+		TaskID:      task.ID,
+		Description: task.Title,
+		UUIDShort:   generateUUIDShort(task.ID),
+	}, nil
+}
+
+// ============================================================================
+// todo.add-session-to-tasks - Bulk add all tasks from source session to target session
+// ============================================================================
+
+type BulkAddSessionRequest struct {
+	SourceSessionID string `json:"source_session_id"`
+	TargetSessionID string `json:"target_session_id"`
+}
+
+type BulkAddSessionResponse struct {
+	TasksAdded int    `json:"tasks_added"`
+	Message    string `json:"message"`
+}
+
+func (h *Handler) HandleBulkAddSession(ctx context.Context, args json.RawMessage) (interface{}, error) {
+	var req BulkAddSessionRequest
+	if err := json.Unmarshal(args, &req); err != nil {
+		return nil, fmt.Errorf("invalid bulk-add-session request: %w", err)
+	}
+
+	if req.SourceSessionID == "" {
+		return nil, fmt.Errorf("source_session_id is required")
+	}
+
+	if req.TargetSessionID == "" {
+		return nil, fmt.Errorf("target_session_id is required")
+	}
+
+	tx, err := h.svc.GetDB().BeginTx(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to start transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Create transaction-scoped repository
+	txRepo := h.svc.GetTasksRepo().WithTx(tx)
+
+	// Bulk add target session to all tasks from source session
+	tasksAdded, err := txRepo.BulkAddSessionToTasks(req.SourceSessionID, req.TargetSessionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to bulk add session: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return BulkAddSessionResponse{
+		TasksAdded: tasksAdded,
+		Message:    fmt.Sprintf("Added %d tasks from session %s to session %s", tasksAdded, req.SourceSessionID, req.TargetSessionID),
+	}, nil
 }
 
 // ============================================================================
