@@ -118,7 +118,6 @@ func (s *todoStore) LoadByAgent(ctx context.Context, agentID domain.AgentID, lim
 			t.created_at,
 			t.updated_at,
 			t.archived,
-			t.session_id,
 			t.agent_id,
 			t.due_at,
 			t.completed_at
@@ -155,14 +154,13 @@ func (s *todoStore) LoadByAgent(ctx context.Context, agentID domain.AgentID, lim
 			createdAt     string
 			updatedAt     *string
 			archived      bool
-			sessionID     *string
 			agentIDStr    *string
 			dueAt         *string
 			completedAt   *string
 		)
 
 		if err := rows.Scan(&id, &title, &description, &stateID, &workflowName, &workflowColor,
-			&projectID, &projectName, &priority, &createdAt, &updatedAt, &archived, &sessionID, &agentIDStr, &dueAt, &completedAt); err != nil {
+			&projectID, &projectName, &priority, &createdAt, &updatedAt, &archived, &agentIDStr, &dueAt, &completedAt); err != nil {
 			return nil, fmt.Errorf("failed to scan task row: %w", err)
 		}
 
@@ -191,7 +189,7 @@ func (s *todoStore) LoadByAgent(ctx context.Context, agentID domain.AgentID, lim
 			CreatedAt:        createdTime,
 			UpdatedAt:        updatedTime,
 			Archived:         archived,
-			SessionID:        derefString(sessionID),
+			SessionID:        "", // Session IDs now in task_sessions junction table
 			AgentID:          derefString(agentIDStr),
 		}
 
