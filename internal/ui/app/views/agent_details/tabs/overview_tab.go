@@ -116,9 +116,6 @@ func renderAgentInfo(agent domain.Agent, styles OverviewStyles) string {
 	if agent.FeatureDesc != "" {
 		sb.WriteString(renderLabelValue("Description:", agent.FeatureDesc, styles.Value, styles.Label))
 	}
-	if agent.ProjectName != "" {
-		sb.WriteString(renderLabelValue("Project:", agent.ProjectName, styles.Value, styles.Label))
-	}
 	if agent.CurrentTask != "" {
 		sb.WriteString(renderLabelValue("Current Task:", agent.CurrentTask, styles.Value, styles.Label))
 	}
@@ -130,6 +127,9 @@ func renderAgentInfo(agent domain.Agent, styles OverviewStyles) string {
 	}
 	if agent.SessionID != "" {
 		sb.WriteString(renderLabelValue("Session ID:", truncateID(agent.SessionID, 8), styles.Value, styles.Label))
+	}
+	if agent.ProjectName != "" {
+		sb.WriteString(renderLabelValue("Project:", agent.ProjectName, styles.Value, styles.Label))
 	}
 	if agent.ParentSessionID != "" {
 		sb.WriteString(renderLabelValue("Parent Session:", truncateID(agent.ParentSessionID, 8), styles.Value, styles.Label))

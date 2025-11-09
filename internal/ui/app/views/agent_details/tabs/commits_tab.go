@@ -2,6 +2,7 @@ package tabs
 
 import (
 	"fmt"
+	"os/exec"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -30,7 +31,12 @@ func RenderCommitsSplitPane(ctx *DataContext, overviewStyles OverviewStyles, sel
 	// Render right pane (selected commit details)
 	rightPane := ""
 	if selectedIndex >= 0 && selectedIndex < len(ctx.Commits) {
-		rightPane = renderCommitDetails(ctx.Commits[selectedIndex], rightWidth, overviewStyles)
+		// Get git worktree path from agent
+		gitPath := ""
+		if ctx.Agent != nil {
+			gitPath = ctx.Agent.GitWorktreePath
+		}
+		rightPane = renderCommitDetails(ctx.Commits[selectedIndex], rightWidth, overviewStyles, gitPath)
 	} else {
 		rightPane = theme.TextMuted.Copy().
 			Width(rightWidth).
@@ -93,7 +99,7 @@ func renderCommitList(commits []domain.Commit, selectedIndex int, width int) str
 }
 
 // renderCommitDetails renders the right pane with full commit details
-func renderCommitDetails(commit domain.Commit, width int, styles OverviewStyles) string {
+func renderCommitDetails(commit domain.Commit, width int, styles OverviewStyles, gitPath string) string {
 	var sb strings.Builder
 
 	// Commit hash
@@ -117,15 +123,65 @@ func renderCommitDetails(commit domain.Commit, width int, styles OverviewStyles)
 	sb.WriteString(styles.Primary.Render(commit.Message))
 	sb.WriteString("\n")
 
-	// Files changed (if available)
-	if len(commit.FilesChanged) > 0 {
-		sb.WriteString("\n")
-		sb.WriteString(styles.SectionTitle.Render("Files Changed"))
-		sb.WriteString("\n\n")
-		for _, file := range commit.FilesChanged {
-			sb.WriteString(fmt.Sprintf("  %s\n", file))
+	// Diff section
+	if gitPath != "" {
+		diff := getCommitDiff(gitPath, string(commit.Hash))
+		if diff != "" {
+			sb.WriteString("\n")
+			sb.WriteString(styles.SectionTitle.Render("Changes"))
+			sb.WriteString("\n")
+			sb.WriteString(theme.TextMuted.Render(strings.Repeat("─", width-4)))
+			sb.WriteString("\n\n")
+			sb.WriteString(colorizeGitDiff(diff, width-4))
 		}
 	}
 
 	return theme.PanelNoBorder.Copy().Width(width).Render(sb.String())
+}
+
+// getCommitDiff fetches the git diff for a specific commit
+func getCommitDiff(gitPath string, commitHash string) string {
+	if gitPath == "" || commitHash == "" {
+		return ""
+	}
+
+	cmd := exec.Command("git", "-C", gitPath, "show", "--no-color", commitHash)
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+
+	return string(output)
+}
+
+// colorizeGitDiff adds color to git diff output
+func colorizeGitDiff(diff string, maxWidth int) string {
+	var sb strings.Builder
+	lines := strings.Split(diff, "\n")
+
+	for _, line := range lines {
+		// Truncate long lines
+		if len(line) > maxWidth {
+			line = line[:maxWidth-3] + "..."
+		}
+
+		// Color based on diff markers
+		switch {
+		case strings.HasPrefix(line, "+++") || strings.HasPrefix(line, "---"):
+			sb.WriteString(theme.TextSubtitle.Render(line))
+		case strings.HasPrefix(line, "+"):
+			sb.WriteString(theme.TextSuccess.Render(line))
+		case strings.HasPrefix(line, "-"):
+			sb.WriteString(theme.TextError.Render(line))
+		case strings.HasPrefix(line, "@@"):
+			sb.WriteString(theme.TextHighlight.Render(line))
+		case strings.HasPrefix(line, "diff --git"):
+			sb.WriteString(theme.TextTitle.Render(line))
+		default:
+			sb.WriteString(theme.TextMuted.Render(line))
+		}
+		sb.WriteString("\n")
+	}
+
+	return sb.String()
 }
