@@ -56,28 +56,27 @@ func renderCommitList(commits []domain.Commit, selectedIndex int, width int) str
 	for i, commit := range commits {
 		isSelected := i == selectedIndex
 
-		// Date and hash
-		date := commit.Timestamp.Format("2006-01-02")
+		// Hash (first 6 chars)
 		hash := string(commit.Hash)
-		if len(hash) > 8 {
-			hash = hash[:8]
+		if len(hash) > 6 {
+			hash = hash[:6]
 		}
 
-		// Message preview
+		// Message preview (first line only)
 		message := commit.Message
-		// Get first line only
 		lines := strings.Split(message, "\n")
 		if len(lines) > 0 {
 			message = strings.TrimSpace(lines[0])
 		}
 
-		maxLen := width - len(date) - len(hash) - 7
+		// Calculate max message length
+		maxLen := width - len(hash) - 5 // 5 for padding and spacing
 		if len(message) > maxLen {
 			message = message[:maxLen-3] + "..."
 		}
 
-		// Build line: date hash message
-		line := fmt.Sprintf("  %-11s %-8s %s", date, hash, message)
+		// Build line: hash message
+		line := fmt.Sprintf("  %-6s %s", hash, message)
 
 		// Apply style
 		if isSelected {
