@@ -18,7 +18,8 @@ CREATE TABLE IF NOT EXISTS agents (
     terminal_application TEXT,
     parent_agent_id TEXT DEFAULT NULL,
     parent_session_id TEXT,
-    bookmarked INTEGER NOT NULL DEFAULT 0
+    bookmarked INTEGER NOT NULL DEFAULT 0,
+    completed_at DATETIME
 );
 
 CREATE TABLE IF NOT EXISTS actions (
