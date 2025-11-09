@@ -34,8 +34,9 @@ eye-in-the-sky/
 │   └── window/                    # Window management utilities
 └── tests/                         # Go test files
 
-### Database Location
-SQLite database: `~/.config/eye-in-the-sky/agents.db` (created at runtime)
+### Database Locations
+- **Main Database**: `~/.config/eye-in-the-sky/eits.db` (created at runtime)
+- **CCUsage Database**: `~/.config/eye-in-the-sky/ccusage.sqlite` (token usage tracking)
 ```
 
 ## Key Concepts
@@ -120,13 +121,17 @@ go test -v ./...
 
 ### Database Management
 ```bash
-# The SQLite database is created automatically at runtime
-# Location: ~/.config/eye-in-the-sky/agents.db
+# The SQLite databases are created automatically at runtime
+# Main DB: ~/.config/eye-in-the-sky/eits.db
+# CCUsage DB: ~/.config/eye-in-the-sky/ccusage.sqlite
 
-# To reset the database, simply delete the file
-rm ~/.config/eye-in-the-sky/agents.db
+# To reset the main database, delete the file
+rm ~/.config/eye-in-the-sky/eits.db
 
-# Database schema is initialized on first run
+# To reset usage tracking, delete the CCUsage database
+rm ~/.config/eye-in-the-sky/ccusage.sqlite
+
+# Database schemas are initialized on first run
 ```
 
 ### Logging
@@ -170,36 +175,45 @@ When finishing work:
 
 ## Database Schema
 
-### Agents Table
-- `id`: UUID identifier (auto-generated)
-- `status`: Current agent status
-- `source`: Always "worktree"
-- `created_at/updated_at`: Timestamps
-- `git_worktree_path`: Path to git worktree
-- `feature_description`: High-level feature being worked on
-- `current_task`: Specific current task
-- `last_activity_at`: When agent last reported activity
-- `session_id`: Associated session identifier
-- `parent_agent_id`: Parent agent if this is a subagent
+### Main Database (eits.db)
 
-### Actions Table
-- Links to agents via `agent_id`
-- Tracks all agent activities with timestamps
-- Categorizes actions by type
-- Stores human-readable descriptions and JSON details
+**Core Tables:**
+- **agents**: Agent instances (UUID, status, session_id, project, worktree path, etc.)
+- **sessions**: Session tracking (id, agent_id, name, timestamps)
+- **projects**: Git repository tracking (id, name, path, remote_url, branch)
 
-### Commits Table
-- Links to agents via `agent_id`
-- Tracks git commit hashes and messages
-- Associates commits with agent sessions
+**Activity Tracking:**
+- **actions**: Agent action log (agent_id, type, description, timestamp)
+- **commits**: Git commits (agent_id, hash, message, project_id, session_id)
+- **logs**: Simple session logs (session_id, type, message, timestamp)
+- **session_logs**: Detailed logs (agent_id, log_level, category, message)
 
-### Logs Table
-- Links to sessions via `session_id`
-- Simple log storage for hook execution and MCP calls
-- Fields: `id`, `session_id`, `type`, `message`, `timestamp`
-- Type values: "action" (PreToolUse), "info" (PostToolUse), "debug", "error"
-- Used by `i-log` CLI command and Claude Code hooks
-- Separate from structured `session_logs` table (which has more fields)
+**Context & Notes:**
+- **session_context**: Session state persistence (phase, progress, tasks, goals, blockers)
+- **agent_context**: Agent-specific context per project
+- **notes**: Polymorphic notes (parent_id, parent_type, body)
+- **session_notes**: Session-specific notes (agent_id, note_type, content, priority)
+
+**Task Management:**
+- **tasks**: Task tracking (id, title, state_id, project_id, agent_id, priority)
+- **workflow_states**: Task states (name, position, color)
+- **task_notes**: Task annotations
+- **tags**: Tag definitions
+- **task_tags**: Task-tag relationships
+- **task_search**: Full-text search (FTS5)
+
+**Metrics:**
+- **session_metrics**: Token usage per session (tokens, cost, model, timestamp)
+
+**Other:**
+- **personas**: Reusable agent personas
+- **compactions**: Conversation compaction tracking
+
+### CCUsage Database (ccusage.sqlite)
+
+**Tables:**
+- **usage_entries**: Claude Code usage data (session_id, timestamp, project, model, tokens, cost)
+- **file_metadata**: JSONL file sync tracking (file_path, last_mtime, last_parsed_at)
 
 ## TUI Dashboard Features
 
