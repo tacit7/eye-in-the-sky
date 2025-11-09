@@ -45,10 +45,26 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Note: "right" is handled per-tab for Agents tab
 	switch msg.String() {
 	case "tab":
+		oldTab := m.tabs.ActiveIndex
 		m.tabs.Next()
+		newTab := m.tabs.ActiveIndex
+		// Emit tab changed message if switched to token usage tab (index 3)
+		if oldTab != newTab && newTab == 3 {
+			return m, func() tea.Msg {
+				return TabChangedMsg{NewTabIndex: newTab}
+			}
+		}
 		return m, nil
 	case "shift+tab", "left":
+		oldTab := m.tabs.ActiveIndex
 		m.tabs.Prev()
+		newTab := m.tabs.ActiveIndex
+		// Emit tab changed message if switched to token usage tab (index 3)
+		if oldTab != newTab && newTab == 3 {
+			return m, func() tea.Msg {
+				return TabChangedMsg{NewTabIndex: newTab}
+			}
+		}
 		return m, nil
 	}
 

@@ -110,6 +110,12 @@ func (m *Model) GetVisibleAgents() []domain.Agent {
 	return visible
 }
 
+// GetActiveTabIndex returns the currently active tab index
+// Used by root to determine which viewport to update
+func (m *Model) GetActiveTabIndex() int {
+	return m.tabs.ActiveIndex
+}
+
 // sortAgents sorts the agents list by the current sort field and order
 func (m *Model) sortAgents() {
 	if m.sortField == "" {

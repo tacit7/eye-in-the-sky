@@ -93,7 +93,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
     }
 
     // Update usage viewport dimensions dynamically
-    if m.currentView == ViewList && m.listTabs.ActiveIndex == 3 {
+    // Check both old listTabs and new overview tabs
+    isUsageTabActive := false
+    if m.currentView == ViewList {
+        isUsageTabActive = m.listTabs.ActiveIndex == 3
+        if overviewModel, ok := m.overviewView.(overview.Model); ok {
+            isUsageTabActive = isUsageTabActive || overviewModel.GetActiveTabIndex() == 3
+        }
+    }
+
+    if isUsageTabActive {
         const headerHeight = 2  // Header + tabs
         const footerHeight = 1  // Footer hints
 
@@ -176,9 +185,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if err := m.loadCCUsageData(); err != nil {
 				// Log but don't fail
 				log.Printf("Warning: Failed to reload ccusage data: %v\n", err)
-			} else if m.currentView == ViewList && m.listTabs.ActiveIndex == 3 {
-				// Trigger usage refresh if usage tab is active
-				cmds = append(cmds, func() tea.Msg { return RefreshUsageMsg{} })
+			} else if m.currentView == ViewList {
+				// Check if usage tab is active (either old listTabs or new overview tabs)
+				isUsageTabActive := m.listTabs.ActiveIndex == 3
+				if overviewModel, ok := m.overviewView.(overview.Model); ok {
+					isUsageTabActive = isUsageTabActive || overviewModel.GetActiveTabIndex() == 3
+				}
+
+				if isUsageTabActive {
+					// Trigger usage refresh if usage tab is active
+					cmds = append(cmds, func() tea.Msg { return RefreshUsageMsg{} })
+				}
 			}
 		}
 

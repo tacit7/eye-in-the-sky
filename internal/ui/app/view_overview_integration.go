@@ -65,6 +65,16 @@ func (m *Model) handleOverviewUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.projectViewport, viewportCmd = m.projectViewport.Update(msg.Msg)
 		}
 		return m, viewportCmd
+
+	case overview.TabChangedMsg:
+		// Tab changed in overview view - trigger refresh if it's the usage tab
+		if msg.NewTabIndex == 3 {
+			// Token Usage tab - trigger viewport refresh
+			return m, func() tea.Msg {
+				return RefreshUsageMsg{}
+			}
+		}
+		return m, nil
 	}
 
 	return m, cmd
