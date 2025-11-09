@@ -175,8 +175,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tickMsg:
 		// Refresh data using command
+		// TEMPORARILY DISABLED: Auto-refresh for overview
 		cmds := []tea.Cmd{
-			loadAgentsCmd(m.data.Agents, m.showAll),
+			// loadAgentsCmd(m.data.Agents, m.showAll), // Disabled temporarily
 			m.tickCmd(), // Schedule next tick
 		}
 
@@ -214,6 +215,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.tickCmd(),
 			func() tea.Msg { return RefreshUsageMsg{} },
 		)
+
+	case ccusageDataLoadedMsg:
+		// CCUsage data loaded asynchronously - trigger usage refresh
+		if msg.err != nil {
+			log.Printf("Warning: Failed to load ccusage data: %v\n", msg.err)
+		}
+		return m, func() tea.Msg { return RefreshUsageMsg{} }
 
 	case RefreshUsageMsg:
 		// Resize viewport first (before setting content for correct scroll bounds)

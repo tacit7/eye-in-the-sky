@@ -57,3 +57,18 @@ func (m *Model) initCCUsageCmd() tea.Cmd {
 		return initCCUsageMsg{}
 	}
 }
+
+// loadCCUsageDataCmd loads CCUsage data asynchronously
+func (m *Model) loadCCUsageDataCmd() tea.Cmd {
+	return func() tea.Msg {
+		if m.ccusageDB == nil {
+			return ccusageDataLoadedMsg{}
+		}
+
+		if err := m.loadCCUsageData(); err != nil {
+			return ccusageDataLoadedMsg{err: err}
+		}
+
+		return ccusageDataLoadedMsg{}
+	}
+}

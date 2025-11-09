@@ -612,6 +612,11 @@ type tickMsg time.Time
 // initCCUsageMsg triggers CCUsage database initialization
 type initCCUsageMsg struct{}
 
+// ccusageDataLoadedMsg is sent when CCUsage data has finished loading
+type ccusageDataLoadedMsg struct {
+	err error
+}
+
 // RefreshUsageMsg triggers a usage tab content refresh
 type RefreshUsageMsg struct{}
 

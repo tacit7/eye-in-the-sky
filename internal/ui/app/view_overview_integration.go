@@ -69,7 +69,13 @@ func (m *Model) handleOverviewUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case overview.TabChangedMsg:
 		// Tab changed in overview view - trigger refresh if it's the usage tab
 		if msg.NewTabIndex == 3 {
-			// Token Usage tab - trigger viewport refresh
+			// Token Usage tab - load data if not loaded yet, then refresh viewport
+			// If data hasn't been synced yet, load it now (async)
+			if m.ccusageDB != nil && m.lastCCUsageSync.IsZero() {
+				return m, m.loadCCUsageDataCmd()
+			}
+
+			// Data already loaded, just refresh
 			return m, func() tea.Msg {
 				return RefreshUsageMsg{}
 			}
