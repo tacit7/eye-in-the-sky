@@ -185,6 +185,16 @@ func (s *Server) registerTools() {
 		}, s.handleTodoList)
 
 		mcp.AddTool(s.mcp, &mcp.Tool{
+			Name:        "i-todo-list-agent",
+			Description: "Retrieve tasks filtered by agent ID",
+		}, s.handleTodoListAgent)
+
+		mcp.AddTool(s.mcp, &mcp.Tool{
+			Name:        "i-todo-list-session",
+			Description: "Retrieve tasks filtered by session ID",
+		}, s.handleTodoListSession)
+
+		mcp.AddTool(s.mcp, &mcp.Tool{
 			Name:        "i-todo-search",
 			Description: "Perform full-text search on tasks",
 		}, s.handleTodoSearch)

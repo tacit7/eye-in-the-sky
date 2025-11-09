@@ -37,6 +37,8 @@ func NewRegistry(handler *Handler) *Registry {
 			"i-todo-status":       handler.HandleStatus,
 			"i-todo-tag":          handler.HandleTag,
 			"i-todo-list":         handler.HandleList,
+			"i-todo-list-agent":   handler.HandleListAgent,
+			"i-todo-list-session": handler.HandleListSession,
 			"i-todo-search":       handler.HandleSearch,
 			"i-todo-delete":       handler.HandleDelete,
 			"i-todo-reindex":      handler.HandleReindex,

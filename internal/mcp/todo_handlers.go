@@ -109,6 +109,34 @@ func (s *Server) handleTodoList(ctx context.Context, req *mcp.CallToolRequest, a
 	}, result, nil
 }
 
+func (s *Server) handleTodoListAgent(ctx context.Context, req *mcp.CallToolRequest, args todo_mcp.ListAgentRequest) (*mcp.CallToolResult, any, error) {
+	jsonArgs, _ := json.Marshal(args)
+	result, err := s.todoRegistry.Execute(ctx, "i-todo-list-agent", jsonArgs)
+	if err != nil {
+		return nil, nil, err
+	}
+	resultJSON, _ := json.Marshal(result)
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: string(resultJSON)},
+		},
+	}, result, nil
+}
+
+func (s *Server) handleTodoListSession(ctx context.Context, req *mcp.CallToolRequest, args todo_mcp.ListSessionRequest) (*mcp.CallToolResult, any, error) {
+	jsonArgs, _ := json.Marshal(args)
+	result, err := s.todoRegistry.Execute(ctx, "i-todo-list-session", jsonArgs)
+	if err != nil {
+		return nil, nil, err
+	}
+	resultJSON, _ := json.Marshal(result)
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: string(resultJSON)},
+		},
+	}, result, nil
+}
+
 func (s *Server) handleTodoSearch(ctx context.Context, req *mcp.CallToolRequest, args todo_mcp.SearchRequest) (*mcp.CallToolResult, any, error) {
 	jsonArgs, _ := json.Marshal(args)
 	result, err := s.todoRegistry.Execute(ctx, "i-todo-search", jsonArgs)

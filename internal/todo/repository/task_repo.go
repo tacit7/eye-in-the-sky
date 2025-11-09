@@ -373,6 +373,166 @@ func (tr *TaskRepo) List(projectID int, filters models.Filters, sortBy models.So
 	return tasks, rows.Err()
 }
 
+// ListByAgent retrieves tasks filtered by agent ID
+func (tr *TaskRepo) ListByAgent(agentID string, projectID int, filters models.Filters, sortBy models.SortOrder) ([]models.Task, error) {
+	query := `SELECT id, project_id, title, description, state_id, COALESCE(priority, 0), due_at, completed_at, session_id, agent_id, created_at, updated_at, COALESCE(archived, 0)
+	          FROM tasks WHERE project_id = ? AND agent_id = ?`
+
+	args := []interface{}{projectID, agentID}
+
+	// Apply filters
+	if filters.StateID != nil {
+		query += " AND state_id = ?"
+		args = append(args, *filters.StateID)
+	}
+
+	if filters.IsActive {
+		query += " AND archived = 0"
+	}
+
+	if filters.Priority != nil {
+		query += " AND priority = ?"
+		args = append(args, *filters.Priority)
+	}
+
+	if filters.DueBefore != nil {
+		query += " AND due_at <= ?"
+		args = append(args, *filters.DueBefore)
+	}
+
+	if filters.DueAfter != nil {
+		query += " AND due_at >= ?"
+		args = append(args, *filters.DueAfter)
+	}
+
+	if filters.HasNote {
+		query += " AND EXISTS (SELECT 1 FROM task_notes WHERE task_notes.task_id = tasks.id)"
+	}
+
+	// Add tag filter
+	if len(filters.Tags) > 0 {
+		placeholders := strings.Repeat("?,", len(filters.Tags)-1) + "?"
+		query += fmt.Sprintf(" AND id IN (SELECT tt.task_id FROM task_tags tt JOIN tags t ON tt.tag_id = t.id WHERE t.name IN (%s))", placeholders)
+		for _, tag := range filters.Tags {
+			args = append(args, tag)
+		}
+	}
+
+	// Apply sorting
+	switch sortBy {
+	case models.SortByDue:
+		query += " ORDER BY due_at ASC, created_at ASC"
+	case models.SortByPriority:
+		query += " ORDER BY priority DESC, created_at ASC"
+	case models.SortByCreated:
+		query += " ORDER BY created_at DESC"
+	case models.SortByUpdated:
+		query += " ORDER BY updated_at DESC"
+	default:
+		query += " ORDER BY created_at ASC"
+	}
+
+	rows, err := tr.executor.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query tasks by agent: %w", err)
+	}
+	defer rows.Close()
+
+	var tasks []models.Task
+	for rows.Next() {
+		task := models.Task{}
+		if err := rows.Scan(&task.ID, &task.ProjectID, &task.Title, &task.Description, &task.StateID, &task.Priority, &task.DueAt, &task.CompletedAt, &task.SessionID, &task.AgentID, &task.CreatedAt, &task.UpdatedAt, &task.Archived); err != nil {
+			return nil, fmt.Errorf("failed to scan task: %w", err)
+		}
+		if err := tr.loadTaskRelations(&task); err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, task)
+	}
+
+	return tasks, rows.Err()
+}
+
+// ListBySession retrieves tasks filtered by session ID
+func (tr *TaskRepo) ListBySession(sessionID string, projectID int, filters models.Filters, sortBy models.SortOrder) ([]models.Task, error) {
+	query := `SELECT id, project_id, title, description, state_id, COALESCE(priority, 0), due_at, completed_at, session_id, agent_id, created_at, updated_at, COALESCE(archived, 0)
+	          FROM tasks WHERE project_id = ? AND session_id = ?`
+
+	args := []interface{}{projectID, sessionID}
+
+	// Apply filters
+	if filters.StateID != nil {
+		query += " AND state_id = ?"
+		args = append(args, *filters.StateID)
+	}
+
+	if filters.IsActive {
+		query += " AND archived = 0"
+	}
+
+	if filters.Priority != nil {
+		query += " AND priority = ?"
+		args = append(args, *filters.Priority)
+	}
+
+	if filters.DueBefore != nil {
+		query += " AND due_at <= ?"
+		args = append(args, *filters.DueBefore)
+	}
+
+	if filters.DueAfter != nil {
+		query += " AND due_at >= ?"
+		args = append(args, *filters.DueAfter)
+	}
+
+	if filters.HasNote {
+		query += " AND EXISTS (SELECT 1 FROM task_notes WHERE task_notes.task_id = tasks.id)"
+	}
+
+	// Add tag filter
+	if len(filters.Tags) > 0 {
+		placeholders := strings.Repeat("?,", len(filters.Tags)-1) + "?"
+		query += fmt.Sprintf(" AND id IN (SELECT tt.task_id FROM task_tags tt JOIN tags t ON tt.tag_id = t.id WHERE t.name IN (%s))", placeholders)
+		for _, tag := range filters.Tags {
+			args = append(args, tag)
+		}
+	}
+
+	// Apply sorting
+	switch sortBy {
+	case models.SortByDue:
+		query += " ORDER BY due_at ASC, created_at ASC"
+	case models.SortByPriority:
+		query += " ORDER BY priority DESC, created_at ASC"
+	case models.SortByCreated:
+		query += " ORDER BY created_at DESC"
+	case models.SortByUpdated:
+		query += " ORDER BY updated_at DESC"
+	default:
+		query += " ORDER BY created_at ASC"
+	}
+
+	rows, err := tr.executor.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query tasks by session: %w", err)
+	}
+	defer rows.Close()
+
+	var tasks []models.Task
+	for rows.Next() {
+		task := models.Task{}
+		if err := rows.Scan(&task.ID, &task.ProjectID, &task.Title, &task.Description, &task.StateID, &task.Priority, &task.DueAt, &task.CompletedAt, &task.SessionID, &task.AgentID, &task.CreatedAt, &task.UpdatedAt, &task.Archived); err != nil {
+			return nil, fmt.Errorf("failed to scan task: %w", err)
+		}
+		if err := tr.loadTaskRelations(&task); err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, task)
+	}
+
+	return tasks, rows.Err()
+}
+
 // Search performs full-text search on tasks using FTS5.
 func (tr *TaskRepo) Search(projectID int, searchQuery string, limit, offset int) ([]models.SearchResult, error) {
 	// Use CTE to get FTS5 results with rank, then join with tasks

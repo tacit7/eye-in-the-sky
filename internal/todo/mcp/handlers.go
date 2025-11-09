@@ -413,6 +413,124 @@ func (h *Handler) HandleList(ctx context.Context, args json.RawMessage) (interfa
 }
 
 // ============================================================================
+// todo.list-agent - List tasks filtered by agent ID
+// ============================================================================
+
+type ListAgentRequest struct {
+	AgentID   string    `json:"agent_id"`
+	ProjectID int       `json:"project_id"`
+	Filters   *Filters  `json:"filters,omitempty"`
+	Limit     int       `json:"limit,omitempty"`
+}
+
+func (h *Handler) HandleListAgent(ctx context.Context, args json.RawMessage) (interface{}, error) {
+	var req ListAgentRequest
+	if err := json.Unmarshal(args, &req); err != nil {
+		return nil, fmt.Errorf("invalid list-agent request: %w", err)
+	}
+
+	if req.AgentID == "" {
+		return nil, fmt.Errorf("agent_id is required")
+	}
+
+	if req.Limit == 0 {
+		req.Limit = 100
+	}
+
+	// Build filters
+	filters := models.Filters{
+		IsActive: req.Filters != nil && req.Filters.Active,
+	}
+
+	if req.Filters != nil {
+		filters.StateID = req.Filters.StateID
+		filters.Tags = req.Filters.Tags
+		filters.Priority = req.Filters.Priority
+	}
+
+	tasks, err := h.svc.GetTasksRepo().ListByAgent(req.AgentID, req.ProjectID, filters, models.SortByCreated)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list tasks by agent: %w", err)
+	}
+
+	response := ListResponse{Tasks: make([]ListTaskResponse, 0, len(tasks))}
+	for _, task := range tasks {
+		tagNames := make([]string, len(task.Tags))
+		for i, tag := range task.Tags {
+			tagNames[i] = tag.Name
+		}
+		response.Tasks = append(response.Tasks, ListTaskResponse{
+			ID:       task.ID,
+			Title:    task.Title,
+			Priority: task.Priority,
+			StateID:  task.StateID,
+			Tags:     tagNames,
+		})
+	}
+
+	return response, nil
+}
+
+// ============================================================================
+// todo.list-session - List tasks filtered by session ID
+// ============================================================================
+
+type ListSessionRequest struct {
+	SessionID string    `json:"session_id"`
+	ProjectID int       `json:"project_id"`
+	Filters   *Filters  `json:"filters,omitempty"`
+	Limit     int       `json:"limit,omitempty"`
+}
+
+func (h *Handler) HandleListSession(ctx context.Context, args json.RawMessage) (interface{}, error) {
+	var req ListSessionRequest
+	if err := json.Unmarshal(args, &req); err != nil {
+		return nil, fmt.Errorf("invalid list-session request: %w", err)
+	}
+
+	if req.SessionID == "" {
+		return nil, fmt.Errorf("session_id is required")
+	}
+
+	if req.Limit == 0 {
+		req.Limit = 100
+	}
+
+	// Build filters
+	filters := models.Filters{
+		IsActive: req.Filters != nil && req.Filters.Active,
+	}
+
+	if req.Filters != nil {
+		filters.StateID = req.Filters.StateID
+		filters.Tags = req.Filters.Tags
+		filters.Priority = req.Filters.Priority
+	}
+
+	tasks, err := h.svc.GetTasksRepo().ListBySession(req.SessionID, req.ProjectID, filters, models.SortByCreated)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list tasks by session: %w", err)
+	}
+
+	response := ListResponse{Tasks: make([]ListTaskResponse, 0, len(tasks))}
+	for _, task := range tasks {
+		tagNames := make([]string, len(task.Tags))
+		for i, tag := range task.Tags {
+			tagNames[i] = tag.Name
+		}
+		response.Tasks = append(response.Tasks, ListTaskResponse{
+			ID:       task.ID,
+			Title:    task.Title,
+			Priority: task.Priority,
+			StateID:  task.StateID,
+			Tags:     tagNames,
+		})
+	}
+
+	return response, nil
+}
+
+// ============================================================================
 // todo.search - Full-text search on tasks
 // ============================================================================
 
