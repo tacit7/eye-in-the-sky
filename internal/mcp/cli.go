@@ -4,10 +4,47 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/tacit7/eye-in-the-sky/internal/database"
 )
+
+// openEditorForInput opens the user's preferred editor to capture input
+func openEditorForInput() (string, error) {
+	// Get editor from environment
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		editor = "vim" // fallback to vim
+	}
+
+	// Create temporary file
+	tmpFile, err := os.CreateTemp("", "eits-note-*.md")
+	if err != nil {
+		return "", fmt.Errorf("failed to create temp file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+	tmpFile.Close()
+	defer os.Remove(tmpPath)
+
+	// Open editor
+	cmd := exec.Command(editor, tmpPath)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("editor exited with error: %w", err)
+	}
+
+	// Read the file content
+	content, err := os.ReadFile(tmpPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read temp file: %w", err)
+	}
+
+	return string(content), nil
+}
 
 // HandleCLI handles command-line interface mode
 func HandleCLI(args []string, db *database.DB) int {
@@ -128,18 +165,35 @@ func handleNoteCLI(args []string, tools *Tools) int {
 	fs := flag.NewFlagSet("i-note", flag.ExitOnError)
 	parentID := fs.String("parent-id", "", "Parent entity ID")
 	parentType := fs.String("parent-type", "", "Parent entity type (sessions, agents, projects, global)")
-	body := fs.String("body", "", "Note content")
+	body := fs.String("body", "", "Note content (optional - will open EDITOR if not provided)")
 	fs.Parse(args)
 
-	if *parentID == "" || *parentType == "" || *body == "" {
-		fmt.Fprintln(os.Stderr, "Error: --parent-id, --parent-type, and --body are required")
+	if *parentID == "" || *parentType == "" {
+		fmt.Fprintln(os.Stderr, "Error: --parent-id and --parent-type are required")
+		return 1
+	}
+
+	// If no body provided, open editor
+	noteBody := *body
+	if noteBody == "" {
+		content, err := openEditorForInput()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error opening editor: %v\n", err)
+			return 1
+		}
+		noteBody = content
+	}
+
+	// Don't create empty notes
+	if strings.TrimSpace(noteBody) == "" {
+		fmt.Fprintln(os.Stderr, "Error: note body cannot be empty")
 		return 1
 	}
 
 	result, err := tools.AddNote(AddNoteArgs{
 		ParentID:   *parentID,
 		ParentType: *parentType,
-		Body:       *body,
+		Body:       noteBody,
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)

@@ -108,18 +108,22 @@ func (m *Model) handleDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		log.Printf("[DETAIL] Tab set to: %d", m.tabs.ActiveIndex)
 		return m, nil
 	case "n":
-		// Create new note for current agent
+		// Create new note for current agent using EDITOR
 		if m.selectedAgent != nil {
+			// Store context for when editor closes
+			m.pendingNoteAgentID = string(m.selectedAgent.ID)
+			m.pendingNoteSessionID = m.selectedAgent.SessionID
+
 			// Get project ID from project name
-			projectID := ""
+			m.pendingNoteProjectID = ""
 			if m.selectedAgent.ProjectName != "" {
 				if proj, err := m.data.DB.GetProjectByName(m.selectedAgent.ProjectName); err == nil && proj != nil {
-					projectID = proj.ID
+					m.pendingNoteProjectID = proj.ID
 				}
 			}
 
-			m.noteModal.SetContext(string(m.selectedAgent.ID), m.selectedAgent.SessionID, projectID)
-			m.noteModal.Show()
+			// Open editor for note creation
+			return m, openNoteEditorCmd()
 		}
 		return m, nil
 	}

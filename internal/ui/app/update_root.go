@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -218,8 +220,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case ccusageDataLoadedMsg:
 		// CCUsage data loaded asynchronously - trigger usage refresh
+		m.ccusageLoading = false
 		if msg.err != nil {
 			log.Printf("Warning: Failed to load ccusage data: %v\n", msg.err)
+			m.ccusageSyncStatus = fmt.Sprintf("Error: %v", msg.err)
+		} else {
+			m.ccusageSyncStatus = ""
 		}
 		return m, func() tea.Msg { return RefreshUsageMsg{} }
 
@@ -433,6 +439,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case modal.FormSubmitted:
 		// Handle form submission from modal
 		return m.handleFormSubmission(msg)
+
+	case noteEditorClosedMsg:
+		// Handle note editor closing
+		return m.handleNoteEditorClosed(msg)
 
 	case components.NoteSubmitMsg:
 		// Handle note submission
@@ -799,6 +809,90 @@ func (m *Model) shouldHighlightFile(filePath string) bool {
 	}
 
 	return false
+}
+
+// handleNoteEditorClosed handles note creation from EDITOR
+func (m *Model) handleNoteEditorClosed(msg noteEditorClosedMsg) (tea.Model, tea.Cmd) {
+	log.Printf("[NOTE-EDITOR] Editor closed, tempPath=%s, err=%v", msg.tempPath, msg.err)
+
+	// Clean up temp file at end of function
+	if msg.tempPath != "" {
+		defer func() {
+			log.Printf("[NOTE-EDITOR] Cleaning up temp file: %s", msg.tempPath)
+			os.Remove(msg.tempPath)
+		}()
+	}
+
+	// Check for editor errors
+	if msg.err != nil {
+		errMsg := fmt.Sprintf("Editor error: %v", msg.err)
+		log.Printf("[NOTE-EDITOR] %s", errMsg)
+		m.statusMsg = errMsg
+		return m, nil
+	}
+
+	// Read note content from temp file
+	log.Printf("[NOTE-EDITOR] Reading temp file: %s", msg.tempPath)
+	content, err := os.ReadFile(msg.tempPath)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to read note: %v", err)
+		log.Printf("[NOTE-EDITOR] %s", errMsg)
+		m.statusMsg = errMsg
+		return m, nil
+	}
+
+	body := strings.TrimSpace(string(content))
+	log.Printf("[NOTE-EDITOR] Read %d bytes, body length after trim: %d", len(content), len(body))
+
+	if body == "" {
+		log.Printf("[NOTE-EDITOR] Empty note body, aborting")
+		m.statusMsg = "Note body cannot be empty"
+		return m, nil
+	}
+
+	// Create agent note
+	log.Printf("[NOTE-EDITOR] Creating agent note for agent_id=%s", m.pendingNoteAgentID)
+	agentNote := &database.Note{
+		ParentType: "agent",
+		ParentID:   m.pendingNoteAgentID,
+		Body:       body,
+		CreatedAt:  time.Now(),
+	}
+	if err := m.data.DB.CreateNote(agentNote); err != nil {
+		errMsg := fmt.Sprintf("Failed to create agent note: %v", err)
+		log.Printf("[NOTE-EDITOR] %s", errMsg)
+		m.statusMsg = errMsg
+		return m, nil
+	}
+	log.Printf("[NOTE-EDITOR] Agent note created successfully, id=%s", agentNote.ID)
+
+	// Create session note if session ID is available
+	if m.pendingNoteSessionID != "" {
+		log.Printf("[NOTE-EDITOR] Creating session note for session_id=%s", m.pendingNoteSessionID)
+		sessionNote := &database.Note{
+			ParentType: "session",
+			ParentID:   m.pendingNoteSessionID,
+			Body:       body,
+			CreatedAt:  time.Now(),
+		}
+		if err := m.data.DB.CreateNote(sessionNote); err != nil {
+			errMsg := fmt.Sprintf("Agent note created, session note failed: %v", err)
+			log.Printf("[NOTE-EDITOR] %s", errMsg)
+			m.statusMsg = errMsg
+			return m, nil
+		}
+		log.Printf("[NOTE-EDITOR] Session note created successfully, id=%s", sessionNote.ID)
+	}
+
+	m.statusMsg = "Note created successfully!"
+	log.Printf("[NOTE-EDITOR] Both notes created, reloading agent details")
+
+	// Reload agent details to show new note
+	if m.currentView == ViewDetail && m.selectedAgent != nil {
+		return m, loadAgentDetailsCmd(m.data, m.selectedAgent.ID)
+	}
+
+	return m, nil
 }
 
 // handleNoteSubmission handles note creation from the note modal

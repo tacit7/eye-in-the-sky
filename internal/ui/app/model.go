@@ -183,6 +183,7 @@ type Model struct {
 
 	// CCUsage sync state
 	ccusageSyncing    bool
+	ccusageLoading    bool   // Loading data from database
 	ccusageSyncStatus string
 	ccusageEntryCount int
 	lastCCUsageSync   time.Time
@@ -232,6 +233,11 @@ type Model struct {
 	noteModal            components.NoteModal
 	taskAnnotationModal  components.TaskAnnotationModal
 	keybindResolver      *keybindings.Resolver
+
+	// Pending note context (for EDITOR workflow)
+	pendingNoteAgentID    string
+	pendingNoteSessionID  string
+	pendingNoteProjectID  string
 
 	// Config tab state
 	keybindingsYAML     string // Current YAML content
@@ -785,26 +791,12 @@ func (m *Model) loadSessionContexts() error {
 	m.sessionContexts = make([]domain.SessionContext, len(dbContexts))
 	for i, dbCtx := range dbContexts {
 		m.sessionContexts[i] = domain.SessionContext{
-			ID:              dbCtx.ID,
-			AgentID:         domain.AgentID(dbCtx.AgentID),
-			SessionID:       dbCtx.SessionID,
-			CreatedAt:       dbCtx.CreatedAt,
-			UpdatedAt:       dbCtx.UpdatedAt,
-			CurrentPhase:    stringPtrToString(dbCtx.CurrentPhase),
-			OverallProgress: float32PtrToFloat32(dbCtx.OverallProgress),
-			PendingTasks:    stringPtrToString(dbCtx.PendingTasks),
-			CompletedTasks:  stringPtrToString(dbCtx.CompletedTasks),
-			NextActions:     stringPtrToString(dbCtx.NextActions),
-			Dependencies:    stringPtrToString(dbCtx.Dependencies),
-			ImportantFiles:  stringPtrToString(dbCtx.ImportantFiles),
-			Milestones:      stringPtrToString(dbCtx.Milestones),
-			CurrentGoals:    stringPtrToString(dbCtx.CurrentGoals),
-			Blockers:        stringPtrToString(dbCtx.Blockers),
-			KeyDecisions:    stringPtrToString(dbCtx.KeyDecisions),
-			Environment:     stringPtrToString(dbCtx.Environment),
-			Metrics:         stringPtrToString(dbCtx.Metrics),
-			AutoSave:        dbCtx.AutoSave,
-			LearnedContext:  stringPtrToString(dbCtx.LearnedContext),
+			ID:        dbCtx.ID,
+			AgentID:   domain.AgentID(dbCtx.AgentID),
+			SessionID: dbCtx.SessionID,
+			Context:   dbCtx.Context,
+			CreatedAt: dbCtx.CreatedAt,
+			UpdatedAt: dbCtx.UpdatedAt,
 		}
 	}
 

@@ -624,11 +624,20 @@ func (db *DB) GetLogsAfter(sessionID string, after time.Time) ([]*Log, error) {
 
 // CreateNote inserts a new note
 func (db *DB) CreateNote(note *Note) error {
-	query := `INSERT INTO notes (id, parent_id, parent_type, body, created_at) VALUES (?, ?, ?, ?, ?)`
-	_, err := db.conn.Exec(query, note.ID, note.ParentID, note.ParentType, note.Body, note.CreatedAt)
+	// Let database auto-generate ID with AUTOINCREMENT
+	query := `INSERT INTO notes (parent_id, parent_type, body, created_at) VALUES (?, ?, ?, ?)`
+	result, err := db.conn.Exec(query, note.ParentID, note.ParentType, note.Body, note.CreatedAt)
 	if err != nil {
 		return fmt.Errorf("failed to create note: %w", err)
 	}
+
+	// Get the auto-generated ID
+	id, err := result.LastInsertId()
+	if err != nil {
+		return fmt.Errorf("failed to get note ID: %w", err)
+	}
+	note.ID = fmt.Sprintf("%d", id)
+
 	return nil
 }
 
@@ -1027,10 +1036,7 @@ func (db *DB) GetActionsByType(agentID string, actionType string) ([]*Action, er
 // GetSessionContextsForAgent retrieves all saved session contexts for a specific agent
 func (db *DB) GetSessionContextsForAgent(agentID string) ([]*SessionContext, error) {
 	query := `
-		SELECT id, agent_id, session_id, created_at, updated_at, current_phase,
-		       overall_progress, pending_tasks, completed_tasks, next_actions,
-		       dependencies, important_files, milestones, current_goals, blockers,
-		       key_decisions, environment, metrics, auto_save, learned_context
+		SELECT id, agent_id, session_id, context, created_at, updated_at
 		FROM session_context
 		WHERE agent_id = ?
 		ORDER BY created_at DESC
@@ -1049,23 +1055,9 @@ func (db *DB) GetSessionContextsForAgent(agentID string) ([]*SessionContext, err
 			&ctx.ID,
 			&ctx.AgentID,
 			&ctx.SessionID,
+			&ctx.Context,
 			&ctx.CreatedAt,
 			&ctx.UpdatedAt,
-			&ctx.CurrentPhase,
-			&ctx.OverallProgress,
-			&ctx.PendingTasks,
-			&ctx.CompletedTasks,
-			&ctx.NextActions,
-			&ctx.Dependencies,
-			&ctx.ImportantFiles,
-			&ctx.Milestones,
-			&ctx.CurrentGoals,
-			&ctx.Blockers,
-			&ctx.KeyDecisions,
-			&ctx.Environment,
-			&ctx.Metrics,
-			&ctx.AutoSave,
-			&ctx.LearnedContext,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan session context: %w", err)
@@ -1080,31 +1072,14 @@ func (db *DB) GetSessionContextsForAgent(agentID string) ([]*SessionContext, err
 func (db *DB) CreateSessionContext(ctx *SessionContext) error {
 	query := `
 		INSERT INTO session_context (
-			agent_id, session_id, current_phase, overall_progress,
-			pending_tasks, completed_tasks, next_actions, dependencies,
-			important_files, milestones, current_goals, blockers,
-			key_decisions, environment, metrics, auto_save, learned_context
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			agent_id, session_id, context
+		) VALUES (?, ?, ?)
 	`
 
 	_, err := db.conn.Exec(query,
 		ctx.AgentID,
 		ctx.SessionID,
-		ctx.CurrentPhase,
-		ctx.OverallProgress,
-		ctx.PendingTasks,
-		ctx.CompletedTasks,
-		ctx.NextActions,
-		ctx.Dependencies,
-		ctx.ImportantFiles,
-		ctx.Milestones,
-		ctx.CurrentGoals,
-		ctx.Blockers,
-		ctx.KeyDecisions,
-		ctx.Environment,
-		ctx.Metrics,
-		ctx.AutoSave,
-		ctx.LearnedContext,
+		ctx.Context,
 	)
 
 	if err != nil {
