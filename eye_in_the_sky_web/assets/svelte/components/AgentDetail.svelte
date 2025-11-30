@@ -346,31 +346,33 @@
         {:else if activeTab === "notes"}
           <NotesTab {notes} />
         {:else if activeTab === "messages"}
-          <div class="flex flex-col h-[600px]">
+          <div class="flex flex-col h-[600px] border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden shadow-sm">
             <!-- Messages list -->
-            <div class="flex-1 overflow-y-auto space-y-3 p-4 bg-gray-50 dark:bg-gray-900 rounded-t-lg">
+            <div class="flex-1 overflow-y-auto space-y-3 p-4 bg-gray-50 dark:bg-gray-900">
               {#if messages && messages.length > 0}
                 {#each messages as message}
                   <div class="flex {message.direction === 'outbound' ? 'justify-end' : 'justify-start'}">
-                    <div class="max-w-[70%] rounded-lg px-4 py-3 {message.direction === 'outbound' ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700'}">
-                      <div class="flex items-center gap-2 mb-1">
-                        <span class="text-xs font-semibold opacity-80">
+                    <div class="max-w-[70%] rounded-xl px-4 py-3 shadow-sm {message.direction === 'outbound' ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700'}">
+                      <div class="flex items-center gap-1.5 mb-1.5 text-xs">
+                        <span class="font-semibold {message.direction === 'outbound' ? 'opacity-90' : 'text-gray-700 dark:text-gray-300'}">
                           {message.sender_role === 'user' ? 'You' : 'Agent'}
                         </span>
                         {#if message.provider}
-                          <span class="text-xs opacity-70">· {message.provider}</span>
+                          <span class="{message.direction === 'outbound' ? 'opacity-70' : 'text-gray-500 dark:text-gray-400'}">•</span>
+                          <span class="{message.direction === 'outbound' ? 'opacity-70' : 'text-gray-500 dark:text-gray-400'}">{message.provider}</span>
                         {/if}
-                        <span class="text-xs opacity-70">
-                          · {new Date(message.inserted_at).toLocaleTimeString()}
+                        <span class="{message.direction === 'outbound' ? 'opacity-70' : 'text-gray-500 dark:text-gray-400'}">•</span>
+                        <span class="{message.direction === 'outbound' ? 'opacity-70' : 'text-gray-500 dark:text-gray-400'}">
+                          {new Date(message.inserted_at).toLocaleTimeString()}
                         </span>
                       </div>
                       <p class="text-sm whitespace-pre-wrap">{message.body}</p>
                       {#if message.status === 'pending'}
-                        <span class="inline-block mt-2 text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+                        <span class="inline-block mt-2 text-xs px-2 py-0.5 rounded-xl bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800 font-semibold">
                           Pending
                         </span>
                       {:else if message.status === 'failed'}
-                        <span class="inline-block mt-2 text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
+                        <span class="inline-block mt-2 text-xs px-2 py-0.5 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-800 font-semibold">
                           Failed
                         </span>
                       {/if}
@@ -390,7 +392,7 @@
             </div>
 
             <!-- Message input -->
-            <div class="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded-b-lg p-4">
+            <div class="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
               <form on:submit|preventDefault={(e) => {
                 const formData = new FormData(e.target);
                 const body = formData.get('body');
