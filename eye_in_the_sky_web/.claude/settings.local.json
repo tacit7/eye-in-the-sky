@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mix run:*)",
+      "Bash(mix ecto.migrate:*)",
+      "Bash(mix compile:*)",
+      "Bash(mix deps:*)",
+      "Bash(mix phx.server:*)",
+      "Bash(mix test:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run:*)",
+      "Bash(git add:*)",
+      "Bash(curl:*)",
+      "Bash(psql:*)",
+      "WebSearch",
+      "Read(//Users/urielmaldonado/projects/**)",
+      "WebFetch(domain:hexdocs.pm)",
+      "mcp__eye-in-the-sky__*"
+    ],
+    "deny": [],
+    "ask": []
+  },
+  "mcpServers": {
+    "eye-in-the-sky": {
+      "command": "/Users/urielmaldonado/projects/eye-in-the-sky/bin/eye-in-the-sky",
+      "instructions": "Eye in the Sky - Agent tracking for Claude Code. Use i-start-session at the beginning of your session to register yourself."
+    }
+  }
+}

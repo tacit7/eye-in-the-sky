@@ -1,6 +1,8 @@
 package overview
 
 import (
+	"github.com/charmbracelet/bubbles/table"
+	"github.com/charmbracelet/lipgloss"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/tacit7/eye-in-the-sky/internal/domain"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/app/messages"
@@ -19,6 +21,9 @@ type Model struct {
 	selectedIndex  int
 	listOffset     int
 	showAll        bool // Show all agents or only active ones
+
+	// Bubble Tea table component for agents list
+	agentsTable table.Model
 
 	// Header sorting state
 	headerFocused  bool   // True when header is focused for sorting
@@ -86,6 +91,10 @@ func (m Model) Init() tea.Cmd {
 func (m *Model) SetSize(width, height int) {
 	m.width = width
 	m.height = height
+	// Refresh table with new height
+	if len(m.agents) > 0 {
+		m.refreshAgentsTable()
+	}
 }
 
 // SelectedAgent returns the currently selected agent
@@ -220,5 +229,82 @@ func (m *Model) loadAgentsCmd() tea.Cmd {
 			return ErrMsg{Error: err}
 		}
 		return messages.AgentsLoadedMsg{Agents: agents}
+	}
+}
+
+// createAgentsTable builds a table.Model from the current agents list
+func (m *Model) createAgentsTable() table.Model {
+	columns := []table.Column{
+		{Title: "Status", Width: 10},
+		{Title: "Last Log", Width: 20},
+		{Title: "Session", Width: 12},
+		{Title: "Task", Width: 40},
+		{Title: "Project", Width: 20},
+	}
+
+	rows := []table.Row{}
+	visibleAgents := m.GetVisibleAgents()
+
+	for _, agent := range visibleAgents {
+		// Get task description (prefer FeatureDesc, fallback to CurrentTask)
+		task := agent.FeatureDesc
+		if task == "" {
+			task = agent.CurrentTask
+		}
+		if len(task) > 40 {
+			task = task[:37] + "..."
+		}
+
+		// Format last log preview
+		lastLog := agent.LastLog
+		if len(lastLog) > 20 {
+			lastLog = lastLog[:17] + "..."
+		}
+
+		rows = append(rows, table.Row{
+			agent.Status,
+			lastLog,
+			agent.SessionID,
+			task,
+			agent.ProjectName,
+		})
+	}
+
+	// Calculate table height (leave room for header, tabs, footer)
+	tableHeight := m.height - 8
+	if tableHeight < 5 {
+		tableHeight = 5
+	}
+
+	t := table.New(
+		table.WithColumns(columns),
+		table.WithRows(rows),
+		table.WithFocused(true),
+		table.WithHeight(tableHeight),
+	)
+
+	// Apply styles
+	s := table.DefaultStyles()
+	s.Header = s.Header.Bold(true)
+
+	// Use primary color from styles
+	primaryStyle := m.styles.GetPrimary()
+	primaryColor := primaryStyle.GetForeground()
+	// Use primary color if available, otherwise default to cyan
+	if primaryColor == nil {
+		primaryColor = lipgloss.Color("#00ADD8")
+	}
+	s.Selected = s.Selected.Bold(true).Foreground(primaryColor)
+	t.SetStyles(s)
+
+	return t
+}
+
+// refreshAgentsTable rebuilds the agents table with current data
+func (m *Model) refreshAgentsTable() {
+	m.agentsTable = m.createAgentsTable()
+	// Sync table cursor with selectedIndex
+	if m.selectedIndex >= 0 && m.selectedIndex < len(m.GetVisibleAgents()) {
+		m.agentsTable.SetCursor(m.selectedIndex)
 	}
 }

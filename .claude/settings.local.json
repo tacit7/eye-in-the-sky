@@ -9,7 +9,16 @@
       "Bash(sqlite3:*)",
       "mcp__eye-in-the-sky__i-end-session",
       "Bash(go build:*)",
-      "Bash(go test:*)"
+      "Bash(go test:*)",
+      "WebSearch",
+      "mcp__eye-in-the-sky__i-nats-send",
+      "mcp__eye-in-the-sky__i-nats-listen",
+      "Bash(mix compile:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "mcp__eye-in-the-sky__i-commits",
+      "mcp__eye-in-the-sky__i-todo-done",
+      "mcp__eye-in-the-sky__i-todo-annotate"
     ],
     "deny": [],
     "ask": []

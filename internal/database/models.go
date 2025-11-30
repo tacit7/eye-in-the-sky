@@ -17,6 +17,7 @@ type Agent struct {
 	WindowID            *string    `json:"window_id,omitempty"`
 	TerminalApplication *string    `json:"terminal_application,omitempty"`
 	ProjectName         *string    `json:"project_name,omitempty"`
+	ProjectID           *int       `json:"project_id,omitempty"` // Foreign key to projects.id
 	SessionID           *string    `json:"session_id,omitempty"`
 	PersonaID           *string    `json:"persona_id,omitempty"`
 	ParentAgentID       *string    `json:"parent_agent_id,omitempty"`
@@ -139,28 +140,14 @@ type Compaction struct {
 	MessageCount  *int      `json:"message_count,omitempty"`
 }
 
-// SessionContext represents a saved session checkpoint
+// SessionContext represents a saved session checkpoint (simplified schema after migration 002)
 type SessionContext struct {
-	ID              int       `json:"id"`
-	AgentID         string    `json:"agent_id"`
-	SessionID       string    `json:"session_id"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
-	CurrentPhase    *string   `json:"current_phase,omitempty"`
-	OverallProgress *float32  `json:"overall_progress,omitempty"`
-	PendingTasks    *string   `json:"pending_tasks,omitempty"`
-	CompletedTasks  *string   `json:"completed_tasks,omitempty"`
-	NextActions     *string   `json:"next_actions,omitempty"`
-	Dependencies    *string   `json:"dependencies,omitempty"`
-	ImportantFiles  *string   `json:"important_files,omitempty"`
-	Milestones      *string   `json:"milestones,omitempty"`
-	CurrentGoals    *string   `json:"current_goals,omitempty"`
-	Blockers        *string   `json:"blockers,omitempty"`
-	KeyDecisions    *string   `json:"key_decisions,omitempty"`
-	Environment     *string   `json:"environment,omitempty"`
-	Metrics         *string   `json:"metrics,omitempty"`
-	AutoSave        bool      `json:"auto_save"`
-	LearnedContext  *string   `json:"learned_context,omitempty"`
+	ID        int       `json:"id"`
+	AgentID   string    `json:"agent_id"`
+	SessionID string    `json:"session_id"`
+	Context   string    `json:"context"`          // Markdown-formatted context
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // SessionMetrics represents token usage and cost tracking for a session

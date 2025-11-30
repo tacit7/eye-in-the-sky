@@ -67,18 +67,16 @@ func main() {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 
-	// Initialize CCUsage database
-	ccusageDBPath := filepath.Join(logDir, "ccusage.sqlite")
-
+	// Initialize CCUsage database using shared connection
+	// CCUsage tables are now in eits.db (migration 003)
 	var ccusageDB *ccdb.CCUsageDB
-	ccusageDB, err = ccdb.New(ccusageDBPath)
+	ccusageDB, err = ccdb.NewWithConnection(db)
 	if err != nil {
 		log.Printf("Warning: CCUsage database unavailable: %v", err)
 		ccusageDB = nil
-	} else {
-		defer ccusageDB.Close()
-		// Note: CCUsage sync now happens on-demand when viewing Usage tab
 	}
+	// Note: CCUsage sync now happens on-demand when viewing Usage tab
+	// Note: Don't defer ccusageDB.Close() - it's using a shared connection
 
 	// Create model
 	model, err := app.NewModel(db, ccusageDB)
@@ -90,6 +88,7 @@ func main() {
 	p := tea.NewProgram(
 		model,
 		tea.WithAltScreen(),
+		tea.WithMouseCellMotion(), // Enable mouse support
 	)
 
 	// Run program

@@ -18,7 +18,7 @@ func RenderTasks(ctx *DataContext, overviewStyles OverviewStyles) string {
 	return RenderTasksSplitPane(ctx, overviewStyles, ctx.SelectedTaskIndex, ctx.Width)
 }
 
-// RenderTasksSplitPane renders tasks in split-pane layout
+// RenderTasksSplitPane renders tasks in split-pane layout with viewport
 func RenderTasksSplitPane(ctx *DataContext, overviewStyles OverviewStyles, selectedIndex int, width int) string {
 	start := time.Now()
 	now := start.Format("15:04:05.000")
@@ -41,14 +41,24 @@ func RenderTasksSplitPane(ctx *DataContext, overviewStyles OverviewStyles, selec
 	// Calculate split widths
 	leftWidth := width / 2
 	rightWidth := width - leftWidth - 1
+	viewportHeight := 30
 
 	// Render left pane (task list with count header)
 	leftPane := renderTaskList(tasks, selectedIndex, leftWidth, totalCount)
 
-	// Render right pane (selected task details)
+	// Render right pane (selected task details with viewport)
 	rightPane := ""
 	if selectedIndex >= 0 && selectedIndex < len(tasks) {
-		rightPane = renderTaskDetails(tasks[selectedIndex], ctx.TaskNotes, rightWidth, ctx.MarkdownRenderer)
+		// Get task details content
+		content := renderTaskDetailsContent(tasks[selectedIndex], ctx.TaskNotes, rightWidth, ctx.MarkdownRenderer)
+
+		// Update viewport size and content
+		ctx.TaskDetailViewport.Width = rightWidth
+		ctx.TaskDetailViewport.Height = viewportHeight
+		ctx.TaskDetailViewport.SetContent(content)
+
+		// Render viewport
+		rightPane = ctx.TaskDetailViewport.View()
 	} else {
 		rightPane = theme.TextMuted.Copy().
 			Width(rightWidth).
@@ -59,7 +69,7 @@ func RenderTasksSplitPane(ctx *DataContext, overviewStyles OverviewStyles, selec
 	result := lipgloss.JoinHorizontal(
 		lipgloss.Top,
 		leftPane,
-		theme.PanelSidebar.Copy().Height(30).Render(""),
+		theme.PanelSidebar.Copy().Height(viewportHeight).Render(""),
 		rightPane,
 	)
 
@@ -144,17 +154,16 @@ func renderTaskList(tasks []domain.Task, selectedIndex int, width int, totalCoun
 	return theme.List.Copy().Width(width).Render(sb.String())
 }
 
-// renderTaskDetails renders the right pane with description and annotations
-func renderTaskDetails(task domain.Task, taskNotes []domain.TaskNote, width int, mdRenderer MarkdownRenderer) string {
+// renderTaskDetailsContent renders task details content for viewport
+func renderTaskDetailsContent(task domain.Task, taskNotes []domain.TaskNote, width int, mdRenderer MarkdownRenderer) string {
 	var sb strings.Builder
 
 	// Task header
-	sb.WriteString(theme.TextTitle.Copy().Width(width-4).Render(task.Title))
+	sb.WriteString(theme.TextTitle.Render(task.Title))
 	sb.WriteString("\n\n")
 
 	// Description
-	descStyle := theme.TextNormal.Copy().Width(width - 4)
-	sb.WriteString(descStyle.Render(task.Description))
+	sb.WriteString(task.Description)
 	sb.WriteString("\n\n")
 
 	// Annotations section
@@ -191,7 +200,7 @@ func renderTaskDetails(task domain.Task, taskNotes []domain.TaskNote, width int,
 		}
 	}
 
-	return theme.PanelNoBorder.Copy().Width(width).Render(sb.String())
+	return sb.String()
 }
 
 // formatPriority returns a visual priority indicator
@@ -234,13 +243,13 @@ func formatPriorityText(priority int) string {
 func getTaskStateIcon(stateID int) string {
 	switch stateID {
 	case 1:
-		return "⬜" // todo
+		return "\uf096" // nf-fa-square_o (todo)
 	case 2:
-		return "▶️" // in progress
+		return "\uf04b" // nf-fa-play (in progress)
 	case 3:
-		return "✅" // done
+		return "\uf00c" // nf-fa-check (done)
 	default:
-		return "❓"
+		return "\uf128" // nf-fa-question
 	}
 }
 

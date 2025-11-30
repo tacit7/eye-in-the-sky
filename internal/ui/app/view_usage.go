@@ -9,6 +9,11 @@ import (
 
 // renderUsageTab renders session costs for all agents with monthly breakdown
 func (m *Model) renderUsageTab() string {
+	// Show loading state
+	if m.ccusageLoading {
+		return m.styles.Working.Render("\uf021 " + m.ccusageSyncStatus)
+	}
+
 	// Check for empty states
 	if emptyState := m.checkEmptyState(); emptyState != "" {
 		return emptyState

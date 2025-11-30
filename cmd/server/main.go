@@ -48,8 +48,8 @@ func main() {
 		log.Fatalf("Failed to create config directory: %v", err)
 	}
 
-	fmt.Fprintf(os.Stderr, "🔍 Eye in the Sky MCP Server - Agent ID: 6d09ae9e\n")
-	fmt.Fprintf(os.Stderr, "📂 Database: %s\n", *dbPath)
+	fmt.Fprintf(os.Stderr, "\uf06e Eye in the Sky MCP Server - Agent ID: 6d09ae9e\n") // nf-fa-eye
+	fmt.Fprintf(os.Stderr, "\uf07c Database: %s\n", *dbPath)                           // nf-fa-folder_open
 
 	// Initialize database
 	db, err := database.New(*dbPath)
@@ -63,7 +63,7 @@ func main() {
 		log.Fatalf("Database health check failed: %v", err)
 	}
 
-	fmt.Fprintln(os.Stderr, "✅ Database initialized successfully")
+	fmt.Fprintln(os.Stderr, "\uf00c Database initialized successfully") // nf-fa-check
 
 	// Check if running in CLI mode (has command-line arguments)
 	if len(os.Args) > 1 && os.Args[1] != "--help" && os.Args[1] != "--db" {
@@ -86,7 +86,7 @@ func main() {
 
 	go func() {
 		<-sigChan
-		fmt.Fprintln(os.Stderr, "\n🛑 Shutdown signal received...")
+		fmt.Fprintln(os.Stderr, "\n\uf04d Shutdown signal received...") // nf-fa-stop
 		cancel()
 	}()
 
@@ -95,17 +95,17 @@ func main() {
 
 	if runningAsMCP {
 		// MCP-only mode (called by Claude Desktop)
-		fmt.Fprintln(os.Stderr, "🚀 Starting MCP Server (stdio mode)...")
+		fmt.Fprintln(os.Stderr, "\uf135 Starting MCP Server (stdio mode)...") // nf-fa-rocket
 		if err := mcpServer.Start(ctx); err != nil {
 			log.Fatalf("MCP Server failed: %v", err)
 		}
 	} else {
 		// Interactive mode - just MCP server
-		fmt.Fprintln(os.Stderr, "🚀 Starting MCP Server...")
+		fmt.Fprintln(os.Stderr, "\uf135 Starting MCP Server...") // nf-fa-rocket
 		if err := mcpServer.Start(ctx); err != nil {
 			log.Fatalf("MCP Server failed: %v", err)
 		}
 	}
 
-	fmt.Fprintln(os.Stderr, "✅ Server shutdown complete")
+	fmt.Fprintln(os.Stderr, "\uf00c Server shutdown complete") // nf-fa-check
 }

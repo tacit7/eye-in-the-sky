@@ -2,6 +2,7 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Show do
   use EyeInTheSkyWebWeb, :live_view
 
   alias EyeInTheSkyWeb.{Agents, Sessions, Messages}
+  alias EyeInTheSkyWeb.Claude.SessionManager
 
   @impl true
   def mount(_params, _session, socket) do
@@ -50,6 +51,12 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Show do
 
     # Build header info
     header = build_header(dashboard_data.agent, active_session)
+
+    # Subscribe to Claude CLI output and message updates for this session
+    if connected?(socket) && active_session do
+      Phoenix.PubSub.subscribe(EyeInTheSkyWeb.PubSub, "session:#{active_session.id}:messages")
+      Phoenix.PubSub.subscribe(EyeInTheSkyWeb.PubSub, "session:#{active_session.id}:claude")
+    end
 
     socket =
       socket
@@ -126,18 +133,62 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Show do
       body: body
     })
 
-    # TODO: Publish to NATS for agent processing
-    # Phoenix.PubSub.broadcast(EyeInTheSkyWeb.PubSub, "agents.request", %{
-    #   message_id: message.id,
-    #   session_id: session_id,
-    #   body: body,
-    #   provider: provider
-    # })
+    # Spawn Claude CLI subprocess with the message
+    case SessionManager.start_session(session_id, body, model: provider_to_model(provider)) do
+      {:ok, _session_ref} ->
+        # Reload messages for the current tab
+        updated_messages = serialize_messages(Messages.list_messages_for_session(session_id))
+        {:noreply, assign(socket, :messages, updated_messages)}
 
-    # Reload messages for the current tab
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, "Failed to start Claude: #{inspect(reason)}")}
+    end
+  end
+
+  defp provider_to_model("claude"), do: "sonnet"
+  defp provider_to_model("openai"), do: "sonnet"  # For now, always use Claude
+  defp provider_to_model(_), do: "sonnet"
+
+  @impl true
+  def handle_info({:new_message, _message}, socket) do
+    # Message received from NATS consumer via PubSub or Claude CLI
+    session_id = socket.assigns.session_id
+
+    # Reload messages and update UI
     updated_messages = serialize_messages(Messages.list_messages_for_session(session_id))
 
-    {:noreply, assign(socket, :messages, updated_messages)}
+    # Update message count
+    counts = Sessions.get_session_counts(session_id)
+
+    socket =
+      socket
+      |> assign(:messages, updated_messages)
+      |> assign(:counts, counts)
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:claude_output, _session_ref, parsed}, socket) do
+    # Real-time Claude CLI output streaming
+    # Just trigger a reload - the SessionManager already saved it to database
+    if socket.assigns.active_tab == :messages do
+      session_id = socket.assigns.session_id
+      updated_messages = serialize_messages(Messages.list_messages_for_session(session_id))
+      {:noreply, assign(socket, :messages, updated_messages)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_info({:claude_complete, _session_ref, exit_code}, socket) do
+    # Claude process completed
+    if exit_code == 0 do
+      {:noreply, put_flash(socket, :info, "Claude completed successfully")}
+    else
+      {:noreply, put_flash(socket, :error, "Claude exited with code #{exit_code}")}
+    end
   end
 
   # Lazy load tab data

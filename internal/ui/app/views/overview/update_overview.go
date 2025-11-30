@@ -24,6 +24,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		for i, a := range msg.Agents {
 			log.Printf("[OVERVIEW]   Agent %d: %s (status=%s, desc=%s)", i, a.ID, a.Status, a.FeatureDesc)
 		}
+		// Refresh the agents table with new data
+		m.refreshAgentsTable()
 		return m, nil
 
 	case ErrMsg:
@@ -41,8 +43,44 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // handleKeyPress handles keyboard input
 func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Tab navigation (direct keys)
-	// Note: "right" is handled per-tab for Agents tab
+	// Direct tab navigation shortcuts (global, checked before per-tab handlers)
+	// Note: Some keys like 'c', 'k', 'n' are intentionally omitted to avoid conflicts with agents tab actions
+	switch msg.String() {
+	case "o", "O":
+		// Jump to Overview tab (index 0)
+		oldTab := m.tabs.ActiveIndex
+		m.tabs.Set(0)
+		if oldTab != 0 {
+			return m, nil
+		}
+		return m, nil
+	case "p":
+		// Jump to Project tab (index 1)
+		oldTab := m.tabs.ActiveIndex
+		m.tabs.Set(1)
+		if oldTab != 1 {
+			return m, nil
+		}
+		return m, nil
+	case "P":
+		// Shift+P: Navigate directly to Project Detail View
+		return m, func() tea.Msg {
+			return SelectProjectMsg{}
+		}
+	case "t", "T":
+		// Jump to Token Usage tab (index 3)
+		oldTab := m.tabs.ActiveIndex
+		m.tabs.Set(3)
+		// Emit tab changed message when switching to token usage
+		if oldTab != 3 {
+			return m, func() tea.Msg {
+				return TabChangedMsg{NewTabIndex: 3}
+			}
+		}
+		return m, nil
+	}
+
+	// Tab navigation (sequential)
 	switch msg.String() {
 	case "tab":
 		oldTab := m.tabs.ActiveIndex
@@ -69,6 +107,7 @@ func (m Model) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Route to active tab handler
+	log.Printf("[OVERVIEW] Routing key '%s' to tab handler for activeTab=%d", msg.String(), m.tabs.ActiveIndex)
 	switch m.tabs.ActiveIndex {
 	case 0:
 		return m.handleAgentsTabKeys(msg)
@@ -93,35 +132,36 @@ func (m Model) handleAgentsTabKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg.String() {
-	case "j", "down":
-		// Move selection down
-		if m.selectedIndex < len(m.agents)-1 {
-			m.selectedIndex++
-			m.adjustListScroll()
-		}
-		return m, nil
-
-	case "k", "up":
-		// Move selection up
-		// If at first row, move to header
-		if m.selectedIndex == 0 {
-			m.headerFocused = true
-			return m, nil
-		}
-		m.selectedIndex--
+	case "j", "down", "k", "up":
+		// Delegate navigation to table.Model
+		var cmd tea.Cmd
+		m.agentsTable, cmd = m.agentsTable.Update(msg)
+		// Sync selectedIndex with table cursor
+		m.selectedIndex = m.agentsTable.Cursor()
 		m.adjustListScroll()
-		return m, nil
+
+		// If at first row and pressing up, move to header
+		if msg.String() == "k" || msg.String() == "up" {
+			if m.selectedIndex == 0 && m.agentsTable.Cursor() == 0 {
+				m.headerFocused = true
+				return m, nil
+			}
+		}
+		return m, cmd
 
 	case "g":
 		// Go to top
 		m.selectedIndex = 0
 		m.listOffset = 0
+		m.agentsTable.SetCursor(0)
 		return m, nil
 
 	case "G":
 		// Go to bottom
-		if len(m.agents) > 0 {
-			m.selectedIndex = len(m.agents) - 1
+		visibleAgents := m.GetVisibleAgents()
+		if len(visibleAgents) > 0 {
+			m.selectedIndex = len(visibleAgents) - 1
+			m.agentsTable.SetCursor(m.selectedIndex)
 			m.adjustListScroll()
 		}
 		return m, nil
@@ -166,9 +206,14 @@ func (m Model) handleAgentsTabKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleProjectTabKeys handles keys for the project tab
 func (m Model) handleProjectTabKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Forward navigation keys to project viewport
 	switch msg.String() {
+	case "enter", " ", "right":
+		// Navigate to project detail view - emit message for root to handle
+		return m, func() tea.Msg {
+			return SelectProjectMsg{}
+		}
 	case "j", "k", "down", "up", "pgdown", "pgup", "home", "end":
+		// Forward navigation keys to project viewport
 		return m, func() tea.Msg {
 			return ViewportUpdateMsg{Target: "project", Msg: msg}
 		}
@@ -190,6 +235,7 @@ func (m Model) handleClaudeTabKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleUsageTabKeys handles keys for the token usage tab
 func (m Model) handleUsageTabKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	log.Printf("[OVERVIEW] handleUsageTabKeys received key: '%s'", msg.String())
 	switch msg.String() {
 	case "j", "k", "down", "up", "pgdown", "pgup", "home", "end":
 		// Forward navigation keys to usage viewport
@@ -198,6 +244,7 @@ func (m Model) handleUsageTabKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "i", "I":
 		// Request CCUsage sync - emit message for root to handle
+		log.Printf("[OVERVIEW] Emitting SyncCCUsageRequestMsg from handleUsageTabKeys")
 		return m, func() tea.Msg {
 			return SyncCCUsageRequestMsg{}
 		}
@@ -270,6 +317,9 @@ func (m Model) sortByColumn() (tea.Model, tea.Cmd) {
 	// Sort agents based on field and order
 	m.sortAgents()
 
+	// Refresh the table with sorted data
+	m.refreshAgentsTable()
+
 	return m, nil
 }
 
@@ -282,6 +332,10 @@ type NewSessionRequestMsg struct{}
 type SelectAgentMsg struct {
 	Agent *domain.Agent
 }
+
+// SelectProjectMsg is sent when user selects project (presses Enter on Project tab)
+// Root will handle this by switching to ProjectDetailsView
+type SelectProjectMsg struct{}
 
 // MarkSessionCompletedMsg is sent when user wants to mark a session as completed
 // Root will handle this by updating the agent status

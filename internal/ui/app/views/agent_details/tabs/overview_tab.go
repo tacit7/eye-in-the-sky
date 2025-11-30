@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/tacit7/eye-in-the-sky/internal/domain"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/presenters"
@@ -30,8 +31,11 @@ type DataContext struct {
 	CommitsIndex       int                     // Index of selected commit in commits list
 	LogsListIndex      int                     // Viewport scroll position for logs tab
 	LastFetchedAt      time.Time               // Last timestamp for incremental log fetching
-	Width              int                     // Terminal width for responsive layout
-	MarkdownRenderer   MarkdownRenderer        // Markdown renderer for formatting
+	Width                int                     // Terminal width for responsive layout
+	MarkdownRenderer     MarkdownRenderer        // Markdown renderer for formatting
+	CommitDetailViewport viewport.Model         // Viewport for scrollable commit details
+	TaskDetailViewport   viewport.Model         // Viewport for scrollable task details
+	LogsViewport         viewport.Model         // Viewport for scrollable logs
 }
 
 // MarkdownRenderer is an interface for rendering markdown
@@ -107,7 +111,7 @@ func RenderOverview(ctx *DataContext, overviewStyles OverviewStyles) string {
 // Pure function - no Model dependency
 func renderAgentInfo(agent domain.Agent, styles OverviewStyles) string {
 	var sb strings.Builder
-	sb.WriteString(styles.SectionTitle.Render("📋 Agent Information"))
+	sb.WriteString(styles.SectionTitle.Render("\uf05a Agent Information"))
 	sb.WriteString("\n\n")
 
 	sb.WriteString(renderLabelValue("Agent ID:", truncateID(string(agent.ID), 8), styles.Value, styles.Label))
@@ -148,7 +152,7 @@ func renderAgentInfo(agent domain.Agent, styles OverviewStyles) string {
 // Pure function - no Model dependency
 func renderTiming(agent domain.Agent, styles OverviewStyles) string {
 	var sb strings.Builder
-	sb.WriteString(styles.SectionTitle.Render("⏱️ Timing"))
+	sb.WriteString(styles.SectionTitle.Render("\uf017 Timing"))
 	sb.WriteString("\n\n")
 
 	sb.WriteString(renderLabelValue("Created:", formatTimestamp(agent.CreatedAt), styles.Value, styles.Label))
@@ -176,7 +180,7 @@ func renderCommitsSection(commits []domain.Commit, styles OverviewStyles) string
 	}
 
 	var sb strings.Builder
-	sb.WriteString(styles.SectionTitle.Render("📝 Recent Commits"))
+	sb.WriteString(styles.SectionTitle.Render("\uf1d3 Recent Commits"))
 	sb.WriteString("\n\n")
 
 	maxCommits := minInt(len(commits), maxCommitsToShow)
@@ -207,7 +211,7 @@ func renderNotesSection(notes []domain.Note, styles OverviewStyles) string {
 	}
 
 	var sb strings.Builder
-	sb.WriteString(styles.SectionTitle.Render("📌 Notes Summary"))
+	sb.WriteString(styles.SectionTitle.Render("\uf249 Notes Summary"))
 	sb.WriteString("\n\n")
 	sb.WriteString(fmt.Sprintf("  %s %d notes\n",
 		styles.Label.Render("Total:"),
@@ -246,7 +250,7 @@ func renderTasksSection(taskCounts map[string]int, styles OverviewStyles) string
 	}
 
 	var sb strings.Builder
-	sb.WriteString(styles.SectionTitle.Render("✅ Tasks Summary"))
+	sb.WriteString(styles.SectionTitle.Render("\uf0ae Tasks Summary"))
 	sb.WriteString("\n\n")
 
 	if taskCounts["todo"] > 0 {

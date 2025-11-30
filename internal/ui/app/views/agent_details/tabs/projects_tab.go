@@ -92,7 +92,7 @@ func renderProjectTicketDetails(ticket domain.Task, styles OverviewStyles) strin
 	// Archived status
 	if ticket.Archived {
 		b.WriteString("\n")
-		b.WriteString(styles.Error.Render("⚠ ARCHIVED"))
+		b.WriteString(styles.Error.Render("\uf071 ARCHIVED")) // nf-fa-exclamation_triangle
 		b.WriteString("\n")
 	}
 
@@ -103,13 +103,13 @@ func renderProjectTicketDetails(ticket domain.Task, styles OverviewStyles) strin
 func getTaskStateIcon(stateID int) string {
 	switch stateID {
 	case 1:
-		return "⬜" // todo
+		return "\uf096" // nf-fa-square_o (todo)
 	case 2:
-		return "▶️" // in progress
+		return "\uf04b" // nf-fa-play (in progress)
 	case 3:
-		return "✅" // done
+		return "\uf00c" // nf-fa-check (done)
 	default:
-		return "❓"
+		return "\uf128" // nf-fa-question
 	}
 }
 

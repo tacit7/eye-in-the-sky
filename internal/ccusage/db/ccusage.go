@@ -10,11 +10,13 @@ import (
 
 // CCUsageDB manages the ccusage SQLite database
 type CCUsageDB struct {
-	db    *sql.DB
-	mutex sync.RWMutex
+	db       *sql.DB
+	mutex    sync.RWMutex
+	ownsConn bool // Track if we own the connection (for backwards compatibility)
 }
 
 // New creates a new CCUsageDB instance and initializes the schema
+// Deprecated: Use NewWithConnection instead to share the main database connection
 func New(dbPath string) (*CCUsageDB, error) {
 	db, err := sql.Open("sqlite", "file:"+dbPath+"?cache=shared&mode=rwc&_journal_mode=WAL")
 	if err != nil {
@@ -30,11 +32,30 @@ func New(dbPath string) (*CCUsageDB, error) {
 	db.SetMaxOpenConns(25)
 	db.SetMaxIdleConns(5)
 
-	ccdb := &CCUsageDB{db: db}
+	ccdb := &CCUsageDB{
+		db:       db,
+		ownsConn: true, // We created the connection, we own it
+	}
 
 	// Initialize schema
 	if err := ccdb.initSchema(); err != nil {
 		db.Close()
+		return nil, err
+	}
+
+	return ccdb, nil
+}
+
+// NewWithConnection creates a new CCUsageDB instance using an existing database connection
+// This is preferred for sharing the main eits.db connection
+func NewWithConnection(db *sql.DB) (*CCUsageDB, error) {
+	ccdb := &CCUsageDB{
+		db:       db,
+		ownsConn: false, // We don't own the connection
+	}
+
+	// Initialize schema (tables will be created if they don't exist)
+	if err := ccdb.initSchema(); err != nil {
 		return nil, err
 	}
 
@@ -55,8 +76,13 @@ func (c *CCUsageDB) initSchema() error {
 }
 
 // Close closes the database connection
+// Only closes the connection if we own it (created via New)
 func (c *CCUsageDB) Close() error {
-	return c.db.Close()
+	if c.ownsConn {
+		return c.db.Close()
+	}
+	// Don't close shared connections
+	return nil
 }
 
 // InsertUsageEntry inserts a usage entry into the database

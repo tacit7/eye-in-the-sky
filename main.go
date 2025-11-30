@@ -32,8 +32,8 @@ func main() {
 		log.Fatalf("Failed to create data directory: %v", err)
 	}
 
-	fmt.Printf("🔍 Eye in the Sky - MCP Server\n")
-	fmt.Printf("📂 Database: %s\n", *dbPath)
+	fmt.Printf("\uf06e Eye in the Sky - MCP Server\n") // nf-fa-eye
+	fmt.Printf("\uf07c Database: %s\n", *dbPath)        // nf-fa-folder_open
 
 	// Initialize database
 	db, err := database.New(*dbPath)
@@ -47,7 +47,7 @@ func main() {
 		log.Fatalf("Database health check failed: %v", err)
 	}
 
-	fmt.Println("✅ Database initialized successfully")
+	fmt.Println("\uf00c Database initialized successfully") // nf-fa-check
 
 	// Create MCP server
 	mcpServer := mcp.NewServer(db)
@@ -62,15 +62,15 @@ func main() {
 
 	go func() {
 		<-sigChan
-		fmt.Println("\n🛑 Shutdown signal received...")
+		fmt.Println("\n\uf04d Shutdown signal received...") // nf-fa-stop
 		cancel()
 	}()
 
 	// Start MCP Server
-	fmt.Println("🚀 Starting MCP Server...")
+	fmt.Println("\uf135 Starting MCP Server...") // nf-fa-rocket
 	if err := mcpServer.Start(ctx); err != nil && ctx.Err() == nil {
 		log.Printf("MCP Server failed: %v", err)
 	}
 
-	fmt.Println("✅ Server shutdown complete")
+	fmt.Println("\uf00c Server shutdown complete") // nf-fa-check
 }

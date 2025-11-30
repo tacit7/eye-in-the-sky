@@ -156,7 +156,7 @@ func (m *Model) renderConfigTab() string {
 	var b strings.Builder
 
 	// Title and mode indicator
-	title := "⚙️  Keybindings Configuration"
+	title := "\uf013  Keybindings Configuration" // nf-fa-cog
 	if m.keybindingsEditing {
 		title += " [EDIT MODE]"
 	}
@@ -165,7 +165,7 @@ func (m *Model) renderConfigTab() string {
 
 	// Display validation error if present
 	if m.keybindingsError != "" {
-		b.WriteString(m.styles.Error.Render("⚠️  Invalid keybindings.yaml: " + m.keybindingsError))
+		b.WriteString(m.styles.Error.Render("\uf071  Invalid keybindings.yaml: " + m.keybindingsError)) // nf-fa-exclamation_triangle
 		b.WriteString("\n\n")
 	}
 

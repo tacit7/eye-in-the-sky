@@ -138,6 +138,8 @@ func (m *Model) getKeyHelp() string {
 		keyHelp = m.getListKeyHelp()
 	case ViewDetail:
 		keyHelp = m.getDetailKeyHelp()
+	case ViewProjectDetail:
+		keyHelp = m.getProjectDetailKeyHelp()
 	default:
 		keyHelp = m.getDefaultKeyHelp()
 	}
@@ -185,6 +187,11 @@ func (m *Model) getDetailKeyHelp() []string {
 	return keyHelp
 }
 
+// getProjectDetailKeyHelp returns key help for project detail view
+func (m *Model) getProjectDetailKeyHelp() []string {
+	return []string{"[o/a/n/t/f] tabs", "[j/k] navigate", "[h/l] scroll", "[esc] back"}
+}
+
 // getDefaultKeyHelp returns default key help
 func (m *Model) getDefaultKeyHelp() []string {
 	return []string{"[j/k] navigate", "[enter] select"}
@@ -198,7 +205,7 @@ func (m *Model) getCommonKeyHelp() []string {
 // getRightStatus returns the right-aligned status information
 func (m *Model) getRightStatus() string {
 	if m.isLoading {
-		return m.styles.Warning.Render(" ⟳ Refreshing...")
+		return m.styles.Warning.Render(" \uf021 Refreshing...")
 	}
 
 	// Use unified error status

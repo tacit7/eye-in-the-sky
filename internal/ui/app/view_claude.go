@@ -57,7 +57,7 @@ func (m *Model) renderClaudeFileList() string {
 	if m.claudeCurrentPath != "" {
 		breadcrumb = "~/.claude/" + m.claudeCurrentPath
 	}
-	title := m.styles.SectionTitle.Render("📁 " + breadcrumb)
+	title := m.styles.SectionTitle.Render("\uf07b " + breadcrumb) // nf-fa-folder
 	lines = append(lines, title)
 	lines = append(lines, "")
 
@@ -68,22 +68,22 @@ func (m *Model) renderClaudeFileList() string {
 		// Selection indicator
 		if i == m.claudeSelectedIndex {
 			// Selected file
-			icon := "📄"
+			icon := "\uf15c" // nf-fa-file_text_o
 			if file.IsParent {
-				icon = "↩️ "
+				icon = "\uf112 " // nf-fa-reply
 			} else if file.IsDir {
-				icon = "📁"
+				icon = "\uf07b" // nf-fa-folder
 			}
 			line = m.styles.Selected.Render(fmt.Sprintf(" %s %s", icon, file.Name))
 		} else {
 			// Unselected file
 			icon := "  "
 			if file.IsParent {
-				icon = "↩️ "
+				icon = "\uf112 " // nf-fa-reply
 			} else if file.IsDir {
-				icon = "📁"
+				icon = "\uf07b" // nf-fa-folder
 			} else {
-				icon = "📄"
+				icon = "\uf15c" // nf-fa-file_text_o
 			}
 			line = m.styles.Text.Render(fmt.Sprintf(" %s %s", icon, file.Name))
 		}

@@ -17,7 +17,7 @@ func (m *Model) renderClaudeCodeEmptyState() string {
 	b.WriteString("\n\n")
 
 	if m.ccusageSyncing {
-		b.WriteString(m.styles.Working.Render("  ⏳ " + m.ccusageSyncStatus))
+		b.WriteString(m.styles.Working.Render("  \uf021 " + m.ccusageSyncStatus))
 	} else {
 		b.WriteString(m.styles.Subtle.Render("  No Claude Code usage data found"))
 		b.WriteString("\n\n")

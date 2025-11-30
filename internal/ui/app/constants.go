@@ -26,7 +26,7 @@ const (
 // UI component constants
 const (
 	AppVersion         = "v0.2.0"
-	AppTitle           = "👁️ Eye in the Sky - Agent Management"
+	AppTitle           = "\uf06e Eye in the Sky - Agent Management"
 	StatusMessageWidth = 40
 )
 

@@ -23,8 +23,9 @@ type ViewHandler func(*Model, tea.KeyMsg) (tea.Model, tea.Cmd)
 
 // viewHandlers maps views to their key handlers
 var viewHandlers = map[ViewType]ViewHandler{
-	ViewList:   (*Model).handleOverviewKeys, // New modular overview view
-	ViewDetail: (*Model).handleDetailKeys,
+	ViewList:          (*Model).handleOverviewKeys,        // New modular overview view
+	ViewDetail:        (*Model).handleDetailKeys,
+	ViewProjectDetail: (*Model).handleProjectDetailKeys,
 }
 
 // Update handles messages and updates the model
@@ -301,6 +302,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.tabs.Set(1) // Set to Overview tab in detail view (index 1, since 0 is back arrow)
 		// Load agent details
 		return m, loadAgentDetailsCmd(m.data, m.selectedAgent.ID)
+
+	case overview.SelectProjectMsg:
+		// User selected project from overview - switch to project detail view
+		m.currentView = ViewProjectDetail
+		m.projectTabsIndex = 1 // Start on Overview tab (0 is back button)
+		return m, nil
 
 	case overview.MarkSessionCompletedMsg:
 		// User wants to mark session as completed
@@ -584,13 +591,16 @@ func (m *Model) handleGlobalKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	action, found := m.keybindResolver.Resolve(msg, m.modalManager.IsActive())
 	if found {
 		debugf("RESOLVED: key '%s' -> action '%s'", msg.String(), action)
+		log.Printf("[ROOT] Global key resolved: '%s' -> action '%s'", msg.String(), action)
 	} else {
 		debugf("NO RESOLVE: key '%s' not found in resolver", msg.String())
+		log.Printf("[ROOT] Global key NOT resolved: '%s', passing to view handler", msg.String())
 	}
 	if !found {
 		return m, nil
 	}
 
+	log.Printf("[ROOT] Executing global action: '%s'", action)
 	switch action {
 	case "quit":
 		return m, tea.Quit
@@ -604,6 +614,7 @@ func (m *Model) handleGlobalKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, loadAgentsCmd(m.data.Agents, m.showAll)
 
 	default:
+		log.Printf("[ROOT] Unknown action '%s', returning m", action)
 		return m, nil
 	}
 }
@@ -920,14 +931,14 @@ func (m *Model) handleNoteSubmission(msg components.NoteSubmitMsg) (tea.Model, t
 		m.statusMsg = "Global note created"
 
 	case components.NoteScopeProject:
-		// Project note: parent_type='projects', parent_id=project.id
+		// Project note: parent_type='project', parent_id=project.id
 		if msg.ParentID == "" {
 			m.statusMsg = "No project selected for note"
 			return m, nil
 		}
 		note := &database.Note{
 			ID:         fmt.Sprintf("%d", time.Now().UnixNano()),
-			ParentType: "projects",
+			ParentType: "project",
 			ParentID:   msg.ParentID,
 			Body:       msg.Body,
 			CreatedAt:  time.Now(),
@@ -943,7 +954,7 @@ func (m *Model) handleNoteSubmission(msg components.NoteSubmitMsg) (tea.Model, t
 		// 1. For agent entity
 		agentNote := &database.Note{
 			ID:         fmt.Sprintf("%d", time.Now().UnixNano()),
-			ParentType: "agents",
+			ParentType: "agent",
 			ParentID:   msg.ParentID, // agent.id
 			Body:       msg.Body,
 			CreatedAt:  time.Now(),
@@ -959,7 +970,7 @@ func (m *Model) handleNoteSubmission(msg components.NoteSubmitMsg) (tea.Model, t
 		if selectedAgent != nil && selectedAgent.SessionID != "" {
 			sessionNote := &database.Note{
 				ID:         fmt.Sprintf("%d", time.Now().UnixNano()+1), // +1 to avoid collision
-				ParentType: "sessions",
+				ParentType: "session",
 				ParentID:   selectedAgent.SessionID,
 				Body:       msg.Body,
 				CreatedAt:  time.Now(),

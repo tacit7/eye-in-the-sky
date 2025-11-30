@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 
+	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/tacit7/eye-in-the-sky/internal/domain"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/app/views/agent_details"
 	"github.com/tacit7/eye-in-the-sky/internal/ui/app/views/agent_details/tabs"
@@ -26,19 +27,22 @@ func (m *Model) renderDetail() string {
 
 	// Create context for agent details
 	ctx := &agent_details.DataContext{
-		Agent:             m.selectedAgent,
-		Commits:           m.commits,
-		Notes:             m.notes,
-		Tasks:             m.tasks,
-		TaskNotes:         taskNotes,
-		Actions:           m.actions,
-		Logs:              m.logs,
-		SessionContexts:   m.sessionContexts,
-		SelectedTaskIndex: m.tasksIndex,
-		NotesIndex:        m.notesIndex,
-		CommitsIndex:      m.commitsIndex,
-		Width:             m.width,
-		MarkdownRenderer:  m.mdRenderer,
+		Agent:                m.selectedAgent,
+		Commits:              m.commits,
+		Notes:                m.notes,
+		Tasks:                m.tasks,
+		TaskNotes:            taskNotes,
+		Actions:              m.actions,
+		Logs:                 m.logs,
+		SessionContexts:      m.sessionContexts,
+		SelectedTaskIndex:    m.tasksIndex,
+		NotesIndex:           m.notesIndex,
+		CommitsIndex:         m.commitsIndex,
+		Width:                m.width,
+		MarkdownRenderer:     m.mdRenderer,
+		CommitDetailViewport: viewport.New(m.width/2, 30),
+		TaskDetailViewport:   viewport.New(m.width/2, 30),
+		LogsViewport:         viewport.New(m.width, 30),
 	}
 
 	// Create styles wrapper - convert app.OverviewStyles to tabs.OverviewStyles

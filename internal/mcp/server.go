@@ -260,6 +260,42 @@ func (s *Server) registerTools() {
 		Name:        "i-speak",
 		Description: "Speak a message aloud using macOS text-to-speech with premium voices",
 	}, s.handleISpeak)
+
+	// NATS Messaging Tools
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name: "i-nats-send",
+		Description: `Send a message via NATS JetStream messaging system
+
+IMPORTANT: Before using, start JetStream with: nats-server -js
+
+Parameters:
+- sender_id (required): Your session_id (identifies who is sending)
+- receiver_id (optional): Target session_id for targeted delivery. Empty = broadcast to all agents
+- subject (optional): Message subject. Auto-prefixed with 'events.' if not present. Default: events.test
+- message (required): The message content
+
+Examples:
+- Broadcast: {"sender_id": "my-session-id", "message": "Deploy starting", "receiver_id": ""}
+- Targeted: {"sender_id": "my-session-id", "receiver_id": "target-session-id", "message": "Review auth module"}
+- Custom subject: {"sender_id": "my-session-id", "subject": "critique.ui", "message": "..."} → becomes events.critique.ui`,
+	}, s.handleNATSSend)
+
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name: "i-nats-listen",
+		Description: `Check for new NATS messages in the instruction queue
+
+Polls for messages sent to your session_id or broadcast messages.
+
+Parameters:
+- session_id (required): Your session ID (used to filter targeted messages)
+- last_sequence (optional): Last processed sequence number. Use 0 or omit to get all new messages
+- max_messages (optional): Maximum messages to fetch (default: 10)
+
+Returns messages where receiver_id matches your session_id or is empty (broadcast).
+
+Example:
+{"session_id": "abc123", "last_sequence": 5, "max_messages": 20}`,
+	}, s.handleNATSListen)
 }
 
 // Tool handlers using the generic AddTool pattern
@@ -612,6 +648,32 @@ func (s *Server) handleListSessions(ctx context.Context, req *mcp.CallToolReques
 
 func (s *Server) handleISpeak(ctx context.Context, req *mcp.CallToolRequest, args ISpeakArgs) (*mcp.CallToolResult, any, error) {
 	result, err := s.tools.ISpeak(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: result.Message},
+		},
+	}, result, nil
+}
+
+func (s *Server) handleNATSSend(ctx context.Context, req *mcp.CallToolRequest, args NATSSendArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.NATSSend(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: result.Message},
+		},
+	}, result, nil
+}
+
+func (s *Server) handleNATSListen(ctx context.Context, req *mcp.CallToolRequest, args NATSListenArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.NATSListen(args)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,6 +21,46 @@ type Tools struct {
 
 func NewTools(db *database.DB) *Tools {
 	return &Tools{db: db}
+}
+
+// getGitRemoteURL extracts the git remote URL from a worktree path
+func getGitRemoteURL(worktreePath string) (string, error) {
+	if worktreePath == "" {
+		return "", fmt.Errorf("worktree path is empty")
+	}
+
+	cmd := exec.Command("git", "-C", worktreePath, "config", "--get", "remote.origin.url")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get git remote URL: %w", err)
+	}
+
+	remoteURL := strings.TrimSpace(string(output))
+	if remoteURL == "" {
+		return "", fmt.Errorf("no remote URL found")
+	}
+
+	return remoteURL, nil
+}
+
+// getGitRoot finds the git repository root from a given path
+func getGitRoot(path string) (string, error) {
+	if path == "" {
+		return "", fmt.Errorf("path is empty")
+	}
+
+	cmd := exec.Command("git", "-C", path, "rev-parse", "--show-toplevel")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("not a git repository or git not found: %w", err)
+	}
+
+	gitRoot := strings.TrimSpace(string(output))
+	if gitRoot == "" {
+		return "", fmt.Errorf("could not determine git root")
+	}
+
+	return gitRoot, nil
 }
 
 // Removed RegisterAgent and RegisterDesktopAgent - now using only StartSession
@@ -628,6 +669,22 @@ func (t *Tools) StartSession(args StartSessionArgs) (StartSessionResult, error) 
 	// Always generate a new UUID agent ID
 	agentID := utils.GenerateGitStyleAgentID()
 
+	// Auto-detect worktree path if not provided
+	if args.WorktreePath == nil || *args.WorktreePath == "" {
+		// Get current working directory
+		cwd, err := os.Getwd()
+		if err == nil {
+			// Try to find git root from cwd
+			gitRoot, err := getGitRoot(cwd)
+			if err == nil {
+				args.WorktreePath = &gitRoot
+				fmt.Fprintf(os.Stderr, "[DEBUG] Auto-detected worktree path: %s\n", gitRoot)
+			} else {
+				fmt.Fprintf(os.Stderr, "[DEBUG] Could not auto-detect git root: %v\n", err)
+			}
+		}
+	}
+
 	// Detect window ID on macOS
 	var windowID *string
 	var terminalApp *string
@@ -645,6 +702,63 @@ func (t *Tools) StartSession(args StartSessionArgs) (StartSessionResult, error) 
 		// If detection fails, just continue without window ID
 	}
 
+	// Look up project by git remote URL or path if worktree path is provided
+	var projectID *int
+	var foundProject *database.Project
+	if args.WorktreePath != nil && *args.WorktreePath != "" {
+		// First try by remote URL
+		remoteURL, err := getGitRemoteURL(*args.WorktreePath)
+		if err == nil {
+			fmt.Fprintf(os.Stderr, "[DEBUG] Got remote URL: %s\n", remoteURL)
+			project, err := t.db.GetProjectByRemoteURL(remoteURL)
+			if err == nil {
+				fmt.Fprintf(os.Stderr, "[DEBUG] Found project by remote URL: %s\n", project.ID)
+				foundProject = project
+				// Convert string ID to int
+				projID, err := strconv.Atoi(project.ID)
+				if err == nil {
+					projectID = &projID
+				}
+			} else {
+				fmt.Fprintf(os.Stderr, "[DEBUG] Remote URL lookup failed: %v\n", err)
+			}
+		} else {
+			fmt.Fprintf(os.Stderr, "[DEBUG] Failed to get remote URL: %v\n", err)
+		}
+
+		// If remote URL lookup failed, try by path
+		if projectID == nil {
+			fmt.Fprintf(os.Stderr, "[DEBUG] Trying path lookup: %s\n", *args.WorktreePath)
+			project, err := t.db.GetProjectByPath(*args.WorktreePath)
+			if err == nil {
+				fmt.Fprintf(os.Stderr, "[DEBUG] Found project by path: %s\n", project.ID)
+				foundProject = project
+				// Convert string ID to int
+				projID, err := strconv.Atoi(project.ID)
+				if err == nil {
+					projectID = &projID
+				} else {
+					fmt.Fprintf(os.Stderr, "[DEBUG] Failed to convert project ID to int: %v\n", err)
+				}
+			} else {
+				fmt.Fprintf(os.Stderr, "[DEBUG] Path lookup failed: %v\n", err)
+				// Project not found by either method - return helpful error
+				return StartSessionResult{}, fmt.Errorf(
+					"project not found for worktree path '%s'. Please create a project entry first. "+
+					"You can do this by adding a row to the projects table with the path or remote_url set.",
+					*args.WorktreePath,
+				)
+			}
+		}
+	}
+
+	// Auto-populate project name from found project if not provided
+	projectName := args.ProjectName
+	if (projectName == nil || *projectName == "") && foundProject != nil {
+		projectName = &foundProject.Name
+		fmt.Fprintf(os.Stderr, "[DEBUG] Auto-populated project name: %s\n", *projectName)
+	}
+
 	// Create agent with window tracking
 	agent := &database.Agent{
 		ID:                  agentID,
@@ -653,7 +767,8 @@ func (t *Tools) StartSession(args StartSessionArgs) (StartSessionResult, error) 
 		Description:         args.AgentDescription,
 		GitWorktreePath:     args.WorktreePath,
 		FeatureDescription:  &args.Description,
-		ProjectName:         args.ProjectName,
+		ProjectName:         projectName, // Use auto-populated project name
+		ProjectID:           projectID,
 		WindowID:            windowID,
 		TerminalApplication: terminalApp,
 		ParentAgentID:       args.ParentAgentID,
@@ -667,10 +782,16 @@ func (t *Tools) StartSession(args StartSessionArgs) (StartSessionResult, error) 
 	// Use the mandatory session_id provided
 	sessionID := args.SessionID
 
+	// Use name if provided, otherwise use description as session name
+	sessionName := args.Name
+	if sessionName == nil || *sessionName == "" {
+		sessionName = &args.Description
+	}
+
 	session := &database.Session{
 		ID:        sessionID,
 		AgentID:   agentID,
-		Name:      args.Name,
+		Name:      sessionName,
 		StartedAt: time.Now(),
 	}
 

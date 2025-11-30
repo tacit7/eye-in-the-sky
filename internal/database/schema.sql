@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS agents (
     source TEXT NOT NULL DEFAULT 'worktree',
     window_id TEXT,
     project_name TEXT,
+    project_id TEXT REFERENCES projects(id),
     session_id TEXT,
     persona_id TEXT REFERENCES personas(id),
     description TEXT,

@@ -96,14 +96,14 @@ func (m *Model) loadClaudeDirectoryContentCmd(path string) tea.Cmd {
 
 		var lines []string
 		for _, file := range files {
-			icon := "📄"
+			icon := "\uf15c" // nf-fa-file_text_o
 			if file.IsDir() {
-				icon = "📁"
+				icon = "\uf07b" // nf-fa-folder
 			}
 			lines = append(lines, icon+" "+file.Name())
 		}
 
-		content := "📁 Directory contents:\n\n" + strings.Join(lines, "\n")
+		content := "\uf07b Directory contents:\n\n" + strings.Join(lines, "\n") // nf-fa-folder
 		return claudeFileContentLoadedMsg{
 			content: content,
 			path:    path,

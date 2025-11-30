@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
@@ -35,6 +36,7 @@ type ViewType int
 const (
 	ViewList ViewType = iota
 	ViewDetail
+	ViewProjectDetail
 )
 
 // TaskStateType represents the loading state of tasks
@@ -79,8 +81,9 @@ type Model struct {
 	styles Styles
 
 	// View models (new modular architecture)
-	overviewView     tea.Model // overview.Model
-	agentDetailsView tea.Model // agent_details.Model (stores as interface to avoid import issues)
+	overviewView        tea.Model // overview.Model
+	agentDetailsView    tea.Model // agent_details.Model (stores as interface to avoid import issues)
+	projectDetailsView  tea.Model // project.Model (stores as interface to avoid import issues)
 
 	// View renderers map
 	renderers map[ViewType]ViewRenderer
@@ -158,6 +161,18 @@ type Model struct {
 	width  int
 	height int
 
+	// Project detail view state
+	projectTabsIndex int // Active tab index in project detail view
+
+	// Project detail view table models (stored here to preserve state)
+	projectAgentsTable table.Model
+	projectNotesTable  table.Model
+	projectTasksTable  table.Model
+	projectAgentsIndex int // Selected agent index in project agents table
+	projectNotesIndex  int // Selected note index in project notes table
+	projectTasksIndex  int // Selected task index in project tasks table
+	projectAgentsForceRefresh bool // Force refresh of agents table on next render
+
 	// Layout management
 	layoutManager *LayoutManager
 
@@ -198,9 +213,8 @@ type Model struct {
 
 	// Project view data
 	projectTasks      []ProjectTask
-	projectMDFiles    []ProjectFile
-	claudeMDContent   string
-	projectTasksIndex int
+	projectMDFiles      []ProjectFile
+	claudeMDContent     string
 	projectMDFilesIndex int
 	projectSelectedSection int    // 0: tasks, 1: CLAUDE.md, 2: .md files
 	projectSection        string  // Current section in project tab
@@ -497,8 +511,9 @@ func NewModel(db *sql.DB, ccusageDB *db.CCUsageDB) (*Model, error) {
 
 	// Initialize view renderers map
 	m.renderers = map[ViewType]ViewRenderer{
-		ViewList:   (*Model).renderOverviewView, // New modular overview view
-		ViewDetail: (*Model).renderDetail,
+		ViewList:          (*Model).renderOverviewView, // New modular overview view
+		ViewDetail:        (*Model).renderDetail,
+		ViewProjectDetail: (*Model).renderProjectDetail,
 	}
 
 	// Detect project information at startup

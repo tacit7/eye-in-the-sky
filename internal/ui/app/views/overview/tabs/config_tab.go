@@ -15,7 +15,7 @@ func RenderConfigTab(viewport shared.ViewportAccess, styles shared.Styles) strin
 	var b strings.Builder
 
 	// Title
-	title := "⚙️  Keybindings Configuration"
+	title := "\uf013  Keybindings Configuration" // nf-fa-cog
 	b.WriteString(styles.RenderPrimary(title))
 	b.WriteString("\n")
 

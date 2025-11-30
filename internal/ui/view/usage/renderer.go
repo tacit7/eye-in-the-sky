@@ -26,12 +26,12 @@ type Styles interface {
 // RenderSummaryBar renders the top-level summary bar with key metrics
 func RenderSummaryBar(styles Styles, totalCost float64, totalTokens int, lastSync time.Time) string {
 	// Format individual parts with styling
-	costPart := styles.Primary().Render(fmt.Sprintf("💰 Total: %s", FormatCostUSD(totalCost)))
-	tokensPart := styles.Text().Render(fmt.Sprintf("🧠 Tokens: %s", FormatNumber(totalTokens)))
+	costPart := styles.Primary().Render(fmt.Sprintf("\uf0d6 Total: %s", FormatCostUSD(totalCost))) // nf-fa-money
+	tokensPart := styles.Text().Render(fmt.Sprintf("\uf013 Tokens: %s", FormatNumber(totalTokens))) // nf-fa-cog
 
 	// Format timestamp
 	syncTimeStr := lastSync.Format("2006-01-02 15:04 MST")
-	updatePart := styles.Subtle().Render(fmt.Sprintf("🕓 Last synced: %s", syncTimeStr))
+	updatePart := styles.Subtle().Render(fmt.Sprintf("\uf017 Last synced: %s", syncTimeStr)) // nf-fa-clock_o
 
 	// Join with separators
 	separator := styles.Subtle().Render("  |  ")
@@ -48,7 +48,7 @@ func RenderGradientHeader(styles Styles) string {
 		Bold(true).
 		Padding(0, 2)
 
-	return headerStyle.Render("🛰️  Eye in the Sky — Usage Metrics")
+	return headerStyle.Render("\uf0ac  Eye in the Sky — Usage Metrics") // nf-fa-globe
 }
 
 // TableBuilder interface for rendering tables

@@ -18,11 +18,11 @@ func repeatPlaceholders(count int) string {
 // CreateAgent inserts a new agent
 func (db *DB) CreateAgent(agent *Agent) error {
 	query := `
-		INSERT INTO agents (id, status, source, git_worktree_path, feature_description, current_task, last_activity_at, window_id, terminal_application, project_name, session_id, parent_agent_id)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO agents (id, status, source, git_worktree_path, feature_description, current_task, last_activity_at, window_id, terminal_application, project_name, project_id, session_id, parent_agent_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	_, err := db.conn.Exec(query, agent.ID, agent.Status, agent.Source, agent.GitWorktreePath,
-		agent.FeatureDescription, agent.CurrentTask, agent.LastActivityAt, agent.WindowID, agent.TerminalApplication, agent.ProjectName, agent.SessionID, agent.ParentAgentID)
+		agent.FeatureDescription, agent.CurrentTask, agent.LastActivityAt, agent.WindowID, agent.TerminalApplication, agent.ProjectName, agent.ProjectID, agent.SessionID, agent.ParentAgentID)
 	if err != nil {
 		return fmt.Errorf("failed to create agent: %w", err)
 	}
@@ -34,13 +34,13 @@ func (db *DB) GetAgent(id string) (*Agent, error) {
 	// No longer validating agent ID format - accepting UUIDs now
 
 	query := `
-		SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, session_id, persona_id, parent_agent_id, bookmarked
+		SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, project_id, session_id, persona_id, parent_agent_id, bookmarked
 		FROM agents WHERE id = ?
 	`
 	var agent Agent
 	row := db.conn.QueryRow(query, id)
 	err := row.Scan(&agent.ID, &agent.Status, &agent.Source, &agent.Description, &agent.CreatedAt, &agent.UpdatedAt,
-		&agent.GitWorktreePath, &agent.FeatureDescription, &agent.CurrentTask, &agent.LastActivityAt, &agent.WindowID, &agent.ProjectName, &agent.SessionID, &agent.PersonaID, &agent.ParentAgentID, &agent.Bookmarked)
+		&agent.GitWorktreePath, &agent.FeatureDescription, &agent.CurrentTask, &agent.LastActivityAt, &agent.WindowID, &agent.ProjectName, &agent.ProjectID, &agent.SessionID, &agent.PersonaID, &agent.ParentAgentID, &agent.Bookmarked)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, NewAgentError(id, "get", ErrAgentNotFound)
@@ -53,7 +53,7 @@ func (db *DB) GetAgent(id string) (*Agent, error) {
 // GetAgentBySessionID retrieves the most recent agent for a session ID
 func (db *DB) GetAgentBySessionID(sessionID string) (*Agent, error) {
 	query := `
-		SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, session_id, persona_id, parent_agent_id, bookmarked
+		SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, project_id, session_id, persona_id, parent_agent_id, bookmarked
 		FROM agents WHERE session_id = ?
 		ORDER BY created_at DESC
 		LIMIT 1
@@ -61,7 +61,7 @@ func (db *DB) GetAgentBySessionID(sessionID string) (*Agent, error) {
 	var agent Agent
 	row := db.conn.QueryRow(query, sessionID)
 	err := row.Scan(&agent.ID, &agent.Status, &agent.Source, &agent.Description, &agent.CreatedAt, &agent.UpdatedAt,
-		&agent.GitWorktreePath, &agent.FeatureDescription, &agent.CurrentTask, &agent.LastActivityAt, &agent.WindowID, &agent.ProjectName, &agent.SessionID, &agent.PersonaID, &agent.ParentAgentID, &agent.Bookmarked)
+		&agent.GitWorktreePath, &agent.FeatureDescription, &agent.CurrentTask, &agent.LastActivityAt, &agent.WindowID, &agent.ProjectName, &agent.ProjectID, &agent.SessionID, &agent.PersonaID, &agent.ParentAgentID, &agent.Bookmarked)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil // Return nil without error if not found
@@ -419,13 +419,13 @@ func (db *DB) ListAgents(status string) ([]*Agent, error) {
 		// Special handling for "active" filter - show all active sessions
 		if status == "active" {
 			query = `
-				SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, session_id, persona_id, bookmarked
+				SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, project_id, session_id, persona_id, bookmarked
 				FROM agents WHERE status IN ('active', 'working', 'idle')
 				ORDER BY bookmarked DESC, substr(session_id, 1, 8)
 			`
 		} else {
 			query = `
-				SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, session_id, persona_id, bookmarked
+				SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, project_id, session_id, persona_id, bookmarked
 				FROM agents WHERE status = ?
 				ORDER BY bookmarked DESC, substr(session_id, 1, 8)
 			`
@@ -433,7 +433,7 @@ func (db *DB) ListAgents(status string) ([]*Agent, error) {
 		}
 	} else {
 		query = `
-			SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, session_id, persona_id, bookmarked
+			SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, project_id, session_id, persona_id, bookmarked
 			FROM agents
 			ORDER BY bookmarked DESC, substr(session_id, 1, 8)
 		`
@@ -461,6 +461,7 @@ func (db *DB) ListAgents(status string) ([]*Agent, error) {
 			&agent.LastActivityAt,
 			&agent.WindowID,
 			&agent.ProjectName,
+			&agent.ProjectID,
 			&agent.SessionID,
 			&agent.PersonaID,
 			&agent.Bookmarked,
@@ -1246,44 +1247,108 @@ func (db *DB) GetMonthlyCosts() ([]*SessionMetrics, error) {
 
 // GetProjectByName retrieves a project by its name
 func (db *DB) GetProjectByName(name string) (*Project, error) {
-	query := `SELECT id, name, slug, path, remote_url, git_remote, repo_url, branch, commit, subpath, module, salt, id_algorithm, created_at, updated_at, last_commit, active FROM projects WHERE name = ? LIMIT 1`
-	
+	query := `SELECT CAST(id AS TEXT), name, path, remote_url, created_at, updated_at FROM projects WHERE name = ? LIMIT 1`
+
 	var project Project
 	err := db.conn.QueryRow(query, name).Scan(
-		&project.ID, &project.Name, &project.Slug, &project.Path, &project.RemoteURL,
-		&project.GitRemote, &project.RepoURL, &project.Branch, &project.Commit,
-		&project.Subpath, &project.Module, &project.Salt, &project.IDAlgorithm,
-		&project.CreatedAt, &project.UpdatedAt, &project.LastCommit, &project.Active,
+		&project.ID, &project.Name, &project.Path, &project.RemoteURL,
+		&project.CreatedAt, &project.UpdatedAt,
 	)
-	
+
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("project not found: %s", name)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to get project by name: %w", err)
 	}
-	
+
 	return &project, nil
 }
 
 // GetProjectByPath retrieves a project by its path
 func (db *DB) GetProjectByPath(path string) (*Project, error) {
-	query := `SELECT id, name, slug, path, remote_url, git_remote, repo_url, branch, commit, subpath, module, salt, id_algorithm, created_at, updated_at, last_commit, active FROM projects WHERE path = ? LIMIT 1`
-	
+	query := `SELECT CAST(id AS TEXT), name, path, remote_url, created_at, updated_at FROM projects WHERE path = ? LIMIT 1`
+
 	var project Project
 	err := db.conn.QueryRow(query, path).Scan(
-		&project.ID, &project.Name, &project.Slug, &project.Path, &project.RemoteURL,
-		&project.GitRemote, &project.RepoURL, &project.Branch, &project.Commit,
-		&project.Subpath, &project.Module, &project.Salt, &project.IDAlgorithm,
-		&project.CreatedAt, &project.UpdatedAt, &project.LastCommit, &project.Active,
+		&project.ID, &project.Name, &project.Path, &project.RemoteURL,
+		&project.CreatedAt, &project.UpdatedAt,
 	)
-	
+
 	if err == sql.ErrNoRows {
 		return nil, fmt.Errorf("project not found: %s", path)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to get project by path: %w", err)
 	}
-	
+
 	return &project, nil
+}
+
+// GetProjectByRemoteURL retrieves a project by its git remote URL
+func (db *DB) GetProjectByRemoteURL(remoteURL string) (*Project, error) {
+	query := `SELECT CAST(id AS TEXT), name, path, remote_url, created_at, updated_at FROM projects WHERE remote_url = ? LIMIT 1`
+
+	var project Project
+	err := db.conn.QueryRow(query, remoteURL).Scan(
+		&project.ID, &project.Name, &project.Path, &project.RemoteURL,
+		&project.CreatedAt, &project.UpdatedAt,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("project not found: %s", remoteURL)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get project by remote URL: %w", err)
+	}
+
+	return &project, nil
+}
+
+// GetActiveAgentsByProject retrieves all active agents (active, working, idle) for a specific project
+func (db *DB) GetActiveAgentsByProject(projectID string) ([]*Agent, error) {
+	query := `
+		SELECT id, status, source, description, created_at, updated_at, git_worktree_path,
+		       feature_description, current_task, last_activity_at, window_id, project_name,
+		       project_id, session_id, persona_id, parent_agent_id, bookmarked
+		FROM agents
+		WHERE project_id = ? AND status IN ('active', 'working', 'idle')
+		ORDER BY bookmarked DESC, created_at DESC
+	`
+
+	rows, err := db.conn.Query(query, projectID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get active agents by project: %w", err)
+	}
+	defer rows.Close()
+
+	var agents []*Agent
+	for rows.Next() {
+		var agent Agent
+		err := rows.Scan(
+			&agent.ID,
+			&agent.Status,
+			&agent.Source,
+			&agent.Description,
+			&agent.CreatedAt,
+			&agent.UpdatedAt,
+			&agent.GitWorktreePath,
+			&agent.FeatureDescription,
+			&agent.CurrentTask,
+			&agent.LastActivityAt,
+			&agent.WindowID,
+			&agent.ProjectName,
+			&agent.ProjectID,
+			&agent.SessionID,
+			&agent.PersonaID,
+			&agent.ParentAgentID,
+			&agent.Bookmarked,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan agent: %w", err)
+		}
+		agents = append(agents, &agent)
+	}
+
+	return agents, nil
 }

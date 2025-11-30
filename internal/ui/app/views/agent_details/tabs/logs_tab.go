@@ -14,6 +14,20 @@ func RenderLogs(ctx *DataContext, overviewStyles OverviewStyles) string {
 		return overviewStyles.Subtle.Render("\n  No logs available for this session\n")
 	}
 
+	// Build logs content
+	content := renderLogsContent(ctx, overviewStyles)
+
+	// Update viewport size and content
+	ctx.LogsViewport.Width = ctx.Width
+	ctx.LogsViewport.Height = 30
+	ctx.LogsViewport.SetContent(content)
+
+	// Render viewport
+	return ctx.LogsViewport.View()
+}
+
+// renderLogsContent builds the log content for the viewport
+func renderLogsContent(ctx *DataContext, overviewStyles OverviewStyles) string {
 	var sb strings.Builder
 
 	// Background style for table rows

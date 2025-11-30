@@ -67,18 +67,18 @@ func minInt(a, b int) int {
 func GetActionIcon(actionType string) string {
 	switch actionType {
 	case "task_start":
-		return "▶️"
+		return "\uf04b" // nf-fa-play
 	case "file_operation":
-		return "📁"
+		return "\uf15b" // nf-fa-file
 	case "git_commit":
-		return "📝"
+		return "\uf1d3" // nf-fa-git_square
 	case "status_update":
-		return "📊"
+		return "\uf080" // nf-fa-bar_chart
 	case "log":
-		return "📋"
+		return "\uf0f6" // nf-fa-file_text_o
 	case "note":
-		return "📌"
+		return "\uf249" // nf-fa-thumb_tack
 	default:
-		return "⚡"
+		return "\uf0e7" // nf-fa-bolt
 	}
 }

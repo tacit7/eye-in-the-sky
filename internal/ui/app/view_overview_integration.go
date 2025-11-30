@@ -92,6 +92,8 @@ func (m *Model) handleOverviewUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.ccusageDB != nil {
 				if m.lastCCUsageSync.IsZero() {
 					// Never synced - load existing data async
+					m.ccusageLoading = true
+					m.ccusageSyncStatus = "Loading token usage data..."
 					return m, m.loadCCUsageDataCmd()
 				} else if time.Since(m.lastCCUsageSync) > 24*time.Hour {
 					// Data is stale - trigger sync

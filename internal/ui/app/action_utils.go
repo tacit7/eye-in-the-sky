@@ -1,22 +1,22 @@
 package app
 
-// GetActionIcon returns an icon/emoji for a given action type
+// GetActionIcon returns an icon for a given action type using nerdfonts
 func GetActionIcon(actionType string) string {
 	switch actionType {
 	case "task_start":
-		return "▶️"
+		return "\uf04b" // nf-fa-play
 	case "file_operation":
-		return "📁"
+		return "\uf07b" // nf-fa-folder
 	case "git_commit":
-		return "📝"
+		return "\uf040" // nf-fa-pencil
 	case "status_update":
-		return "📊"
+		return "\uf080" // nf-fa-bar_chart
 	case "log":
-		return "📋"
+		return "\uf0ea" // nf-fa-paste
 	case "note":
-		return "📌"
+		return "\uf08d" // nf-fa-thumb_tack
 	default:
-		return "⚡"
+		return "\uf0e7" // nf-fa-bolt
 	}
 }
 
