@@ -253,12 +253,43 @@
           {#if commits && commits.length > 0}
             <div class="space-y-2">
               {#each commits as commit}
-                <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2.5 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-750 hover:shadow-sm transition-all">
-                  <div class="flex items-start gap-4">
-                    <code class="shrink-0 rounded-md bg-gray-700 dark:bg-gray-600 px-2 py-1 font-mono text-xs font-semibold text-white">
-                      {commit.commit_hash?.slice(0, 7)}
-                    </code>
-                    <p class="flex-1 text-sm font-medium text-gray-900 dark:text-gray-100">{commit.commit_message}</p>
+                <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-750 hover:shadow-sm transition-all">
+                  <div class="flex items-start justify-between gap-4">
+                    <div class="flex items-start gap-3 flex-1 min-w-0">
+                      <!-- Status badge -->
+                      <span class="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800">
+                        Committed
+                      </span>
+
+                      <!-- Commit hash -->
+                      <code class="shrink-0 rounded-md bg-gray-100 dark:bg-gray-700 px-2 py-0.5 font-mono text-xs font-semibold text-gray-700 dark:text-gray-300">
+                        {commit.commit_hash?.slice(0, 7)}
+                      </code>
+
+                      <!-- Commit message -->
+                      <p class="flex-1 text-sm font-medium text-gray-900 dark:text-gray-100 min-w-0 break-words">{commit.commit_message}</p>
+                    </div>
+
+                    <div class="flex items-center gap-2 shrink-0">
+                      <!-- Relative timestamp -->
+                      {#if commit.created_at}
+                        <time datetime={commit.created_at} class="text-xs text-gray-500 dark:text-gray-400" title={commit.created_at}>
+                          {relativeFrom(parseDateLike(commit.created_at))}
+                        </time>
+                      {/if}
+
+                      <!-- Actions -->
+                      <button
+                        on:click={() => navigator.clipboard.writeText(commit.commit_hash)}
+                        class="rounded-md p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                        title="Copy commit hash"
+                        aria-label="Copy commit hash"
+                      >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                 </div>
               {/each}
