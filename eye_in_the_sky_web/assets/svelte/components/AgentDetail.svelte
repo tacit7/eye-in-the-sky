@@ -1,5 +1,6 @@
 <script>
   import { onMount, onDestroy } from "svelte"
+  import NotesTab from "./tabs/NotesTab.svelte"
 
   export let header
   export let activeTab
@@ -60,6 +61,16 @@
     return `${s}s ago`
   }
 
+  function elapsedTime(date) {
+    if (!date) return "—"
+    const secs = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000))
+    const m = Math.floor(secs / 60), s = secs % 60
+    const h = Math.floor(m / 60), mm = m % 60
+    if (h > 0) return `${h}h ${mm}m`
+    if (m > 0) return `${m}m`
+    return `${s}s`
+  }
+
   let tick = 0
   let intervalId
 
@@ -110,29 +121,31 @@
             </div>
 
             <!-- Meta chips -->
-            <div class="mt-3 flex flex-wrap gap-2 text-sm">
-              <div class="rounded-lg bg-gray-100 dark:bg-gray-800 px-3 py-2">
+            <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-xs sm:text-sm">
+              <div class="rounded-lg bg-gray-50 dark:bg-gray-800/50 px-3 py-1.5">
                 <span class="text-gray-600 dark:text-gray-400 font-medium">Session</span>
                 <span class="ml-2 font-mono text-gray-900 dark:text-gray-100 font-semibold">#{short(header.session_id)}</span>
               </div>
 
-              <div class="rounded-lg bg-gray-100 dark:bg-gray-800 px-3 py-2">
+              <div class="rounded-lg bg-gray-50 dark:bg-gray-800/50 px-3 py-1.5">
                 <span class="text-gray-600 dark:text-gray-400 font-medium">Project</span>
                 <span class="ml-2 text-gray-900 dark:text-gray-100 font-semibold">{header.project ?? "Unassigned"}</span>
               </div>
 
               {#if header.started}
-                <div class="rounded-lg bg-gray-100 dark:bg-gray-800 px-3 py-2" title={String(header.started) + " UTC"}>
+                <div class="rounded-lg bg-gray-50 dark:bg-gray-800/50 px-3 py-1.5">
                   <span class="text-gray-600 dark:text-gray-400 font-medium">Started</span>
-                  <span class="ml-2 text-gray-900 dark:text-gray-100 font-semibold">{relativeFrom(parseDateLike(header.started))}</span>
+                  <time datetime={parseDateLike(header.started)?.toISOString()} title={String(header.started) + " UTC"} class="ml-2 text-gray-900 dark:text-gray-100 font-semibold">
+                    {relativeFrom(parseDateLike(header.started))}
+                  </time>
                 </div>
               {/if}
 
-              <div class="rounded-lg bg-gray-100 dark:bg-gray-800 px-3 py-2">
+              <div class="rounded-lg bg-gray-50 dark:bg-gray-800/50 px-3 py-1.5">
                 <span class="text-gray-600 dark:text-gray-400 font-medium">Duration</span>
                 <span class="ml-2 text-gray-900 dark:text-gray-100 font-semibold">
                   {#if header.status === 'active'}
-                    {tick >= 0 ? relativeFrom(parseDateLike(header.started)) : '—'}
+                    {tick >= 0 ? elapsedTime(parseDateLike(header.started)) : '—'}
                   {:else}
                     {header.duration ?? '—'}
                   {/if}
@@ -143,8 +156,13 @@
 
           <div class="flex shrink-0 items-center gap-2">
             <button
-              class="rounded-md bg-gray-900 dark:bg-gray-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-gray-800 dark:hover:bg-gray-600"
-              on:click={() => live.pushEvent('end_session')}
+              class="rounded-md bg-gray-900 dark:bg-gray-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-gray-800 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              on:click={() => {
+                if (confirm('Are you sure you want to end this session?')) {
+                  live.pushEvent('end_session')
+                }
+              }}
+              disabled={header.status === 'completed' || header.status === 'failed'}
               aria-label="End session"
             >
               End Session
@@ -168,19 +186,21 @@
       </div>
 
       <!-- Tabs -->
-      <div class="px-6 pt-4">
-        <div role="tablist" aria-label="Session sections" class="inline-flex gap-1">
+      <div class="px-6 pt-4 pb-2">
+        <div role="tablist" aria-label="Session sections" class="inline-flex gap-1 border-b border-gray-200 dark:border-gray-700">
           {#each tabs as t}
             <button
               role="tab"
+              id={`tab-${t.key}`}
               aria-selected={activeTab === t.key}
-              class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-all
-              {activeTab === t.key ? 'bg-indigo-600 text-white' : 'text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800'}"
+              aria-controls={`panel-${t.key}`}
+              class="flex items-center gap-2 px-3 py-2 text-sm font-semibold transition-all border-b-2 -mb-px
+              {activeTab === t.key ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:border-gray-300 dark:hover:border-gray-600'}"
               on:click={() => changeTab(t.key)}
             >
               <span>{t.label}</span>
               {#if t.countKey && countFor(t.countKey) > 0}
-                <span class={`rounded-full px-1.5 py-0.5 text-[11px] font-bold ${activeTab === t.key ? 'bg-white/20 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'}`}>
+                <span class={`rounded-full px-1.5 py-0.5 text-[11px] font-bold ${activeTab === t.key ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'}`}>
                   {countFor(t.countKey)}
                 </span>
               {/if}
@@ -190,7 +210,7 @@
       </div>
 
       <!-- Content -->
-      <div class="px-6 py-6">
+      <div role="tabpanel" id={`panel-${activeTab}`} aria-labelledby={`tab-${activeTab}`} class="px-6 py-6">
         {#if activeTab === "tasks"}
           {#if tasks && tasks.length > 0}
             <div class="space-y-2">
@@ -293,27 +313,7 @@
             </div>
           {/if}
         {:else if activeTab === "notes"}
-          {#if notes && notes.length > 0}
-            <div class="space-y-2">
-              {#each notes as note}
-                <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2.5 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-750 hover:shadow-sm transition-all">
-                  <p class="text-sm font-medium text-gray-900 dark:text-gray-100 whitespace-pre-wrap">{note.body}</p>
-                  {#if note.created_at}
-                    <p class="mt-2 text-xs font-medium text-gray-600 dark:text-gray-400">{note.created_at}</p>
-                  {/if}
-                </div>
-              {/each}
-            </div>
-          {:else}
-            <div class="rounded-lg border border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 px-6 py-10 text-center">
-              <div class="mx-auto max-w-md">
-                <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100">No notes yet</h2>
-                <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                  Add a note to capture decisions, blockers, or next steps for this session.
-                </p>
-              </div>
-            </div>
-          {/if}
+          <NotesTab {notes} />
         {:else if activeTab === "messages"}
           <div class="flex flex-col h-[600px]">
             <!-- Messages list -->
