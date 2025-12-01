@@ -40,100 +40,76 @@ defmodule EyeInTheSkyWebWeb.SessionLive.Index do
 
         <button
           phx-click="start_session_global"
-          class="inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+          class="btn btn-outline"
         >
           Start New Session
         </button>
       </div>
 
-      <div class="mt-8 flow-root">
-        <div class="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
-          <div class="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
-            <div class="overflow-hidden shadow ring-1 ring-black ring-opacity-5 sm:rounded-lg">
-              <table class="min-w-full divide-y divide-gray-300">
-                <thead class="bg-gray-50">
-                  <tr>
-                    <th
-                      scope="col"
-                      class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6"
+      <div class="mt-8 overflow-x-auto">
+        <table class="table table-zebra table-pin-rows">
+          <thead>
+            <tr>
+              <th>Session ID</th>
+              <th>Project</th>
+              <th>Session Name</th>
+              <th>Started</th>
+              <th>Duration</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <%= for session <- @sessions do %>
+              <tr class="hover">
+                <td class="font-mono">
+                  <.link
+                    navigate={~p"/agents/#{session.agent_id}?s=#{session.session_id}"}
+                    class="link link-primary"
+                  >
+                    <%= String.slice(session.session_id, 0..11) %>...
+                  </.link>
+                </td>
+
+                <td>
+                  <%= session.project_name || "—" %>
+                </td>
+
+                <td>
+                  <%= session.session_name || "—" %>
+                </td>
+
+                <td>
+                  <%= format_timestamp(session.started_at) %>
+                </td>
+
+                <td>
+                  <%= format_duration(session.started_at, session.ended_at) %>
+                </td>
+
+                <td>
+                  <div class="flex gap-2 justify-end">
+                    <button
+                      phx-hook="CopyToClipboard"
+                      id={"copy-#{session.session_id}"}
+                      data-session-id={session.session_id}
+                      class="btn btn-ghost btn-xs"
                     >
-                      Session ID
-                    </th>
-                    <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                      Project
-                    </th>
-                    <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                      Session Name
-                    </th>
-                    <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                      Started
-                    </th>
-                    <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                      Duration
-                    </th>
-                    <th
-                      scope="col"
-                      class="relative py-3.5 pl-3 pr-4 sm:pr-6"
+                      Copy ID
+                    </button>
+
+                    <button
+                      phx-click="start_session"
+                      phx-value-agent_id={session.agent_id}
+                      class="btn btn-ghost btn-xs"
                     >
-                      <span class="sr-only">Actions</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-200 bg-white">
-                  <%= for session <- @sessions do %>
-                    <tr class="hover:bg-gray-50">
-                      <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-mono sm:pl-6">
-                        <.link
-                          navigate={~p"/agents/#{session.agent_id}?s=#{session.session_id}"}
-                          class="text-indigo-600 hover:text-indigo-900 underline decoration-dotted"
-                        >
-                          <%= String.slice(session.session_id, 0..11) %>...
-                        </.link>
-                      </td>
-
-                      <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                        <%= session.project_name || "—" %>
-                      </td>
-
-                      <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-900">
-                        <%= session.session_name || "—" %>
-                      </td>
-
-                      <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                        <%= format_timestamp(session.started_at) %>
-                      </td>
-
-                      <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
-                        <%= format_duration(session.started_at, session.ended_at) %>
-                      </td>
-
-                      <td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-6">
-                        <div class="flex gap-2 justify-end">
-                          <button
-                            phx-hook="CopyToClipboard"
-                            id={"copy-#{session.session_id}"}
-                            data-session-id={session.session_id}
-                            class="inline-flex items-center rounded border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                          >
-                            Copy ID
-                          </button>
-
-                          <button
-                            phx-click="start_session"
-                            phx-value-agent_id={session.agent_id}
-                            class="inline-flex items-center rounded border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                          >
-                            New Session
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  <% end %>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
+                      New Session
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
       </div>
     </div>
     """
