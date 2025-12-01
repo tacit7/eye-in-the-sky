@@ -9,33 +9,24 @@
 </script>
 
 <div class="h-full flex flex-col">
-  <div class="flex gap-2 mb-4">
+  <div class="btn-group mb-4">
     <button
-      class="px-3 py-1 text-xs rounded border"
-      class:bg-indigo-600={filterLevel === 'all'}
-      class:text-white={filterLevel === 'all'}
-      class:border-indigo-600={filterLevel === 'all'}
-      class:border-gray-300={filterLevel !== 'all'}
+      class="btn btn-sm"
+      class:btn-active={filterLevel === 'all'}
       on:click={() => (filterLevel = 'all')}
     >
       All
     </button>
     <button
-      class="px-3 py-1 text-xs rounded border"
-      class:bg-indigo-600={filterLevel === 'info'}
-      class:text-white={filterLevel === 'info'}
-      class:border-indigo-600={filterLevel === 'info'}
-      class:border-gray-300={filterLevel !== 'info'}
+      class="btn btn-sm"
+      class:btn-active={filterLevel === 'info'}
       on:click={() => (filterLevel = 'info')}
     >
       Info
     </button>
     <button
-      class="px-3 py-1 text-xs rounded border"
-      class:bg-indigo-600={filterLevel === 'error'}
-      class:text-white={filterLevel === 'error'}
-      class:border-indigo-600={filterLevel === 'error'}
-      class:border-gray-300={filterLevel !== 'error'}
+      class="btn btn-sm"
+      class:btn-active={filterLevel === 'error'}
       on:click={() => (filterLevel = 'error')}
     >
       Error

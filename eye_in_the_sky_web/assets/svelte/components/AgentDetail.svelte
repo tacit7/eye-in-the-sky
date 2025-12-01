@@ -69,11 +69,12 @@
   }
 </script>
 
-<div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+<div class="min-h-screen bg-base-200">
   <div class="mx-auto max-w-6xl px-6 py-6">
-    <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
-      <!-- Header -->
-      <div class="bg-white/80 dark:bg-gray-800/80 backdrop-blur sticky top-0 z-30 border-b border-gray-200 dark:border-gray-700 shadow-sm px-6 py-5">
+    <div class="card bg-base-100 shadow-sm">
+      <div class="card-body">
+        <!-- Header -->
+        <div class="bg-base-100/80 backdrop-blur sticky top-0 z-30 border-b border-base-300 -m-6 mb-0 p-6">
         <div class="flex items-start justify-between gap-4">
           <div class="min-w-0">
             <a href="/" class="inline-flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100">
@@ -211,6 +212,7 @@
         {:else if activeTab === "messages"}
           <MessagesTab {messages} {live} />
         {/if}
+      </div>
       </div>
     </div>
   </div>
