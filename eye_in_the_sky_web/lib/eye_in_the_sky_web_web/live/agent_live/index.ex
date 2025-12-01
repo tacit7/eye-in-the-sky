@@ -120,92 +120,76 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Index do
         </div>
       </div>
 
-      <div class="mt-6 flow-root">
-        <div class="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
-          <div class="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
-            <div class="overflow-hidden rounded-lg bg-white dark:bg-gray-900 ring-1 ring-gray-200 dark:ring-gray-700">
-              <table class="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
-                <thead class="bg-gray-50 dark:bg-gray-800 sticky top-0 z-10">
-                  <tr>
-                    <th scope="col" class="w-32 py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 sm:pl-4">
-                      Status
-                    </th>
-                    <th scope="col" class="w-48 px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">
-                      Session
-                    </th>
-                    <th scope="col" class="w-56 px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">
-                      Project
-                    </th>
-                    <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-gray-100">
-                      Description
-                    </th>
-                    <th scope="col" class="w-32 py-3.5 pl-3 pr-4 text-left text-sm font-semibold text-gray-900 dark:text-gray-100 sm:pr-4">
-                      Last Active
-                    </th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                  <%= if @filtered_agents == [] do %>
-                    <tr>
-                      <td colspan="5" class="py-12 text-center text-sm text-gray-500 dark:text-gray-400">
-                        No agents found matching your criteria.
-                      </td>
-                    </tr>
-                  <% else %>
-                    <%= for agent <- @filtered_agents do %>
-                      <tr
-                        phx-click={JS.navigate(~p"/agents/#{agent.id}")}
-                        class="cursor-pointer hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group"
-                      >
-                        <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm sm:pl-4">
-                          {render_status_badge(assigns, agent)}
-                        </td>
-                        <td class="px-3 py-4 text-sm">
-                          <div class="flex items-center gap-2">
-                            <span class="font-mono font-semibold text-gray-900 dark:text-gray-100">
-                              {agent.session_id && String.slice(agent.session_id, 0..7) || "—"}
-                            </span>
-                            <%= if agent.session_id do %>
-                              <button
-                                id={"copy-btn-#{agent.session_id}"}
-                                type="button"
-                                phx-hook="CopySessionId"
-                                data-session-id={agent.session_id}
-                                class="relative text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                                aria-label="Copy full session ID"
-                              >
-                                <.icon name="hero-clipboard" class="h-4 w-4" />
-                              </button>
-                            <% end %>
-                          </div>
-                          {render_agent_meta(assigns, agent)}
-                        </td>
-                        <td class="px-3 py-4 text-sm">
-                          {render_project_badge(assigns, agent.project_name)}
-                        </td>
-                        <td class="px-3 py-4 text-sm text-gray-600 dark:text-gray-400">
-                          <div class="line-clamp-1" title={agent.description || agent.feature_description}>
-                            {agent.description || agent.feature_description || "—"}
-                          </div>
-                        </td>
-                        <td class="whitespace-nowrap py-4 pl-3 pr-4 sm:pr-4">
-                          <div class="flex items-center justify-between gap-2">
-                            <span class="text-sm text-gray-500 dark:text-gray-400" title={format_datetime_full(agent.last_activity_at)}>
-                              {relative_time(agent.last_activity_at)}
-                            </span>
-                            <svg class="h-5 w-5 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 20 20" fill="currentColor">
-                              <path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd" />
-                            </svg>
-                          </div>
-                        </td>
-                      </tr>
-                    <% end %>
-                  <% end %>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
+      <div class="mt-6 overflow-x-auto">
+        <table class="table table-zebra table-pin-rows">
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>Session</th>
+              <th>Project</th>
+              <th>Description</th>
+              <th>Last Active</th>
+            </tr>
+          </thead>
+          <tbody>
+            <%= if @filtered_agents == [] do %>
+              <tr>
+                <td colspan="5" class="text-center">
+                  No agents found matching your criteria.
+                </td>
+              </tr>
+            <% else %>
+              <%= for agent <- @filtered_agents do %>
+                <tr
+                  phx-click={JS.navigate(~p"/agents/#{agent.id}")}
+                  class="hover cursor-pointer group"
+                >
+                  <td>
+                    {render_status_badge(assigns, agent)}
+                  </td>
+                  <td>
+                    <div class="flex items-center gap-2">
+                      <span class="font-mono font-semibold">
+                        {agent.session_id && String.slice(agent.session_id, 0..7) || "—"}
+                      </span>
+                      <%= if agent.session_id do %>
+                        <button
+                          id={"copy-btn-#{agent.session_id}"}
+                          type="button"
+                          phx-hook="CopySessionId"
+                          data-session-id={agent.session_id}
+                          class="relative text-base-content/40 hover:text-base-content/70 transition-colors"
+                          aria-label="Copy full session ID"
+                        >
+                          <.icon name="hero-clipboard" class="h-4 w-4" />
+                        </button>
+                      <% end %>
+                    </div>
+                    {render_agent_meta(assigns, agent)}
+                  </td>
+                  <td>
+                    {render_project_badge(assigns, agent.project_name)}
+                  </td>
+                  <td>
+                    <div class="line-clamp-1" title={agent.description || agent.feature_description}>
+                      {agent.description || agent.feature_description || "—"}
+                    </div>
+                  </td>
+                  <td>
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="text-sm" title={format_datetime_full(agent.last_activity_at)}>
+                        {relative_time(agent.last_activity_at)}
+                      </span>
+                      <svg class="h-5 w-5 text-base-content/40 opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd" />
+                      </svg>
+                    </div>
+                  </td>
+                </tr>
+              <% end %>
+            <% end %>
+          </tbody>
+        </table>
       </div>
     </div>
     """

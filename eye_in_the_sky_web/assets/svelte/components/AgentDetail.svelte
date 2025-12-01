@@ -160,15 +160,14 @@
 
       <!-- Tabs -->
       <div class="px-6 pt-4 pb-2">
-        <div role="tablist" aria-label="Session sections" class="inline-flex gap-1 border-b border-gray-200 dark:border-gray-700">
+        <div role="tablist" aria-label="Session sections" class="tabs tabs-bordered">
           {#each tabs as t}
             <button
               role="tab"
               id={`tab-${t.key}`}
               aria-selected={activeTab === t.key}
               aria-controls={`panel-${t.key}`}
-              class="flex items-center gap-2 px-3 py-2 text-sm font-semibold transition-all border-b-2 -mb-px
-              {activeTab === t.key ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400' : 'border-transparent text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:border-gray-300 dark:hover:border-gray-600'}"
+              class="tab {activeTab === t.key ? 'tab-active' : ''} flex items-center gap-2"
               on:click={() => changeTab(t.key)}
             >
               <span>{t.label}</span>
