@@ -56,6 +56,7 @@ func LoadKeybindingsDefaults() (*Resolver, error) {
 		"continue_session":  {"c": true},
 		"go_to_window":      {"w": true},
 		"archive":           {"d": true},
+		"toggle_theme":      {"shift+d": true},
 	}
 
 	// List view keybindings
@@ -234,6 +235,7 @@ func createDefaultKeybindings(path string) error {
     start_session: ["s"]
     go_to_window: ["w"]
     archive: ["D"]
+    toggle_theme: ["shift+d"]
 
   list:
     overview:

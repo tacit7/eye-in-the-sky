@@ -42,6 +42,7 @@ defmodule EyeInTheSkyWeb.Claude.CLI do
 
         # DEBUG: Log the command being executed
         require Logger
+        Logger.info("🚀 CLAUDE COMMAND: cd #{project_path} && #{claude_path} #{Enum.join(args, " ")}")
         Logger.info("Spawning Claude: #{claude_path} #{Enum.join(args, " ")}")
         Logger.info("Project path: #{project_path}")
 
@@ -118,6 +119,7 @@ defmodule EyeInTheSkyWeb.Claude.CLI do
 
         # DEBUG: Log the command being executed
         require Logger
+        Logger.info("🚀 CLAUDE COMMAND: cd #{project_path} && #{claude_path} #{Enum.join(args, " ")}")
         Logger.info("Spawning Claude with #{flag}: #{claude_path} #{Enum.join(args, " ")}")
         Logger.info("Project path: #{project_path}")
 
@@ -191,8 +193,8 @@ defmodule EyeInTheSkyWeb.Claude.CLI do
         :ok
 
       after
-        30_000 ->
-          Logger.warning("No output from Claude after 30 seconds, timing out")
+        300_000 ->
+          Logger.warning("No output from Claude after 5 minutes, timing out")
           send(caller, {:claude_exit, session_ref, :timeout})
           :ok
     end

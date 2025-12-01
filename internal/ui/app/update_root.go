@@ -613,10 +613,57 @@ func (m *Model) handleGlobalKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.statusMsg = "Refreshing..."
 		return m, loadAgentsCmd(m.data.Agents, m.showAll)
 
+	case "toggle_theme":
+		return m.toggleTheme()
+
 	default:
 		log.Printf("[ROOT] Unknown action '%s', returning m", action)
 		return m, nil
 	}
+}
+
+// toggleTheme toggles between dark and light themes
+func (m *Model) toggleTheme() (tea.Model, tea.Cmd) {
+	// Determine new theme
+	var newTheme Theme
+	var newThemeName string
+	if m.theme.Name == "dark" {
+		newTheme = LightTheme()
+		newThemeName = "light"
+	} else {
+		newTheme = DarkTheme()
+		newThemeName = "dark"
+	}
+
+	// Apply new theme
+	m.theme = newTheme
+	m.styles = createStyles(newTheme)
+
+	// Update config
+	m.config.Theme = newThemeName
+
+	// Save config to persist theme choice
+	if err := SaveConfig(m.config); err != nil {
+		log.Printf("Warning: Failed to save theme preference: %v", err)
+		m.statusMsg = fmt.Sprintf("Theme switched to %s (not saved)", newThemeName)
+	} else {
+		m.statusMsg = fmt.Sprintf("Theme switched to %s", newThemeName)
+	}
+
+	// Recreate tabs with new theme colors
+	m.tabs = components.NewNavBar(
+		[]string{"← Back", "[O]verview", "[T]asks", "[L]ogs", "[C]ommits", "[N]otes", "[S]ession Context"},
+		newTheme.Colors.Active,
+		newTheme.Colors.Text,
+	)
+	m.listTabs = components.NewNavBar(
+		[]string{"[O]verview", "[P]roject", "[C]laude", "[T]oken Usage", "[K]eybindings"},
+		newTheme.Colors.Active,
+		newTheme.Colors.Text,
+	)
+
+	// Force full UI refresh
+	return m, nil
 }
 
 // openContextualHelp opens the help modal with keybindings for the current context

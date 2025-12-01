@@ -67,10 +67,15 @@ func DefaultConfig() Config {
 	}
 }
 
-// DefaultTheme returns the default theme
+// DefaultTheme returns the default (dark) theme
 func DefaultTheme() Theme {
+	return DarkTheme()
+}
+
+// DarkTheme returns the dark theme
+func DarkTheme() Theme {
 	theme := Theme{
-		Name: "default",
+		Name: "dark",
 	}
 	theme.Colors.Active = "#00FF00"    // Green
 	theme.Colors.Working = "#0088FF"   // Blue
@@ -85,6 +90,27 @@ func DefaultTheme() Theme {
 	theme.Colors.Title = "#FFFFFF"     // White
 	theme.Colors.Text = "#CCCCCC"      // Light Gray
 	theme.Colors.Subtle = "#666666"    // Medium Gray
+	return theme
+}
+
+// LightTheme returns the light theme
+func LightTheme() Theme {
+	theme := Theme{
+		Name: "light",
+	}
+	theme.Colors.Active = "#008800"    // Dark Green
+	theme.Colors.Working = "#0066CC"   // Dark Blue
+	theme.Colors.Idle = "#CC8800"      // Dark Yellow
+	theme.Colors.Stale = "#666666"     // Dark Gray
+	theme.Colors.Unknown = "#666666"   // Dark Gray
+	theme.Colors.Completed = "#0088AA" // Dark Cyan
+	theme.Colors.Failed = "#CC0000"    // Dark Red
+	theme.Colors.Primary = "#0077CC"   // Medium Blue
+	theme.Colors.Secondary = "#6666CC" // Dark Purple
+	theme.Colors.Border = "#CCCCCC"    // Light Gray
+	theme.Colors.Title = "#000000"     // Black
+	theme.Colors.Text = "#333333"      // Dark Gray
+	theme.Colors.Subtle = "#999999"    // Medium Gray
 	return theme
 }
 

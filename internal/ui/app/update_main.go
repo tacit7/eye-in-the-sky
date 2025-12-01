@@ -47,6 +47,21 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "shift+tab", "left":
 		m.listTabs.Prev()
 		return m, nil
+	case "ctrl+t":
+		// Toggle theme between light and dark
+		if m.theme.Name == "dark" {
+			m.theme = LightTheme()
+			m.config.Theme = "light"
+		} else {
+			m.theme = DarkTheme()
+			m.config.Theme = "dark"
+		}
+		// Reinitialize styles with new theme
+		m.styles = NewStyles(m.theme)
+		// Save config to persist theme choice
+		_ = SaveConfig(m.config)
+		m.statusMsg = "Theme: " + m.theme.Name
+		return m, nil
 	case "i", "I":
 		// Initialize/Sync CCUsage database (in Usage tab only)
 		if m.listTabs.ActiveIndex == 3 && m.ccusageDB != nil && !m.ccusageSyncing {
