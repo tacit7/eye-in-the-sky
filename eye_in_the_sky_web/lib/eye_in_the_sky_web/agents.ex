@@ -15,12 +15,13 @@ defmodule EyeInTheSkyWeb.Agents do
   end
 
   @doc """
-  Returns the list of agents with their sessions preloaded.
+  Returns the list of agents with their sessions and tasks preloaded for display.
+  Sorted by last activity (most recent first).
   """
   def list_agents_with_sessions do
     Agent
-    |> preload(:sessions)
-    |> order_by([a], desc: a.updated_at)
+    |> preload([:sessions, :tasks])
+    |> order_by([a], desc: a.last_activity_at)
     |> Repo.all()
   end
 

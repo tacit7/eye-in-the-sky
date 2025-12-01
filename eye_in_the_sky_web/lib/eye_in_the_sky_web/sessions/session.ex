@@ -10,6 +10,7 @@ defmodule EyeInTheSkyWeb.Sessions.Session do
     field :name, :string
     field :started_at, :string
     field :ended_at, :string
+    field :claude_session_id, :string
 
     belongs_to :agent, EyeInTheSkyWeb.Agents.Agent,
       define_field: false,
@@ -27,7 +28,7 @@ defmodule EyeInTheSkyWeb.Sessions.Session do
   @doc false
   def changeset(session, attrs) do
     session
-    |> cast(attrs, [:id, :agent_id, :name, :started_at, :ended_at])
+    |> cast(attrs, [:id, :agent_id, :name, :started_at, :ended_at, :claude_session_id])
     |> validate_required([:id, :agent_id, :started_at])
   end
 end

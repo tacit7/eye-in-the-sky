@@ -3,6 +3,7 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Show do
 
   alias EyeInTheSkyWeb.{Agents, Sessions, Messages}
   alias EyeInTheSkyWeb.Claude.SessionManager
+  alias EyeInTheSkyWeb.NATS.Publisher
 
   @impl true
   def mount(_params, _session, socket) do
@@ -104,8 +105,27 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Show do
 
   @impl true
   def handle_event("end_session", _params, socket) do
-    # TODO: Call MCP server to end session
-    {:noreply, socket}
+    session_id = socket.assigns.session_id
+    agent_id = socket.assigns.agent_id
+
+    with session when not is_nil(session) <- Sessions.get_session!(session_id),
+         {:ok, _updated_session} <- Sessions.end_session(session),
+         agent <- Agents.get_agent!(agent_id),
+         {:ok, _updated_agent} <- Agents.update_agent_status(agent, "completed") do
+
+      socket =
+        socket
+        |> put_flash(:info, "Session ended successfully")
+        |> push_patch(to: ~p"/agents/#{agent_id}")
+
+      {:noreply, socket}
+    else
+      nil ->
+        {:noreply, put_flash(socket, :error, "Session not found")}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Failed to end session")}
+    end
   end
 
   @impl true
@@ -133,15 +153,36 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Show do
       body: body
     })
 
-    # Spawn Claude CLI subprocess with the message
-    case SessionManager.start_session(session_id, body, model: provider_to_model(provider)) do
-      {:ok, _session_ref} ->
-        # Reload messages for the current tab
-        updated_messages = serialize_messages(Messages.list_messages_for_session(session_id))
-        {:noreply, assign(socket, :messages, updated_messages)}
+    # Publish to NATS for agent consumption
+    case Publisher.publish_message(message) do
+      {:ok, _} ->
+        # Message published to NATS successfully
+        # Get session and agent to get project path
+        session = Sessions.get_session!(session_id)
+        agent = Agents.get_agent!(socket.assigns.agent_id)
+
+        # Use git_worktree_path as project_path for Claude
+        project_path = agent.git_worktree_path || File.cwd!()
+
+        # Always use resume with the Eye in the Sky session ID
+        result = SessionManager.resume_session(session_id, body,
+          session_id: session_id,
+          model: provider_to_model(provider),
+          project_path: project_path
+        )
+
+        case result do
+          {:ok, _session_ref} ->
+            # Reload messages for the current tab
+            updated_messages = serialize_messages(Messages.list_messages_for_session(session_id))
+            {:noreply, assign(socket, :messages, updated_messages)}
+
+          {:error, reason} ->
+            {:noreply, put_flash(socket, :error, "Failed to start/resume Claude session: #{inspect(reason)}")}
+        end
 
       {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Failed to start Claude: #{inspect(reason)}")}
+        {:noreply, put_flash(socket, :error, "Failed to publish message: #{inspect(reason)}")}
     end
   end
 
@@ -169,7 +210,7 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Show do
   end
 
   @impl true
-  def handle_info({:claude_output, _session_ref, parsed}, socket) do
+  def handle_info({:claude_output, _session_ref, _parsed}, socket) do
     # Real-time Claude CLI output streaming
     # Just trigger a reload - the SessionManager already saved it to database
     if socket.assigns.active_tab == :messages do

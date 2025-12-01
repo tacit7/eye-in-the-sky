@@ -24,7 +24,9 @@ import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import topbar from "../vendor/topbar"
 import {CopyToClipboard} from "./hooks/copy_to_clipboard"
+import {CopySessionId} from "./hooks/copy_session_id"
 import {getHooks} from "live_svelte"
+import "./theme"
 
 // Import Svelte components manually (esbuild doesn't support import.meta.glob)
 import SessionsSidebar from "../svelte/components/SessionsSidebar.svelte"
@@ -47,6 +49,7 @@ let Hooks = getHooks({
   AgentDetail
 })
 Hooks.CopyToClipboard = CopyToClipboard
+Hooks.CopySessionId = CopySessionId
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {

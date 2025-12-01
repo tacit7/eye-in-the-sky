@@ -18,7 +18,9 @@
       "Bash(git commit:*)",
       "mcp__eye-in-the-sky__i-commits",
       "mcp__eye-in-the-sky__i-todo-done",
-      "mcp__eye-in-the-sky__i-todo-annotate"
+      "mcp__eye-in-the-sky__i-todo-annotate",
+      "Bash(find:*)",
+      "Bash(mix assets.build:*)"
     ],
     "deny": [],
     "ask": []

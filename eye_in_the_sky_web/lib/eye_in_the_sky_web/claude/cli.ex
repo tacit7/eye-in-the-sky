@@ -40,6 +40,11 @@ defmodule EyeInTheSkyWeb.Claude.CLI do
         # Build command args like opcode does
         args = build_args(prompt, model, output_format, skip_permissions)
 
+        # DEBUG: Log the command being executed
+        require Logger
+        Logger.info("Spawning Claude: #{claude_path} #{Enum.join(args, " ")}")
+        Logger.info("Project path: #{project_path}")
+
         session_ref = make_ref()
 
         # Spawn the process
@@ -111,6 +116,11 @@ defmodule EyeInTheSkyWeb.Claude.CLI do
             [flag] ++ base_args
           end
 
+        # DEBUG: Log the command being executed
+        require Logger
+        Logger.info("Spawning Claude with #{flag}: #{claude_path} #{Enum.join(args, " ")}")
+        Logger.info("Project path: #{project_path}")
+
         session_ref = make_ref()
 
         port = Port.open(
@@ -160,20 +170,31 @@ defmodule EyeInTheSkyWeb.Claude.CLI do
   end
 
   defp handle_port_output(port, session_ref, caller) do
+    require Logger
+
     receive do
       {^port, {:data, data}} ->
+        Logger.debug("Claude output received: #{byte_size(data)} bytes")
         # Split by newlines and send each line
         data
         |> String.split("\n", trim: true)
         |> Enum.each(fn line ->
+          Logger.debug("Claude line: #{line}")
           send(caller, {:claude_output, session_ref, line})
         end)
 
         handle_port_output(port, session_ref, caller)
 
       {^port, {:exit_status, status}} ->
+        Logger.info("Claude process exited with status #{status}")
         send(caller, {:claude_exit, session_ref, status})
         :ok
+
+      after
+        30_000 ->
+          Logger.warning("No output from Claude after 30 seconds, timing out")
+          send(caller, {:claude_exit, session_ref, :timeout})
+          :ok
     end
   end
 

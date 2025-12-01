@@ -68,6 +68,15 @@ defmodule EyeInTheSkyWeb.Sessions do
   end
 
   @doc """
+  Updates the claude_session_id for a session.
+  """
+  def update_claude_session_id(%Session{} = session, claude_session_id) do
+    session
+    |> Session.changeset(%{claude_session_id: claude_session_id})
+    |> Repo.update()
+  end
+
+  @doc """
   Deletes a session.
   """
   def delete_session(%Session{} = session) do
