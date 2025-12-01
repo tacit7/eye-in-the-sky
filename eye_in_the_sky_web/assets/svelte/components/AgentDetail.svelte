@@ -1,6 +1,24 @@
 <script>
   import { onMount, onDestroy } from "svelte"
+  import TasksTab from "./tabs/TasksTab.svelte"
+  import CommitsTab from "./tabs/CommitsTab.svelte"
+  import LogsTab from "./tabs/LogsTab.svelte"
   import NotesTab from "./tabs/NotesTab.svelte"
+  import MessagesTab from "./tabs/MessagesTab.svelte"
+  import { parseDateLike, relativeFrom, elapsedTime, shortId } from "../utils/datetime.js"
+  import { emptyStateStyle } from "../utils/styles.js"
+
+  function statusToBadgeVariant(status) {
+    const map = {
+      active: 'badge-success',
+      working: 'badge-warning',
+      idle: 'badge-info',
+      stale: 'badge-warning badge-outline',
+      completed: 'badge-ghost',
+      failed: 'badge-error'
+    }
+    return map[status] || 'badge-ghost'
+  }
 
   export let header
   export let activeTab
@@ -22,53 +40,8 @@
     { key: "messages", label: "Messages", countKey: "messages" },
   ]
 
-  const statusStyles = {
-    active: "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800",
-    working: "bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800",
-    completed: "bg-gray-100 text-gray-700 border border-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600",
-    failed: "bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-800",
-    idle: "bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800"
-  }
-
-  const short = (id) => (id ? id.slice(0, 8) : "")
-
   function countFor(key) {
     return counts?.[key] || 0
-  }
-
-  function parseDateLike(v) {
-    if (!v) return null
-    // Try ISO first
-    const d1 = new Date(v)
-    if (!isNaN(d1)) return d1
-    // Try Go format: "YYYY-MM-DD HH:MM:SS ..."
-    const parts = String(v).split(" ")
-    if (parts.length >= 2) {
-      const isoish = parts[0] + "T" + parts[1]
-      const d2 = new Date(isoish)
-      if (!isNaN(d2)) return d2
-    }
-    return null
-  }
-
-  function relativeFrom(date) {
-    if (!date) return "—"
-    const secs = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000))
-    const m = Math.floor(secs / 60), s = secs % 60
-    const h = Math.floor(m / 60), mm = m % 60
-    if (h > 0) return `${h}h ${mm}m ago`
-    if (m > 0) return `${m}m ago`
-    return `${s}s ago`
-  }
-
-  function elapsedTime(date) {
-    if (!date) return "—"
-    const secs = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000))
-    const m = Math.floor(secs / 60), s = secs % 60
-    const h = Math.floor(m / 60), mm = m % 60
-    if (h > 0) return `${h}h ${mm}m`
-    if (m > 0) return `${m}m`
-    return `${s}s`
   }
 
   let tick = 0
@@ -111,39 +84,39 @@
             <div class="mt-3 flex flex-wrap items-center gap-2">
               <h1 class="text-2xl font-semibold text-gray-900 dark:text-gray-100">{header.agent_type}</h1>
 
-              <span class="rounded-full border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 px-2 py-0.5 font-mono text-xs text-gray-700 dark:text-gray-300">
-                {short(header.agent_id)}
+              <span class="badge badge-outline font-mono">
+                {shortId(header.agent_id)}
               </span>
 
-              <span class={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusStyles[header.status] || statusStyles.completed}`} aria-label={`Status: ${header.status}`}>
+              <span class="badge {statusToBadgeVariant(header.status)}" aria-label={`Status: ${header.status}`}>
                 {header.status}
               </span>
             </div>
 
             <!-- Meta chips -->
             <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-xs sm:text-sm">
-              <div class="rounded-lg bg-gray-50 dark:bg-gray-800/50 px-3 py-1.5">
-                <span class="text-gray-600 dark:text-gray-400 font-medium">Session</span>
-                <span class="ml-2 font-mono text-gray-900 dark:text-gray-100 font-semibold">#{short(header.session_id)}</span>
+              <div class="bg-base-200 rounded-lg px-3 py-1.5">
+                <span class="text-base-content/70 font-medium">Session</span>
+                <span class="ml-2 font-mono font-semibold">#{shortId(header.session_id)}</span>
               </div>
 
-              <div class="rounded-lg bg-gray-50 dark:bg-gray-800/50 px-3 py-1.5">
-                <span class="text-gray-600 dark:text-gray-400 font-medium">Project</span>
-                <span class="ml-2 text-gray-900 dark:text-gray-100 font-semibold">{header.project ?? "Unassigned"}</span>
+              <div class="bg-base-200 rounded-lg px-3 py-1.5">
+                <span class="text-base-content/70 font-medium">Project</span>
+                <span class="ml-2 font-semibold">{header.project ?? "Unassigned"}</span>
               </div>
 
               {#if header.started}
-                <div class="rounded-lg bg-gray-50 dark:bg-gray-800/50 px-3 py-1.5">
-                  <span class="text-gray-600 dark:text-gray-400 font-medium">Started</span>
-                  <time datetime={parseDateLike(header.started)?.toISOString()} title={String(header.started) + " UTC"} class="ml-2 text-gray-900 dark:text-gray-100 font-semibold">
+                <div class="bg-base-200 rounded-lg px-3 py-1.5">
+                  <span class="text-base-content/70 font-medium">Started</span>
+                  <time datetime={parseDateLike(header.started)?.toISOString()} title={String(header.started) + " UTC"} class="ml-2 font-semibold">
                     {relativeFrom(parseDateLike(header.started))}
                   </time>
                 </div>
               {/if}
 
-              <div class="rounded-lg bg-gray-50 dark:bg-gray-800/50 px-3 py-1.5">
-                <span class="text-gray-600 dark:text-gray-400 font-medium">Duration</span>
-                <span class="ml-2 text-gray-900 dark:text-gray-100 font-semibold">
+              <div class="bg-base-200 rounded-lg px-3 py-1.5">
+                <span class="text-base-content/70 font-medium">Duration</span>
+                <span class="ml-2 font-semibold">
                   {#if header.status === 'active'}
                     {tick >= 0 ? elapsedTime(parseDateLike(header.started)) : '—'}
                   {:else}
@@ -156,7 +129,7 @@
 
           <div class="flex shrink-0 items-center gap-2">
             <button
-              class="rounded-md bg-gray-900 dark:bg-gray-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-gray-800 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              class="btn btn-primary btn-sm"
               on:click={() => {
                 if (confirm('Are you sure you want to end this session?')) {
                   live.pushEvent('end_session')
@@ -168,14 +141,14 @@
               End Session
             </button>
             <button
-              class="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-1.5 text-sm font-semibold text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700"
+              class="btn btn-outline btn-sm"
               on:click={() => live.pushEvent('new_task')}
               aria-label="Create new task"
             >
               New Task
             </button>
             <button
-              class="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-1.5 text-sm font-semibold text-gray-800 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700"
+              class="btn btn-outline btn-sm"
               on:click={() => live.pushEvent('add_note')}
               aria-label="Add note"
             >
@@ -200,7 +173,7 @@
             >
               <span>{t.label}</span>
               {#if t.countKey && countFor(t.countKey) > 0}
-                <span class={`rounded-full px-1.5 py-0.5 text-[11px] font-bold ${activeTab === t.key ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300' : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'}`}>
+                <span class="badge badge-sm {activeTab === t.key ? 'badge-primary' : 'badge-ghost'}">
                   {countFor(t.countKey)}
                 </span>
               {/if}
@@ -212,120 +185,11 @@
       <!-- Content -->
       <div role="tabpanel" id={`panel-${activeTab}`} aria-labelledby={`tab-${activeTab}`} class="px-6 py-6">
         {#if activeTab === "tasks"}
-          {#if tasks && tasks.length > 0}
-            <div class="space-y-2">
-              {#each tasks as task}
-                <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2.5 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-750 hover:shadow-sm transition-all">
-                  <div class="flex items-start justify-between gap-4">
-                    <div class="flex-1 min-w-0">
-                      <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{task.title}</h3>
-                      {#if task.description}
-                        <p class="mt-1 text-sm text-gray-700 dark:text-gray-300 line-clamp-2">{task.description}</p>
-                      {/if}
-                      {#if task.tags && task.tags.length > 0}
-                        <div class="mt-2 flex flex-wrap gap-1">
-                          {#each task.tags as tag}
-                            <span class="inline-flex items-center rounded-md border border-gray-200 bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200">
-                              {tag.name}
-                            </span>
-                          {/each}
-                        </div>
-                      {/if}
-                    </div>
-                    <span class="shrink-0 rounded-full px-2.5 py-1 text-xs font-bold bg-blue-600 text-white">
-                      {task.state_name || 'todo'}
-                    </span>
-                  </div>
-                </div>
-              {/each}
-            </div>
-          {:else}
-            <div class="rounded-lg border border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 px-6 py-10 text-center">
-              <div class="mx-auto max-w-md">
-                <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100">No tasks yet</h2>
-                <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                  Tasks created during this session will appear here.
-                </p>
-              </div>
-            </div>
-          {/if}
+          <TasksTab {tasks} />
         {:else if activeTab === "commits"}
-          {#if commits && commits.length > 0}
-            <div class="space-y-2">
-              {#each commits as commit}
-                <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 hover:border-gray-400 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-750 hover:shadow-sm transition-all">
-                  <div class="flex items-start justify-between gap-4">
-                    <div class="flex items-start gap-3 flex-1 min-w-0">
-                      <!-- Status badge -->
-                      <span class="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800">
-                        Committed
-                      </span>
-
-                      <!-- Commit hash -->
-                      <code class="shrink-0 rounded-md bg-gray-100 dark:bg-gray-700 px-2 py-0.5 font-mono text-xs font-semibold text-gray-700 dark:text-gray-300">
-                        {commit.commit_hash?.slice(0, 7)}
-                      </code>
-
-                      <!-- Commit message -->
-                      <p class="flex-1 text-sm font-medium text-gray-900 dark:text-gray-100 min-w-0 break-words">{commit.commit_message}</p>
-                    </div>
-
-                    <div class="flex items-center gap-2 shrink-0">
-                      <!-- Relative timestamp -->
-                      {#if commit.created_at}
-                        <time datetime={commit.created_at} class="text-xs text-gray-500 dark:text-gray-400" title={commit.created_at}>
-                          {relativeFrom(parseDateLike(commit.created_at))}
-                        </time>
-                      {/if}
-
-                      <!-- Actions -->
-                      <button
-                        on:click={() => navigator.clipboard.writeText(commit.commit_hash)}
-                        class="rounded-md p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                        title="Copy commit hash"
-                        aria-label="Copy commit hash"
-                      >
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              {/each}
-            </div>
-          {:else}
-            <div class="rounded-lg border border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 px-6 py-10 text-center">
-              <div class="mx-auto max-w-md">
-                <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100">No commits yet</h2>
-                <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                  Git commits made during this session will appear here.
-                </p>
-              </div>
-            </div>
-          {/if}
+          <CommitsTab {commits} />
         {:else if activeTab === "logs"}
-          {#if logs && logs.length > 0}
-            <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-900 p-4">
-              <div class="space-y-1 font-mono text-xs">
-                {#each logs as log}
-                  <div class="flex gap-3">
-                    <span class="shrink-0 text-gray-500">[{log.type}]</span>
-                    <span class="flex-1 text-gray-100">{log.message}</span>
-                  </div>
-                {/each}
-              </div>
-            </div>
-          {:else}
-            <div class="rounded-lg border border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 px-6 py-10 text-center">
-              <div class="mx-auto max-w-md">
-                <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100">No logs yet</h2>
-                <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                  Session logs will appear here as the agent works.
-                </p>
-              </div>
-            </div>
-          {/if}
+          <LogsTab {logs} />
         {:else if activeTab === "context"}
           {#if context?.context}
             <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-6 py-4">
@@ -334,7 +198,7 @@
               </div>
             </div>
           {:else}
-            <div class="rounded-lg border border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 px-6 py-10 text-center">
+            <div class={emptyStateStyle}>
               <div class="mx-auto max-w-md">
                 <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100">No context saved</h2>
                 <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
@@ -346,87 +210,7 @@
         {:else if activeTab === "notes"}
           <NotesTab {notes} />
         {:else if activeTab === "messages"}
-          <div class="flex flex-col h-[600px] border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden shadow-sm">
-            <!-- Messages list -->
-            <div class="flex-1 overflow-y-auto space-y-3 p-4 bg-gray-50 dark:bg-gray-900">
-              {#if messages && messages.length > 0}
-                {#each messages as message}
-                  <div class="flex {message.direction === 'outbound' ? 'justify-end' : 'justify-start'}">
-                    <div class="max-w-[70%] rounded-xl px-4 py-3 shadow-sm {message.direction === 'outbound' ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700'}">
-                      <div class="flex items-center gap-1.5 mb-1.5 text-xs">
-                        <span class="font-semibold {message.direction === 'outbound' ? 'opacity-90' : 'text-gray-700 dark:text-gray-300'}">
-                          {message.sender_role === 'user' ? 'You' : 'Agent'}
-                        </span>
-                        {#if message.provider}
-                          <span class="{message.direction === 'outbound' ? 'opacity-70' : 'text-gray-500 dark:text-gray-400'}">•</span>
-                          <span class="{message.direction === 'outbound' ? 'opacity-70' : 'text-gray-500 dark:text-gray-400'}">{message.provider}</span>
-                        {/if}
-                        <span class="{message.direction === 'outbound' ? 'opacity-70' : 'text-gray-500 dark:text-gray-400'}">•</span>
-                        <span class="{message.direction === 'outbound' ? 'opacity-70' : 'text-gray-500 dark:text-gray-400'}">
-                          {new Date(message.inserted_at).toLocaleTimeString()}
-                        </span>
-                      </div>
-                      <p class="text-sm whitespace-pre-wrap">{message.body}</p>
-                      {#if message.status === 'pending'}
-                        <span class="inline-block mt-2 text-xs px-2 py-0.5 rounded-xl bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800 font-semibold">
-                          Pending
-                        </span>
-                      {:else if message.status === 'failed'}
-                        <span class="inline-block mt-2 text-xs px-2 py-0.5 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-800 font-semibold">
-                          Failed
-                        </span>
-                      {/if}
-                    </div>
-                  </div>
-                {/each}
-              {:else}
-                <div class="flex items-center justify-center h-full">
-                  <div class="text-center">
-                    <h3 class="text-base font-semibold text-gray-900 dark:text-gray-100">No messages yet</h3>
-                    <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                      Start a conversation with the agent below.
-                    </p>
-                  </div>
-                </div>
-              {/if}
-            </div>
-
-            <!-- Message input -->
-            <div class="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
-              <form on:submit|preventDefault={(e) => {
-                const formData = new FormData(e.target);
-                const body = formData.get('body');
-                const provider = formData.get('provider');
-                if (body.trim()) {
-                  live.pushEvent('send_message', { body, provider });
-                  e.target.reset();
-                }
-              }}>
-                <div class="flex gap-2">
-                  <select
-                    name="provider"
-                    class="rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100"
-                  >
-                    <option value="claude">Claude</option>
-                    <option value="openai">OpenAI</option>
-                  </select>
-                  <input
-                    type="text"
-                    name="body"
-                    placeholder="Type your message..."
-                    class="flex-1 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 dark:focus:border-indigo-400 dark:focus:ring-indigo-400"
-                    autocomplete="off"
-                  />
-                  <button
-                    type="submit"
-                    class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                  >
-                    Send
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
+          <MessagesTab {messages} {live} />
         {/if}
       </div>
     </div>
