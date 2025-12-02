@@ -88,11 +88,19 @@ defmodule EyeInTheSkyWeb.Claude.SessionReader do
   """
   def format_messages(messages) when is_list(messages) do
     messages
-    |> Enum.map(fn msg ->
+    |> Enum.with_index()
+    |> Enum.map(fn {msg, idx} ->
+      # Use timestamp from message, or generate one based on index
+      # (assuming messages are in chronological order)
+      timestamp = msg["timestamp"] || msg["created_at"] ||
+        DateTime.utc_now()
+        |> DateTime.add(-Enum.count(messages) + idx, :second)
+        |> DateTime.to_iso8601()
+
       %{
         role: get_in(msg, ["message", "role"]) || msg["type"],
         content: extract_content(msg),
-        timestamp: msg["timestamp"]
+        timestamp: timestamp
       }
     end)
     |> Enum.reject(&(&1.content == ""))

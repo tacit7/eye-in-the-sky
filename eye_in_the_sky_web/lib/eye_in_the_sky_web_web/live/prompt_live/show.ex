@@ -84,6 +84,7 @@ defmodule EyeInTheSkyWebWeb.PromptLive.Show do
   @impl true
   def render(assigns) do
     ~H"""
+    <.live_component module={EyeInTheSkyWebWeb.Components.Navbar} id="navbar" />
     <div class="px-4 sm:px-6 lg:px-8">
       <!-- Header with back button -->
       <div class="mb-6">

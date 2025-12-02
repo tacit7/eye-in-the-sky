@@ -30,14 +30,46 @@
   export let notes
   export let messages
   export let live
+  export let showNoteModal = false
+  export let showTaskModal = false
 
   const tabs = [
-    { key: "tasks", label: "Tasks", countKey: "tasks" },
-    { key: "commits", label: "Commits", countKey: "commits" },
-    { key: "logs", label: "Logs", countKey: "logs" },
-    { key: "context", label: "Context", countKey: null },
-    { key: "notes", label: "Notes", countKey: "notes" },
-    { key: "messages", label: "Messages", countKey: "messages" },
+    {
+      key: "tasks",
+      label: "Tasks",
+      countKey: "tasks",
+      icon: "M2.5 1.75v11.5c0 .138.112.25.25.25h3.17a.75.75 0 0 1 .75.75V16L9.4 13.571c.13-.096.289-.196.601-.196h3.249a.25.25 0 0 0 .25-.25V1.75a.25.25 0 0 0-.25-.25H2.75a.25.25 0 0 0-.25.25Zm-1.5 0C1 .784 1.784 0 2.75 0h10.5C14.216 0 15 .784 15 1.75v11.5A1.75 1.75 0 0 1 13.25 15H10l-3.573 2.573A1.458 1.458 0 0 1 4 16.543V15H2.75A1.75 1.75 0 0 1 1 13.25Z"
+    },
+    {
+      key: "commits",
+      label: "Commits",
+      countKey: "commits",
+      icon: "M11.93 8.5a4.002 4.002 0 0 1-7.86 0H.75a.75.75 0 0 1 0-1.5h3.32a4.002 4.002 0 0 1 7.86 0h3.32a.75.75 0 0 1 0 1.5Zm-1.43-.75a2.5 2.5 0 1 0-5 0 2.5 2.5 0 0 0 5 0Z"
+    },
+    {
+      key: "logs",
+      label: "Logs",
+      countKey: "logs",
+      icon: "M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v12.5A1.75 1.75 0 0 1 14.25 16H1.75A1.75 1.75 0 0 1 0 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25V1.75a.25.25 0 0 0-.25-.25ZM3.5 4.75A.75.75 0 0 1 4.25 4h7.5a.75.75 0 0 1 0 1.5h-7.5A.75.75 0 0 1 3.5 4.75ZM4.25 7a.75.75 0 0 0 0 1.5h7.5a.75.75 0 0 0 0-1.5ZM3.5 10.75a.75.75 0 0 1 .75-.75h7.5a.75.75 0 0 1 0 1.5h-7.5a.75.75 0 0 1-.75-.75Z"
+    },
+    {
+      key: "context",
+      label: "Context",
+      countKey: null,
+      icon: "M0 1.75C0 .784.784 0 1.75 0h8.5C11.216 0 12 .784 12 1.75v12.5c0 .085-.006.168-.018.25h2.268a.25.25 0 0 0 .25-.25V8.285a.25.25 0 0 0-.111-.208l-1.055-.703a.749.749 0 1 1 .832-1.248l1.055.703c.487.325.779.871.779 1.456v5.965A1.75 1.75 0 0 1 14.25 16h-3.5a.766.766 0 0 1-.197-.026c-.099.017-.2.026-.303.026h-3a.75.75 0 0 1-.75-.75V14h-1v1.25a.75.75 0 0 1-.75.75H1.75A1.75 1.75 0 0 1 0 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25H4v-1.25a.75.75 0 0 1 .75-.75h2a.75.75 0 0 1 .75.75v1.25h2.25a.25.25 0 0 0 .25-.25V1.75a.25.25 0 0 0-.25-.25Z"
+    },
+    {
+      key: "notes",
+      label: "Notes",
+      countKey: "notes",
+      icon: "M0 3.75C0 2.784.784 2 1.75 2h12.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0 1 14.25 14H1.75A1.75 1.75 0 0 1 0 12.25Zm1.75-.25a.25.25 0 0 0-.25.25v8.5c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25v-8.5a.25.25 0 0 0-.25-.25ZM3.5 6.25a.75.75 0 0 1 .75-.75h7a.75.75 0 0 1 0 1.5h-7a.75.75 0 0 1-.75-.75Zm.75 2.25a.75.75 0 0 0 0 1.5h4a.75.75 0 0 0 0-1.5Z"
+    },
+    {
+      key: "messages",
+      label: "Messages",
+      countKey: "messages",
+      icon: "M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v9.5A1.75 1.75 0 0 1 14.25 13H8.06l-2.573 2.573A1.458 1.458 0 0 1 3 14.543V13H1.75A1.75 1.75 0 0 1 0 11.25Zm1.75-.25a.25.25 0 0 0-.25.25v9.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h6.5a.25.25 0 0 0 .25-.25v-9.5a.25.25 0 0 0-.25-.25Z"
+    },
   ]
 
   function countFor(key) {
@@ -88,12 +120,7 @@
         <div class="bg-base-100/80 backdrop-blur sticky top-0 z-30 border-b border-base-300 -m-6 mb-0 p-6">
         <div class="flex items-start justify-between gap-4">
           <div class="min-w-0">
-            <a href="/" class="inline-flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100">
-              <span>←</span>
-              <span>Back to Agents</span>
-            </a>
-
-            <div class="mt-3 flex flex-wrap items-center gap-2">
+            <div class="flex flex-wrap items-center gap-2">
               <h1 class="text-2xl font-semibold text-gray-900 dark:text-gray-100">{header.agent_type}</h1>
 
               <span class="badge badge-outline font-mono">
@@ -201,25 +228,30 @@
       </div>
 
       <!-- Tabs -->
-      <div class="px-6 pt-4 pb-2">
-        <div role="tablist" aria-label="Session sections" class="tabs tabs-bordered">
-          {#each tabs as t}
-            <button
-              role="tab"
-              id={`tab-${t.key}`}
-              aria-selected={activeTab === t.key}
-              aria-controls={`panel-${t.key}`}
-              class="tab {activeTab === t.key ? 'tab-active' : ''} flex items-center gap-2"
-              on:click={() => changeTab(t.key)}
-            >
-              <span>{t.label}</span>
-              {#if t.countKey && countFor(t.countKey) > 0}
-                <span class="badge badge-sm {activeTab === t.key ? 'badge-primary' : 'badge-ghost'}">
-                  {countFor(t.countKey)}
-                </span>
-              {/if}
-            </button>
-          {/each}
+      <div class="border-b border-base-300">
+        <div class="px-6">
+          <div role="tablist" aria-label="Session sections" class="flex items-center gap-1 -mb-px">
+            {#each tabs as t}
+              <button
+                role="tab"
+                id={`tab-${t.key}`}
+                aria-selected={activeTab === t.key}
+                aria-controls={`panel-${t.key}`}
+                class="flex items-center gap-2 px-4 py-2 border-b-2 text-sm transition-colors {activeTab === t.key ? 'border-primary font-medium text-base-content' : 'border-transparent text-base-content/60 hover:text-base-content hover:border-base-content/20'}"
+                on:click={() => changeTab(t.key)}
+              >
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
+                  <path d={t.icon} />
+                </svg>
+                <span>{t.label}</span>
+                {#if t.countKey && countFor(t.countKey) > 0}
+                  <span class="badge badge-sm badge-ghost">
+                    {countFor(t.countKey)}
+                  </span>
+                {/if}
+              </button>
+            {/each}
+          </div>
         </div>
       </div>
 
@@ -258,3 +290,94 @@
     </div>
   </div>
 </div>
+
+<!-- Add Note Modal -->
+<dialog class="modal {showNoteModal ? 'modal-open' : ''}">
+  <div class="modal-box">
+    <form method="dialog">
+      <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" on:click={() => live.pushEvent('close_modal')}>✕</button>
+    </form>
+    <h3 class="font-bold text-lg mb-4">Add Note</h3>
+    <form on:submit|preventDefault={(e) => {
+      const formData = new FormData(e.target);
+      live.pushEvent('save_note', { body: formData.get('body') });
+    }}>
+      <div class="form-control">
+        <label class="label" for="note-body">
+          <span class="label-text">Note Content (Markdown supported)</span>
+        </label>
+        <textarea
+          id="note-body"
+          name="body"
+          class="textarea textarea-bordered h-48"
+          placeholder="Enter your note here... You can use markdown formatting."
+          required
+        ></textarea>
+      </div>
+      <div class="modal-action">
+        <button type="button" class="btn btn-ghost" on:click={() => live.pushEvent('close_modal')}>
+          Cancel
+        </button>
+        <button type="submit" class="btn btn-primary">
+          Save Note
+        </button>
+      </div>
+    </form>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button on:click={() => live.pushEvent('close_modal')}>close</button>
+  </form>
+</dialog>
+
+<!-- Add Task Modal -->
+<dialog class="modal {showTaskModal ? 'modal-open' : ''}">
+  <div class="modal-box">
+    <form method="dialog">
+      <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" on:click={() => live.pushEvent('close_modal')}>✕</button>
+    </form>
+    <h3 class="font-bold text-lg mb-4">Create New Task</h3>
+    <form on:submit|preventDefault={(e) => {
+      const formData = new FormData(e.target);
+      live.pushEvent('save_task', {
+        title: formData.get('title'),
+        description: formData.get('description')
+      });
+    }}>
+      <div class="form-control mb-4">
+        <label class="label" for="task-title">
+          <span class="label-text">Title</span>
+        </label>
+        <input
+          id="task-title"
+          name="title"
+          type="text"
+          class="input input-bordered"
+          placeholder="Task title"
+          required
+        />
+      </div>
+      <div class="form-control">
+        <label class="label" for="task-description">
+          <span class="label-text">Description</span>
+        </label>
+        <textarea
+          id="task-description"
+          name="description"
+          class="textarea textarea-bordered h-32"
+          placeholder="Optional task description"
+        ></textarea>
+      </div>
+      <div class="modal-action">
+        <button type="button" class="btn btn-ghost" on:click={() => live.pushEvent('close_modal')}>
+          Cancel
+        </button>
+        <button type="submit" class="btn btn-primary">
+          Create Task
+        </button>
+      </div>
+    </form>
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button on:click={() => live.pushEvent('close_modal')}>close</button>
+  </form>
+</dialog>

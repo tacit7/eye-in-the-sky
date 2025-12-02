@@ -25,7 +25,7 @@ defmodule EyeInTheSkyWeb.NATS.Publisher do
       meta: %{
         message_id: message.id,
         provider: message.provider,
-        timestamp: DateTime.to_iso8601(message.inserted_at)
+        timestamp: format_timestamp(message.inserted_at)
       }
     }
 
@@ -64,7 +64,7 @@ defmodule EyeInTheSkyWeb.NATS.Publisher do
         message_id: message.id,
         sender_session_id: message.session_id,
         provider: message.provider,
-        timestamp: DateTime.to_iso8601(message.inserted_at),
+        timestamp: format_timestamp(message.inserted_at),
         attachments: format_attachments(message)
       }
     }
@@ -79,6 +79,45 @@ defmodule EyeInTheSkyWeb.NATS.Publisher do
 
       {:error, reason} ->
         Logger.error("Failed to publish channel message #{message.id}: #{inspect(reason)}")
+        {:error, reason}
+    end
+  end
+
+  @doc """
+  Publishes a direct message to a specific agent by session_id.
+
+  Message format follows the eits-messaging-v3 protocol:
+  - Subject: events.direct.{session_id}
+  - Payload: JSON envelope with target_session_id and message
+  """
+  def publish_direct_message(message, target_session_id, opts \\ []) do
+    connection = Keyword.get(opts, :connection, get_connection())
+
+    # Build envelope following eits-messaging-v3 protocol
+    envelope = %{
+      op: "msg",
+      channel: "direct",
+      version: "eits-messaging-v3",
+      target_session_id: target_session_id,
+      msg: message.body,
+      meta: %{
+        message_id: message.id,
+        sender_session_id: message.session_id,
+        provider: message.provider,
+        timestamp: format_timestamp(message.inserted_at)
+      }
+    }
+
+    payload = Jason.encode!(envelope)
+    subject = "events.direct.#{target_session_id}"
+
+    case Gnat.pub(connection, subject, payload) do
+      :ok ->
+        Logger.info("Published direct message #{message.id} to #{subject}")
+        {:ok, message}
+
+      {:error, reason} ->
+        Logger.error("Failed to publish direct message #{message.id}: #{inspect(reason)}")
         {:error, reason}
     end
   end
@@ -110,19 +149,28 @@ defmodule EyeInTheSkyWeb.NATS.Publisher do
   end
 
   defp format_attachments(message) do
-    if Ecto.assoc_loaded?(message.attachments) do
-      Enum.map(message.attachments, fn att ->
-        %{
-          id: att.id,
-          filename: att.original_filename,
-          size: att.size_bytes,
-          content_type: att.content_type
-        }
-      end)
-    else
-      []
+    case Map.get(message, :attachments) do
+      %Ecto.Association.NotLoaded{} -> []
+      attachments when is_list(attachments) ->
+        Enum.map(attachments, fn att ->
+          %{
+            id: att.id,
+            filename: att.original_filename,
+            size: att.size_bytes,
+            content_type: att.content_type
+          }
+        end)
+      _ -> []
     end
   end
+
+  defp format_timestamp(nil), do: DateTime.utc_now() |> DateTime.to_iso8601()
+  defp format_timestamp(%DateTime{} = dt), do: DateTime.to_iso8601(dt)
+  defp format_timestamp(%NaiveDateTime{} = ndt) do
+    ndt |> DateTime.from_naive!("Etc/UTC") |> DateTime.to_iso8601()
+  end
+  defp format_timestamp(timestamp) when is_binary(timestamp), do: timestamp
+  defp format_timestamp(_), do: DateTime.utc_now() |> DateTime.to_iso8601()
 
   defp get_connection do
     case Process.whereis(:gnat) do

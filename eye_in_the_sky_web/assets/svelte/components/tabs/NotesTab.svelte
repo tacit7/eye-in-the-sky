@@ -1,15 +1,26 @@
 <script>
   import { marked } from 'marked'
+  import hljs from 'highlight.js'
 
   export let notes = []
 
-  // Configure marked options for better rendering
+  // Configure marked with syntax highlighting
   marked.setOptions({
     gfm: true,           // GitHub Flavored Markdown
     breaks: true,        // Convert \n to <br>
     headerIds: true,     // Add IDs to headers
     mangle: false,       // Don't mangle email addresses
     pedantic: false,     // Use original markdown.pl behavior
+    highlight: function(code, lang) {
+      if (lang && hljs.getLanguage(lang)) {
+        try {
+          return hljs.highlight(code, { language: lang }).value
+        } catch (err) {
+          console.error('Highlight error:', err)
+        }
+      }
+      return hljs.highlightAuto(code).value
+    }
   })
 
   function formatDate(dateStr) {

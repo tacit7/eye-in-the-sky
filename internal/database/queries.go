@@ -19,10 +19,10 @@ func repeatPlaceholders(count int) string {
 func (db *DB) CreateAgent(agent *Agent) error {
 	query := `
 		INSERT INTO agents (id, status, source, git_worktree_path, feature_description, current_task, last_activity_at, window_id, terminal_application, project_name, project_id, session_id, parent_agent_id)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?)
 	`
 	_, err := db.conn.Exec(query, agent.ID, agent.Status, agent.Source, agent.GitWorktreePath,
-		agent.FeatureDescription, agent.CurrentTask, agent.LastActivityAt, agent.WindowID, agent.TerminalApplication, agent.ProjectName, agent.ProjectID, agent.SessionID, agent.ParentAgentID)
+		agent.FeatureDescription, agent.CurrentTask, agent.WindowID, agent.TerminalApplication, agent.ProjectName, agent.ProjectID, agent.SessionID, agent.ParentAgentID)
 	if err != nil {
 		return fmt.Errorf("failed to create agent: %w", err)
 	}
@@ -544,8 +544,8 @@ func (db *DB) ListCommits(agentID string) ([]*Commit, error) {
 
 // CreateSession inserts a new session
 func (db *DB) CreateSession(session *Session) error {
-	query := `INSERT INTO sessions (id, agent_id, name, started_at) VALUES (?, ?, ?, ?)`
-	_, err := db.conn.Exec(query, session.ID, session.AgentID, session.Name, session.StartedAt)
+	query := `INSERT INTO sessions (id, agent_id, name, started_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)`
+	_, err := db.conn.Exec(query, session.ID, session.AgentID, session.Name)
 	if err != nil {
 		return fmt.Errorf("failed to create session: %w", err)
 	}
@@ -569,8 +569,8 @@ func (db *DB) GetSession(id string) (*Session, error) {
 
 // CreateLog inserts a new log entry
 func (db *DB) CreateLog(log *Log) error {
-	query := `INSERT INTO logs (session_id, type, message, timestamp) VALUES (?, ?, ?, ?)`
-	_, err := db.conn.Exec(query, log.SessionID, log.Type, log.Message, log.Timestamp)
+	query := `INSERT INTO logs (session_id, type, message, timestamp) VALUES (?, ?, ?, CURRENT_TIMESTAMP)`
+	_, err := db.conn.Exec(query, log.SessionID, log.Type, log.Message)
 	if err != nil {
 		return fmt.Errorf("failed to create log: %w", err)
 	}

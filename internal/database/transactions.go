@@ -49,10 +49,10 @@ func (tx *Tx) QueryRow(query string, args ...interface{}) *sql.Row {
 func (tx *Tx) CreateAgentTx(agent *Agent) error {
 	query := `
 		INSERT INTO agents (id, status, source, git_worktree_path, feature_description, current_task, last_activity_at, window_id)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
 	`
 	_, err := tx.tx.Exec(query, agent.ID, agent.Status, agent.Source, agent.GitWorktreePath,
-		agent.FeatureDescription, agent.CurrentTask, agent.LastActivityAt, agent.WindowID)
+		agent.FeatureDescription, agent.CurrentTask, agent.WindowID)
 	if err != nil {
 		return fmt.Errorf("failed to create agent in transaction: %w", err)
 	}

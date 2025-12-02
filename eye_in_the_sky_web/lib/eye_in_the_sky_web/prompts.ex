@@ -120,4 +120,50 @@ defmodule EyeInTheSkyWeb.Prompts do
     |> order_by([p], desc: p.updated_at)
     |> Repo.all()
   end
+
+  @doc """
+  Search prompts using FTS5.
+  Requires prompt_search FTS5 table in database.
+  """
+  def search_prompts(query, project_id \\ nil) when is_binary(query) do
+    sql = """
+    SELECT p.*
+    FROM subagent_prompts p
+    JOIN prompt_search ps ON p.id = ps.rowid
+    WHERE ps.prompt_search MATCH ?
+    #{if project_id, do: "AND (p.project_id = ? OR p.project_id IS NULL)", else: ""}
+    AND p.active = 1
+    ORDER BY ps.rank
+    LIMIT 50
+    """
+
+    params = if project_id, do: [query, project_id], else: [query]
+
+    case Ecto.Adapters.SQL.query(Repo, sql, params) do
+      {:ok, %{rows: rows, columns: columns}} ->
+        Enum.map(rows, fn row ->
+          columns
+          |> Enum.zip(row)
+          |> Map.new()
+          |> then(&Repo.load(Prompt, &1))
+        end)
+
+      {:error, _} ->
+        # Fallback to LIKE search if FTS5 table doesn't exist
+        pattern = "%#{query}%"
+        query_filter = from p in Prompt,
+          where: (ilike(p.name, ^pattern) or ilike(p.description, ^pattern) or ilike(p.prompt_text, ^pattern)) and p.active == true
+
+        query_filter = if project_id do
+          where(query_filter, [p], p.project_id == ^project_id or is_nil(p.project_id))
+        else
+          query_filter
+        end
+
+        query_filter
+        |> order_by([p], desc: p.updated_at)
+        |> limit(50)
+        |> Repo.all()
+    end
+  end
 end

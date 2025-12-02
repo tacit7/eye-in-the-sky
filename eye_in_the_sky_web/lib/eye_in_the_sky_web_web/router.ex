@@ -24,6 +24,12 @@ defmodule EyeInTheSkyWebWeb.Router do
     live "/nats", NatsLive.Index, :index
     live "/prompts", PromptLive.Index, :index
     live "/prompts/:id", PromptLive.Show, :show
+    live "/projects/:id", ProjectLive.Show, :show
+    live "/projects/:id/agents", ProjectLive.Agents, :show
+    live "/projects/:id/prompts", ProjectLive.Prompts, :show
+    live "/projects/:id/tasks", ProjectLive.Tasks, :show
+    live "/projects/:id/notes", ProjectLive.Notes, :show
+    live "/projects/:id/files", ProjectLive.Files, :show
     live "/chat", ChatLive, :index
   end
 

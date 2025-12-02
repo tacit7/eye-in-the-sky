@@ -2,6 +2,7 @@
    https://tailwindcss.com/docs/configuration */
 
 @import "tailwindcss" source(none);
+@import "highlight.js/styles/github-dark.css";
 @source "../css";
 @source "../js";
 @source "../../lib/eye_in_the_sky_web_web";
@@ -26,9 +27,9 @@
   default: false;
   prefersdark: true;
   color-scheme: "dark";
-  --color-base-100: oklch(30.33% 0.016 252.42);
-  --color-base-200: oklch(25.26% 0.014 253.1);
-  --color-base-300: oklch(20.15% 0.012 254.09);
+  --color-base-100: oklch(18% 0.016 252.42);
+  --color-base-200: oklch(15% 0.014 253.1);
+  --color-base-300: oklch(12% 0.012 254.09);
   --color-base-content: oklch(97.807% 0.029 256.847);
   --color-primary: oklch(58% 0.233 277.117);
   --color-primary-content: oklch(96% 0.018 272.314);
@@ -61,9 +62,9 @@
   default: true;
   prefersdark: false;
   color-scheme: "light";
-  --color-base-100: oklch(98% 0 0);
-  --color-base-200: oklch(96% 0.001 286.375);
-  --color-base-300: oklch(92% 0.004 286.32);
+  --color-base-100: oklch(88% 0 0);
+  --color-base-200: oklch(85% 0.001 286.375);
+  --color-base-300: oklch(80% 0.004 286.32);
   --color-base-content: oklch(21% 0.006 285.885);
   --color-primary: oklch(70% 0.213 47.604);
   --color-primary-content: oklch(98% 0.016 73.684);
@@ -122,3 +123,31 @@ a.phx-click-loading,
 input.phx-click-loading { opacity: .6 !important; pointer-events: none; }
 
 /* This file is for your main application CSS */
+
+/* Make cards, tables, modals, and navbar lighter to stand out */
+.card,
+.table,
+.modal-box,
+.navbar {
+  --tw-bg-opacity: 1;
+}
+
+/* Dark theme overrides */
+[data-theme="dark"] .card,
+[data-theme="dark"] .table,
+[data-theme="dark"] .modal-box,
+[data-theme="dark"] .navbar,
+[data-theme="dark"] .tab-content,
+[data-theme="dark"] [role="tabpanel"] {
+  background-color: oklch(23% 0.016 252.42) !important;
+}
+
+/* Light theme overrides */
+[data-theme="light"] .card,
+[data-theme="light"] .table,
+[data-theme="light"] .modal-box,
+[data-theme="light"] .navbar,
+[data-theme="light"] .tab-content,
+[data-theme="light"] [role="tabpanel"] {
+  background-color: oklch(91% 0 0) !important;
+}

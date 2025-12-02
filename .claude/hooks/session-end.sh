@@ -51,5 +51,9 @@ if [ -f "$agent_mapping_file" ] && [ "$session_id" != "unknown" ]; then
   fi
 fi
 
+# Send desktop notification
+short_session_id="${session_id:0:8}"
+osascript -e "display notification \"Session ${short_session_id} ended: ${reason}\" with title \"Eye in the Sky\" sound name \"Glass\"" 2>/dev/null &
+
 # Always exit successfully so we don't block Claude Code
 exit 0

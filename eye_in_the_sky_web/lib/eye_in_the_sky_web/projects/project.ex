@@ -2,6 +2,7 @@ defmodule EyeInTheSkyWeb.Projects.Project do
   use Ecto.Schema
   import Ecto.Changeset
 
+  @primary_key {:id, :id, autogenerate: true}
   schema "projects" do
     field :name, :string
     field :path, :string
@@ -9,11 +10,12 @@ defmodule EyeInTheSkyWeb.Projects.Project do
 
     has_many :agents, EyeInTheSkyWeb.Agents.Agent
     has_many :commits, EyeInTheSkyWeb.Commits.Commit
-    has_many :tasks, EyeInTheSkyWeb.Tasks.Task
-
-    field :created_at, :utc_datetime
-    field :updated_at, :utc_datetime
+    # Note: tasks.project_id is TEXT but projects.id is INTEGER
+    # Manual loading required - see Projects.get_project_tasks/1
   end
+
+  # Note: created_at and updated_at fields are stored by Go in a format that Ecto can't parse
+  # They are omitted from the schema to avoid type casting errors
 
   @doc false
   def changeset(project, attrs) do

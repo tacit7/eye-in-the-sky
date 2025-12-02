@@ -50,8 +50,8 @@
     selectedPromptId = e.target.value
     if (selectedPromptId) {
       const prompt = prompts.find(p => p.id === selectedPromptId)
-      if (prompt && prompt.description) {
-        agentInstructions = prompt.description
+      if (prompt && prompt.prompt_text) {
+        agentInstructions = prompt.prompt_text
       }
     }
   }
@@ -441,76 +441,24 @@
   .date-separator {
     display: flex;
     align-items: center;
+    justify-content: center;
     margin: 1.5rem 0;
   }
 
-  .date-separator::before,
-  .date-separator::after {
-    content: '';
-    flex: 1;
-    border-bottom: 1px solid var(--border-subtle);
-  }
-
-  .date-separator span {
-    padding: 0 1rem;
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: var(--text-secondary);
-  }
-
-  /* Message */
-  .message {
-    margin-bottom: 0.5rem;
-    padding: 0.5rem 1rem;
-    border-radius: 0.375rem;
-    transition: background-color 0.15s;
-  }
-
-  .message:hover {
-    background-color: var(--bg-shell);
-  }
-
-  .message-header {
-    display: flex;
-    align-items: baseline;
-    gap: 0.5rem;
-    margin-bottom: 0.25rem;
-  }
-
-  .sender-name {
-    font-weight: 700;
-    font-size: 0.9375rem;
-    color: var(--text-primary);
-  }
-
-  .session-id {
-    font-size: 0.6875rem;
-    color: var(--text-tertiary);
-    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
-    background-color: var(--bg-shell);
-    padding: 0.125rem 0.375rem;
-    border-radius: 0.25rem;
-    margin-left: auto;
-    cursor: pointer;
-    transition: background-color 0.15s, color 0.15s;
-  }
-
-  .session-id:hover {
-    background-color: var(--accent-primary);
-    color: white;
-  }
-
-  .message-time {
+  .date-badge {
     font-size: 0.75rem;
-    color: var(--text-secondary);
+    font-weight: 600;
+    padding: 0.25rem 0.75rem;
   }
 
-  .message-body {
-    font-size: 0.9375rem;
-    color: var(--text-primary);
-    white-space: pre-wrap;
-    word-break: break-word;
-    line-height: 1.5;
+  .session-id-badge {
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .session-id-badge:hover {
+    transform: scale(1.05);
   }
 
   .input-area {
@@ -695,25 +643,34 @@
           <!-- Date separator -->
           {#if idx === 0 || formatDate(messages[idx - 1].inserted_at) !== formatDate(message.inserted_at)}
             <div class="date-separator">
-              <span>{formatDate(message.inserted_at)}</span>
+              <div class="badge badge-ghost badge-sm date-badge">
+                {formatDate(message.inserted_at)}
+              </div>
             </div>
           {/if}
 
-          <!-- Message -->
-          <div class="message">
-            <div class="message-header">
-              <span class="sender-name">
-                {message.sender_role === 'user' ? 'You' : `Agent (${message.provider || 'unknown'})`}
-              </span>
-              <span class="message-time">{formatTime(message.inserted_at)}</span>
-              {#if message.sender_role === 'agent' && message.session_id}
-                <span class="session-id" on:click={() => handleSessionIdClick(message.session_id)}>
-                  {message.session_id.substring(0, 8)}
-                </span>
-              {/if}
+          <!-- Message card -->
+          <div class="card bg-base-100 shadow-sm mb-3 {message.sender_role === 'user' ? 'border-l-4 border-primary' : 'border-l-4 border-base-300'}">
+            <div class="card-body p-4">
+              <div class="flex items-center gap-2 mb-2">
+                <h3 class="card-title text-sm">
+                  {message.sender_role === 'user' ? 'You' : `Agent (${message.provider || 'unknown'})`}
+                </h3>
+                <time class="text-xs opacity-50">{formatTime(message.inserted_at)}</time>
+                {#if message.sender_role === 'agent' && message.session_id}
+                  <span
+                    class="badge badge-xs badge-outline session-id-badge ml-auto"
+                    on:click={() => handleSessionIdClick(message.session_id)}
+                    on:keydown={(e) => e.key === 'Enter' && handleSessionIdClick(message.session_id)}
+                    role="button"
+                    tabindex="0"
+                  >
+                    {message.session_id.substring(0, 8)}
+                  </span>
+                {/if}
+              </div>
+              <p class="text-sm whitespace-pre-wrap">{message.body}</p>
             </div>
-
-            <div class="message-body">{message.body}</div>
           </div>
         {/each}
       {:else}

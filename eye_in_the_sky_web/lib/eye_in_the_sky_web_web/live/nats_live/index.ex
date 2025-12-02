@@ -46,6 +46,7 @@ defmodule EyeInTheSkyWebWeb.NatsLive.Index do
   @impl true
   def render(assigns) do
     ~H"""
+    <.live_component module={EyeInTheSkyWebWeb.Components.Navbar} id="navbar" />
     <div class="p-6">
       <div class="flex items-center justify-between mb-6">
         <h1 class="text-3xl font-bold">NATS Messages</h1>

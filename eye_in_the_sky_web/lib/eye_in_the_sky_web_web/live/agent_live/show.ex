@@ -1,13 +1,19 @@
 defmodule EyeInTheSkyWebWeb.AgentLive.Show do
   use EyeInTheSkyWebWeb, :live_view
 
-  alias EyeInTheSkyWeb.{Agents, Sessions, Messages}
+  alias EyeInTheSkyWeb.{Agents, Sessions, Messages, Notes, Tasks, Repo}
   alias EyeInTheSkyWeb.Claude.{SessionManager, SessionReader}
   alias EyeInTheSkyWeb.NATS.Publisher
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, socket}
+    {:ok, socket
+      |> assign(:show_note_modal, false)
+      |> assign(:show_task_modal, false)
+      |> assign(:note_body, "")
+      |> assign(:task_title, "")
+      |> assign(:task_description, "")
+    }
   end
 
   @impl true
@@ -130,14 +136,106 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Show do
 
   @impl true
   def handle_event("new_task", _params, socket) do
-    # TODO: open a modal or navigate to tasks tab in a future PR
-    {:noreply, socket}
+    {:noreply, assign(socket, show_task_modal: true, task_title: "", task_description: "")}
+  end
+
+  @impl true
+  def handle_event("save_task", %{"title" => title, "description" => description}, socket) do
+    agent_id = socket.assigns.agent_id
+    session_id = socket.assigns.session_id
+
+    # Get agent to find project_id
+    case Agents.get_agent(agent_id) do
+      {:ok, agent} ->
+        # Create task with generated UUID (schema requires string ID)
+        task_attrs = %{
+          id: Ecto.UUID.generate(),
+          title: title,
+          description: description,
+          project_id: to_string(agent.project_id),  # Ensure string type
+          agent_id: agent_id,
+          state_id: 1,  # Default to "todo" state
+          priority: 2   # Default to medium priority
+        }
+
+        case Tasks.create_task(task_attrs) do
+          {:ok, task} ->
+            # Associate task with session if there is one
+            if session_id do
+              # Use Ecto to insert into join table
+              case Repo.query("INSERT INTO task_sessions (task_id, session_id) VALUES ($1, $2)",
+                             [task.id, session_id]) do
+                {:ok, _} -> :ok
+                {:error, err} ->
+                  IO.inspect(err, label: "Failed to link task to session")
+              end
+            end
+
+            # Reload tasks for current view
+            updated_tasks = if socket.assigns.active_tab == :tasks do
+              Tasks.list_tasks_for_session(session_id)
+            else
+              socket.assigns.tasks
+            end
+
+            # Update counts
+            updated_counts = if session_id do
+              Sessions.get_session_counts(session_id)
+            else
+              socket.assigns.counts
+            end
+
+            {:noreply, socket
+              |> assign(show_task_modal: false, tasks: updated_tasks, counts: updated_counts)
+              |> put_flash(:info, "Task created successfully")}
+
+          {:error, changeset} ->
+            IO.inspect(changeset, label: "Task creation failed")
+            {:noreply, put_flash(socket, :error, "Failed to create task: #{inspect(changeset.errors)}")}
+        end
+
+      {:error, err} ->
+        IO.inspect(err, label: "Agent fetch failed")
+        {:noreply, put_flash(socket, :error, "Agent not found")}
+    end
   end
 
   @impl true
   def handle_event("add_note", _params, socket) do
-    # TODO: open a note input in a future PR
-    {:noreply, socket}
+    {:noreply, assign(socket, show_note_modal: true, note_body: "")}
+  end
+
+  @impl true
+  def handle_event("save_note", %{"body" => body}, socket) do
+    session_id = socket.assigns.session_id
+
+    note_attrs = %{
+      parent_type: "session",
+      parent_id: session_id,
+      body: body
+    }
+
+    case Notes.create_note(note_attrs) do
+      {:ok, _note} ->
+        # Reload notes if we're on the notes tab
+        updated_notes = if socket.assigns.active_tab == :notes do
+          Notes.list_notes_for_session(session_id)
+        else
+          socket.assigns.notes
+        end
+
+        {:noreply, socket
+          |> assign(show_note_modal: false, notes: updated_notes)
+          |> put_flash(:info, "Note added successfully")}
+
+      {:error, changeset} ->
+        {:noreply, put_flash(socket, :error, "Failed to add note: #{inspect(changeset.errors)}")}
+    end
+  end
+
+  @impl true
+  def handle_event("close_modal", _params, socket) do
+    {:noreply, assign(socket, show_note_modal: false, show_task_modal: false)}
   end
 
   @impl true
@@ -171,9 +269,8 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Show do
           # Use git_worktree_path as project_path for Claude
           project_path = agent.git_worktree_path || File.cwd!()
 
-          # Always start a new session (don't use --resume)
-          # Claude sessions are directory-specific and hard to manage across restarts
-          result = SessionManager.start_session(session_id, body,
+          # Continue the existing session instead of starting a new one
+          result = SessionManager.continue_session(session_id, body,
             model: provider_to_model(provider),
             project_path: project_path
           )
@@ -361,38 +458,34 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Show do
   defp serialize_messages(_), do: []
 
   defp serialize_claude_messages(messages) when is_list(messages) do
-    # Convert Claude messages to match UI expected format
-    # Group by consecutive sender to create message groups
+    # Convert Claude messages to flat format for UI
     messages
     |> Enum.map(fn msg ->
-      %{
-        sender_role: msg[:role] || msg["role"],
-        direction: if((msg[:role] || msg["role"]) == "user", do: "outbound", else: "inbound"),
-        body: msg[:content] || msg["content"],
-        inserted_at: msg[:timestamp] || msg["timestamp"]
-      }
-    end)
-    |> Enum.chunk_by(&{&1.sender_role, &1.direction})
-    |> Enum.map(fn group ->
-      first_message = List.first(group)
-      last_message = List.last(group)
+      # Handle both Message structs and Claude API response maps
+      {sender_role, body, inserted_at, provider} = case msg do
+        %{__struct__: EyeInTheSkyWeb.Messages.Message} = message ->
+          {message.sender_role, message.body, message.inserted_at, message.provider}
+        map when is_map(map) ->
+          role = map[:role] || map["role"]
+          content = map[:content] || map["content"]
+          timestamp = map[:timestamp] || map["timestamp"]
+          provider = map[:provider] || map["provider"] || "claude"
+          # Convert Claude API role to UI sender_role
+          ui_role = case role do
+            "assistant" -> "agent"
+            "user" -> "user"
+            other -> other
+          end
+          {ui_role, content, timestamp, provider}
+      end
 
       %{
-        sender_role: first_message.sender_role,
-        direction: first_message.direction,
-        provider: "claude",
-        timestamp: first_message.inserted_at,
-        date: parse_date_from_timestamp(first_message.inserted_at),
-        status: "delivered",
-        messages: Enum.map(group, fn msg ->
-          %{
-            body: msg.body,
-            inserted_at: msg.inserted_at
-          }
-        end)
+        sender_role: sender_role,
+        body: body,
+        inserted_at: format_timestamp(inserted_at),
+        provider: provider || "claude"
       }
     end)
-    |> add_date_separators()
   end
   defp serialize_claude_messages(_), do: []
 
@@ -478,6 +571,7 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Show do
   @impl true
   def render(assigns) do
     ~H"""
+    <.live_component module={EyeInTheSkyWebWeb.Components.Navbar} id="navbar" />
     <div style="opacity: 1 !important;" class="agent-detail-wrapper">
       <.svelte
         name="AgentDetail"
@@ -492,7 +586,10 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Show do
           logs: @logs,           # loaded when tab is logs
           context: @context,     # loaded when tab is context
           notes: @notes,         # loaded when tab is notes
-          messages: @messages    # loaded when tab is messages
+          messages: @messages,   # loaded when tab is messages
+
+          showNoteModal: @show_note_modal,
+          showTaskModal: @show_task_modal
         }}
         socket={@socket}
       />
@@ -504,14 +601,16 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Show do
   defp format_timestamp(""), do: nil
 
   defp format_timestamp(%DateTime{} = datetime) do
-    Calendar.strftime(datetime, "%Y-%m-%d %H:%M")
+    DateTime.to_iso8601(datetime)
+  end
+
+  defp format_timestamp(%NaiveDateTime{} = naive_datetime) do
+    NaiveDateTime.to_iso8601(naive_datetime)
   end
 
   defp format_timestamp(timestamp) when is_binary(timestamp) do
-    case String.split(timestamp, " ", parts: 3) do
-      [date, time | _] -> "#{date} #{String.slice(time, 0..7)}"
-      _ -> timestamp
-    end
+    # Return as-is if already a string (might be ISO8601)
+    timestamp
   end
 
   defp format_duration(_started, nil), do: "Active"

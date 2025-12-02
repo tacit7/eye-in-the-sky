@@ -167,6 +167,7 @@ defmodule EyeInTheSkyWeb.Claude.CLI do
             :exit_status,
             :use_stdio,
             :stderr_to_stdout,
+            {:line, 65536},  # Increase line buffer to 64KB to handle long JSON output
             {:args, args},
             {:cd, project_path},
             {:env, build_env()}

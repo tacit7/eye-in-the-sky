@@ -15,8 +15,8 @@ defmodule EyeInTheSkyWeb.Prompts.Prompt do
     field :version, :integer, default: 1
     field :tags, :string
     field :created_by, :string
-    field :created_at, :utc_datetime
-    field :updated_at, :utc_datetime
+    field :created_at, :naive_datetime
+    field :updated_at, :naive_datetime
   end
 
   @doc false

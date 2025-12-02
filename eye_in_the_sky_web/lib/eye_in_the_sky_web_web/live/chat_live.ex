@@ -371,6 +371,7 @@ defmodule EyeInTheSkyWebWeb.ChatLive do
   @impl true
   def render(assigns) do
     ~H"""
+    <.live_component module={EyeInTheSkyWebWeb.Components.Navbar} id="navbar" />
     <div style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; overflow: hidden;">
       <.svelte
         name="AgentMessagesPanel"
@@ -510,7 +511,8 @@ defmodule EyeInTheSkyWebWeb.ChatLive do
         id: prompt.id,
         name: prompt.name,
         slug: prompt.slug,
-        description: prompt.description
+        description: prompt.description,
+        prompt_text: prompt.prompt_text
       }
     end)
   end

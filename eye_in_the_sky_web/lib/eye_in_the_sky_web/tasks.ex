@@ -106,6 +106,53 @@ defmodule EyeInTheSkyWeb.Tasks do
     Task.changeset(task, attrs)
   end
 
+  @doc """
+  Search tasks using FTS5.
+  Requires task_search FTS5 table in database.
+  """
+  def search_tasks(query, project_id \\ nil) when is_binary(query) do
+    sql = """
+    SELECT t.*
+    FROM tasks t
+    JOIN task_search ts ON t.id = ts.rowid
+    WHERE ts.task_search MATCH ?
+    #{if project_id, do: "AND t.project_id = ?", else: ""}
+    ORDER BY ts.rank
+    LIMIT 50
+    """
+
+    params = if project_id, do: [query, Integer.to_string(project_id)], else: [query]
+
+    case Ecto.Adapters.SQL.query(Repo, sql, params) do
+      {:ok, %{rows: rows, columns: columns}} ->
+        Enum.map(rows, fn row ->
+          columns
+          |> Enum.zip(row)
+          |> Map.new()
+          |> then(&Repo.load(Task, &1))
+        end)
+        |> Repo.preload([:state, :tags])
+
+      {:error, _} ->
+        # Fallback to LIKE search if FTS5 table doesn't exist
+        pattern = "%#{query}%"
+        query_filter = from t in Task,
+          where: ilike(t.title, ^pattern) or ilike(t.description, ^pattern)
+
+        query_filter = if project_id do
+          where(query_filter, [t], t.project_id == ^Integer.to_string(project_id))
+        else
+          query_filter
+        end
+
+        query_filter
+        |> order_by([t], desc: t.priority, desc: t.created_at)
+        |> limit(50)
+        |> preload([:state, :tags])
+        |> Repo.all()
+    end
+  end
+
   # Workflow State functions
 
   @doc """

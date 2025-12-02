@@ -78,6 +78,7 @@ defmodule EyeInTheSkyWebWeb.PromptLive.Index do
   @impl true
   def render(assigns) do
     ~H"""
+    <.live_component module={EyeInTheSkyWebWeb.Components.Navbar} id="navbar" />
     <div class="px-4 sm:px-6 lg:px-8">
       <div class="sm:flex sm:items-center sm:justify-between">
         <div class="sm:flex-auto">

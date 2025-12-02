@@ -9,8 +9,8 @@ defmodule EyeInTheSkyWeb.Tasks.Task do
     field :title, :string
     field :description, :string
     field :priority, :integer, default: 0
-    field :due_at, :string
-    field :completed_at, :string
+    field :due_at, :naive_datetime
+    field :completed_at, :naive_datetime
     field :archived, :boolean, default: false
     field :agent_id, :string
 
@@ -34,8 +34,8 @@ defmodule EyeInTheSkyWeb.Tasks.Task do
       join_through: "task_tags",
       join_keys: [task_id: :id, tag_id: :id]
 
-    field :created_at, :string
-    field :updated_at, :string
+    field :created_at, :naive_datetime
+    field :updated_at, :naive_datetime
   end
 
   @doc false

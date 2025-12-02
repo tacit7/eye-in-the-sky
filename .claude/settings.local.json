@@ -20,7 +20,13 @@
       "mcp__eye-in-the-sky__i-todo-done",
       "mcp__eye-in-the-sky__i-todo-annotate",
       "Bash(find:*)",
-      "Bash(mix assets.build:*)"
+      "Bash(mix assets.build:*)",
+      "mcp__eye-in-the-sky__i-todo-start",
+      "WebFetch(domain:daisyui.com)",
+      "Bash(cat:*)",
+      "Bash(jq:*)",
+      "mcp__eye-in-the-sky__i-todo-create",
+      "Bash(npm install:*)"
     ],
     "deny": [],
     "ask": []

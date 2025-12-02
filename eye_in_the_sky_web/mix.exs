@@ -68,7 +68,8 @@ defmodule EyeInTheSkyWeb.MixProject do
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
       {:gnat, "~> 1.8"},
-      {:exile, "~> 0.10.0"}
+      {:exile, "~> 0.10.0"},
+      {:earmark, "~> 1.4"}
     ]
   end
 

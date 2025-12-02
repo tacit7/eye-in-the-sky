@@ -20,8 +20,8 @@ defmodule EyeInTheSkyWeb.Agents.Agent do
     field :parent_agent_id, :string
     field :parent_session_id, :string
     field :bookmarked, :boolean, default: false
-    field :last_activity_at, :string
-    field :completed_at, :string
+    field :last_activity_at, :naive_datetime
+    field :completed_at, :naive_datetime
 
     belongs_to :project, EyeInTheSkyWeb.Projects.Project, type: :integer
 
@@ -29,8 +29,8 @@ defmodule EyeInTheSkyWeb.Agents.Agent do
     has_many :commits, EyeInTheSkyWeb.Commits.Commit, foreign_key: :agent_id
     has_many :tasks, EyeInTheSkyWeb.Tasks.Task, foreign_key: :agent_id
 
-    field :created_at, :utc_datetime
-    field :updated_at, :utc_datetime
+    field :created_at, :naive_datetime
+    field :updated_at, :naive_datetime
   end
 
   @doc false

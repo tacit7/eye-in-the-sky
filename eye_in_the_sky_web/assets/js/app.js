@@ -27,6 +27,8 @@ import {CopyToClipboard} from "./hooks/copy_to_clipboard"
 import {CopySessionId} from "./hooks/copy_session_id"
 import {getHooks} from "live_svelte"
 import "./theme"
+import hljs from 'highlight.js'
+import 'highlight.js/styles/github-dark.css'
 
 // Import Svelte components manually (esbuild doesn't support import.meta.glob)
 import SessionsSidebar from "../svelte/components/SessionsSidebar.svelte"
@@ -52,6 +54,14 @@ let Hooks = getHooks({
 })
 Hooks.CopyToClipboard = CopyToClipboard
 Hooks.CopySessionId = CopySessionId
+Hooks.Highlight = {
+  mounted() {
+    hljs.highlightElement(this.el)
+  },
+  updated() {
+    hljs.highlightElement(this.el)
+  }
+}
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {

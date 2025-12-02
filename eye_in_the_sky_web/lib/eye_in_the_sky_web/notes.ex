@@ -65,4 +65,49 @@ defmodule EyeInTheSkyWeb.Notes do
   def delete_note(%Note{} = note) do
     Repo.delete(note)
   end
+
+  @doc """
+  Search notes using FTS5.
+  Requires note_search FTS5 table in database.
+  """
+  def search_notes(query, agent_ids \\ []) when is_binary(query) do
+    sql = """
+    SELECT n.*
+    FROM notes n
+    JOIN note_search ns ON n.id = ns.rowid
+    WHERE ns.note_search MATCH ?
+    #{if length(agent_ids) > 0, do: "AND n.parent_type = 'agent' AND n.parent_id IN (#{Enum.map(agent_ids, fn _ -> "?" end) |> Enum.join(",")})", else: ""}
+    ORDER BY ns.rank
+    LIMIT 50
+    """
+
+    params = if length(agent_ids) > 0, do: [query | agent_ids], else: [query]
+
+    case Ecto.Adapters.SQL.query(Repo, sql, params) do
+      {:ok, %{rows: rows, columns: columns}} ->
+        Enum.map(rows, fn row ->
+          columns
+          |> Enum.zip(row)
+          |> Map.new()
+          |> then(&Repo.load(Note, &1))
+        end)
+
+      {:error, _} ->
+        # Fallback to LIKE search if FTS5 table doesn't exist
+        pattern = "%#{query}%"
+        query_filter = from n in Note,
+          where: ilike(n.body, ^pattern)
+
+        query_filter = if length(agent_ids) > 0 do
+          where(query_filter, [n], n.parent_type == "agent" and n.parent_id in ^agent_ids)
+        else
+          query_filter
+        end
+
+        query_filter
+        |> order_by([n], desc: n.created_at)
+        |> limit(50)
+        |> Repo.all()
+    end
+  end
 end
