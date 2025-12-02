@@ -186,7 +186,7 @@ defmodule EyeInTheSkyWeb.Messages do
     |> order_by([m], asc: m.inserted_at)
     |> offset(^offset)
     |> limit(^limit)
-    |> preload([:reactions, :attachments])
+    |> preload([:reactions, :attachments, :session])
     |> Repo.all()
   end
 

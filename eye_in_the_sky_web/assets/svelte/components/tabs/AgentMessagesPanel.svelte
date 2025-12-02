@@ -7,47 +7,248 @@
   export let messages = []
   export let unreadCounts = {}
   export let agentStatusCounts = {}
+  export let prompts = []
   export let live
 
   let messagesContainer
   let shouldAutoScroll = true
   let inputValue = ''
+  let inputElement
 
   // Modal state
   let showAgentModal = false
   let agentType = 'claude'
   let agentModel = 'sonnet'
+  let agentDescription = ''
   let agentInstructions = ''
+  let selectedPromptId = ''
+
+  // Autocomplete state
+  let showAutocomplete = false
+  let autocompleteOptions = []
+  let selectedAutocompleteIndex = 0
+
+  // Message history for up/down navigation
+  let messageHistory = []
+  let historyIndex = -1
+  let currentDraft = ''
 
   function openAgentModal() {
     showAgentModal = true
     agentType = 'claude'
     agentModel = 'sonnet'
+    agentDescription = ''
     agentInstructions = ''
+    selectedPromptId = ''
   }
 
   function closeAgentModal() {
     showAgentModal = false
   }
 
+  function handlePromptChange(e) {
+    selectedPromptId = e.target.value
+    if (selectedPromptId) {
+      const prompt = prompts.find(p => p.id === selectedPromptId)
+      if (prompt && prompt.description) {
+        agentInstructions = prompt.description
+      }
+    }
+  }
+
   function createAgent() {
     live.pushEvent('create_agent', {
       agent_type: agentType,
       model: agentModel,
+      description: agentDescription,
       instructions: agentInstructions,
+      prompt_id: selectedPromptId || null,
       channel_id: activeChannelId
     })
     closeAgentModal()
+  }
+
+  function handleSessionIdClick(sessionId) {
+    const shortId = sessionId.substring(0, 8)
+    inputValue = `@${shortId} `
+    showAutocomplete = false
+    if (inputElement) {
+      inputElement.focus()
+    }
+  }
+
+  function handleInputChange(e) {
+    const value = e.target.value
+    const cursorPos = e.target.selectionStart
+
+    // Find @ mentions that are being typed
+    const textBeforeCursor = value.substring(0, cursorPos)
+    const lastAtIndex = textBeforeCursor.lastIndexOf('@')
+
+    if (lastAtIndex !== -1) {
+      const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1)
+
+      // Check if we're still typing the mention (no space after @)
+      if (!textAfterAt.includes(' ')) {
+        // Get unique agent session IDs from messages
+        const agentSessions = messages
+          .filter(m => m.sender_role === 'agent' && m.session_id)
+          .reduce((acc, m) => {
+            if (!acc.some(s => s.id === m.session_id)) {
+              acc.push({
+                id: m.session_id,
+                shortId: m.session_id.substring(0, 8),
+                provider: m.provider || 'agent',
+                name: m.session_name || null
+              })
+            }
+            return acc
+          }, [])
+
+        // Filter based on what's typed after @ (search in ID, shortID, and name)
+        const searchTerm = textAfterAt.toLowerCase()
+        const filtered = agentSessions.filter(s =>
+          s.id.toLowerCase().includes(searchTerm) ||
+          s.shortId.toLowerCase().includes(searchTerm) ||
+          (s.name && s.name.toLowerCase().includes(searchTerm))
+        )
+
+        if (filtered.length > 0) {
+          autocompleteOptions = filtered
+          selectedAutocompleteIndex = 0
+          showAutocomplete = true
+          return
+        }
+      }
+    }
+
+    showAutocomplete = false
+  }
+
+  function handleInputKeydown(e) {
+    // Handle autocomplete navigation if autocomplete is shown
+    if (showAutocomplete) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        selectedAutocompleteIndex = (selectedAutocompleteIndex + 1) % autocompleteOptions.length
+        return
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        selectedAutocompleteIndex = selectedAutocompleteIndex === 0
+          ? autocompleteOptions.length - 1
+          : selectedAutocompleteIndex - 1
+        return
+      } else if (e.key === 'Tab' || e.key === 'Enter') {
+        if (autocompleteOptions.length > 0) {
+          e.preventDefault()
+          selectAutocomplete(autocompleteOptions[selectedAutocompleteIndex].id)
+        }
+        return
+      } else if (e.key === 'Escape') {
+        showAutocomplete = false
+        return
+      }
+    }
+
+    // Handle message history navigation (up/down arrows when autocomplete is NOT shown)
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      if (messageHistory.length === 0) return
+
+      // Save current draft when starting to navigate history
+      if (historyIndex === -1) {
+        currentDraft = inputValue
+      }
+
+      // Move up in history (towards older messages)
+      if (historyIndex < messageHistory.length - 1) {
+        historyIndex++
+        inputValue = messageHistory[historyIndex]
+      }
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      if (historyIndex === -1) return
+
+      // Move down in history (towards newer messages)
+      historyIndex--
+      if (historyIndex === -1) {
+        // Back to current draft
+        inputValue = currentDraft
+        currentDraft = ''
+      } else {
+        inputValue = messageHistory[historyIndex]
+      }
+    }
+  }
+
+  function selectAutocomplete(sessionId) {
+    const cursorPos = inputElement.selectionStart
+    const textBeforeCursor = inputValue.substring(0, cursorPos)
+    const textAfterCursor = inputValue.substring(cursorPos)
+    const lastAtIndex = textBeforeCursor.lastIndexOf('@')
+
+    // Replace from @ to cursor with first 8 chars of session ID
+    const shortId = sessionId.substring(0, 8)
+    inputValue = textBeforeCursor.substring(0, lastAtIndex) + `@${shortId} ` + textAfterCursor
+    showAutocomplete = false
+
+    // Set cursor after the inserted text
+    setTimeout(() => {
+      const newPos = lastAtIndex + shortId.length + 2
+      inputElement.setSelectionRange(newPos, newPos)
+      inputElement.focus()
+    }, 0)
   }
 
   function handleSubmit(e) {
     const body = inputValue.trim()
 
     if (body) {
-      live.pushEvent('send_channel_message', {
-        channel_id: activeChannelId,
-        body: body
-      })
+      // Check for @session-id mentions (match first 8 chars or full UUID)
+      const mentionRegex = /@([a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}|[a-f0-9]{8})/gi
+      const mentions = []
+      let match
+
+      while ((match = mentionRegex.exec(body)) !== null) {
+        const sessionIdPart = match[1]
+        // Find full session_id from messages that match the prefix
+        const fullSessionId = messages.find(m =>
+          m.session_id && m.session_id.startsWith(sessionIdPart)
+        )?.session_id || sessionIdPart
+
+        if (!mentions.includes(fullSessionId)) {
+          mentions.push(fullSessionId)
+        }
+      }
+
+      if (mentions.length > 0) {
+        // Send targeted message to each mentioned agent
+        mentions.forEach(sessionId => {
+          live.pushEvent('send_direct_message', {
+            session_id: sessionId,
+            body: body,
+            channel_id: activeChannelId
+          })
+        })
+      } else {
+        // Regular broadcast message to channel
+        live.pushEvent('send_channel_message', {
+          channel_id: activeChannelId,
+          body: body
+        })
+      }
+
+      // Add to message history (at beginning of array for reverse chronological)
+      messageHistory.unshift(body)
+      // Keep only last 50 messages in history
+      if (messageHistory.length > 50) {
+        messageHistory = messageHistory.slice(0, 50)
+      }
+
+      // Reset history navigation
+      historyIndex = -1
+      currentDraft = ''
+
       inputValue = ''
       shouldAutoScroll = true
     }
@@ -282,6 +483,23 @@
     color: var(--text-primary);
   }
 
+  .session-id {
+    font-size: 0.6875rem;
+    color: var(--text-tertiary);
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+    background-color: var(--bg-shell);
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.25rem;
+    margin-left: auto;
+    cursor: pointer;
+    transition: background-color 0.15s, color 0.15s;
+  }
+
+  .session-id:hover {
+    background-color: var(--accent-primary);
+    color: white;
+  }
+
   .message-time {
     font-size: 0.75rem;
     color: var(--text-secondary);
@@ -341,6 +559,60 @@
   .send-button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  /* Autocomplete Dropdown */
+  .autocomplete-dropdown {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    right: 4.5rem;
+    margin-bottom: 0.5rem;
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 0.375rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 50;
+  }
+
+  .autocomplete-item {
+    width: 100%;
+    padding: 0.5rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: none;
+    border: none;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 0.15s;
+    color: var(--text-primary);
+  }
+
+  .autocomplete-item:hover,
+  .autocomplete-item.selected {
+    background-color: var(--bg-shell);
+  }
+
+  .autocomplete-id {
+    font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .autocomplete-name {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin-left: 0.5rem;
+  }
+
+  .autocomplete-provider {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    margin-left: auto;
   }
 
   .empty-state {
@@ -434,6 +706,11 @@
                 {message.sender_role === 'user' ? 'You' : `Agent (${message.provider || 'unknown'})`}
               </span>
               <span class="message-time">{formatTime(message.inserted_at)}</span>
+              {#if message.sender_role === 'agent' && message.session_id}
+                <span class="session-id" on:click={() => handleSessionIdClick(message.session_id)}>
+                  {message.session_id.substring(0, 8)}
+                </span>
+              {/if}
             </div>
 
             <div class="message-body">{message.body}</div>
@@ -458,14 +735,38 @@
 
     <!-- Input Area -->
     <div class="input-area">
-      <form on:submit|preventDefault={handleSubmit} class="input-form">
+      <form on:submit|preventDefault={handleSubmit} class="input-form" style="position: relative;">
         <input
           type="text"
           bind:value={inputValue}
-          placeholder="Send instruction to agents..."
+          bind:this={inputElement}
+          on:input={handleInputChange}
+          on:keydown={handleInputKeydown}
+          placeholder="Send instruction to agents (use @session-id for direct messages)..."
           class="message-input"
           autocomplete="off"
         />
+
+        <!-- Autocomplete Dropdown -->
+        {#if showAutocomplete && autocompleteOptions.length > 0}
+          <div class="autocomplete-dropdown">
+            {#each autocompleteOptions as option, idx}
+              <button
+                type="button"
+                class="autocomplete-item"
+                class:selected={idx === selectedAutocompleteIndex}
+                on:click={() => selectAutocomplete(option.id)}
+                on:mouseenter={() => selectedAutocompleteIndex = idx}
+              >
+                <span class="autocomplete-id">@{option.shortId}</span>
+                {#if option.name}
+                  <span class="autocomplete-name">{option.name}</span>
+                {/if}
+                <span class="autocomplete-provider">({option.provider})</span>
+              </button>
+            {/each}
+          </div>
+        {/if}
 
         <button type="submit" class="send-button" disabled={!inputValue || inputValue.trim() === ''}>
           Send
@@ -476,7 +777,7 @@
 
   <!-- Agent Creation Modal -->
   {#if showAgentModal}
-    <div class="modal modal-open">
+    <dialog class="modal modal-open">
       <div class="modal-box">
         <h3 class="font-bold text-lg mb-4">Create New Agent</h3>
 
@@ -508,6 +809,45 @@
           </select>
         </div>
 
+        <!-- Description/Nickname -->
+        <div class="form-control w-full mb-4">
+          <label class="label" for="description">
+            <span class="label-text">Agent Name / Nickname</span>
+          </label>
+          <input
+            id="description"
+            type="text"
+            class="input input-bordered w-full"
+            placeholder="e.g., Code Reviewer, Bug Fixer, Feature Dev..."
+            bind:value={agentDescription}
+          />
+        </div>
+
+        <!-- Prompt Template -->
+        <div class="form-control w-full mb-4">
+          <label class="label" for="prompt">
+            <span class="label-text">Prompt Template (Optional)</span>
+          </label>
+          <select
+            id="prompt"
+            class="select select-bordered w-full"
+            bind:value={selectedPromptId}
+            on:change={handlePromptChange}
+          >
+            <option value="">-- None (Custom Instructions) --</option>
+            {#each prompts as prompt}
+              <option value={prompt.id}>{prompt.name}</option>
+            {/each}
+          </select>
+          {#if selectedPromptId}
+            <label class="label">
+              <span class="label-text-alt text-info">
+                {prompts.find(p => p.id === selectedPromptId)?.description || ''}
+              </span>
+            </label>
+          {/if}
+        </div>
+
         <!-- Instructions -->
         <div class="form-control w-full mb-4">
           <label class="label" for="instructions">
@@ -526,6 +866,9 @@
           <button class="btn btn-primary" on:click={createAgent}>Create</button>
         </div>
       </div>
-    </div>
+      <form method="dialog" class="modal-backdrop">
+        <button on:click={closeAgentModal}>close</button>
+      </form>
+    </dialog>
   {/if}
 </div>

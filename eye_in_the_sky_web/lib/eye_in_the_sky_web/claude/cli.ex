@@ -93,12 +93,14 @@ defmodule EyeInTheSkyWeb.Claude.CLI do
     * `:model` - Model to use. Default: "sonnet"
     * `:project_path` - Working directory. Default: current directory
     * `:channel_id` - Channel ID for routing messages
+    * `:prompt_name` - Name of the prompt template used (optional)
     * `:caller` - PID to send output to. Default: self()
   """
   def spawn_channel_agent(session_id, agent_id, instructions, opts \\ []) do
     model = Keyword.get(opts, :model, "sonnet")
     project_path = Keyword.get(opts, :project_path, File.cwd!())
     channel_id = Keyword.get(opts, :channel_id)
+    prompt_name = Keyword.get(opts, :prompt_name)
     caller = Keyword.get(opts, :caller, self())
 
     case find_claude_binary() do
@@ -106,41 +108,66 @@ defmodule EyeInTheSkyWeb.Claude.CLI do
         # Build description with session-id and agent-id
         description = "session-id #{session_id} agent-id #{agent_id}"
 
-        # Build args: --dangerously-skip-permissions --session-id UUID "description" -p "instructions"
+        # Build initialization prompt with Eye in the Sky MCP call
+        init_prompt = build_init_prompt(session_id, agent_id, prompt_name, instructions)
+
+        # Build args: --dangerously-skip-permissions --session-id UUID "description" -p "init_prompt"
         args = [
           "--dangerously-skip-permissions",
           "--session-id", session_id,
           description,
-          "-p", instructions,
+          "-p", init_prompt,
           "--model", model,
-          "--output-format", "stream-json"
+          "--output-format", "stream-json",
+          "--verbose"
         ]
 
-        Logger.info("🚀 SPAWNING CHANNEL AGENT: #{claude_path} #{Enum.join(args, " ")}")
-        Logger.info("Project path: #{project_path}")
-        Logger.info("Channel ID: #{channel_id}")
-
-        session_ref = make_ref()
-
-        # Spawn output handler with channel_id context
-        handler_pid = spawn_link(fn ->
-          receive do
-            {:port, port} ->
-              handle_channel_output(port, session_ref, caller, channel_id, session_id)
+        # Build full command for debugging with proper quoting
+        quoted_args = Enum.map_join(args, " ", fn arg ->
+          if String.contains?(arg, ["\n", " ", "\"", "'", "{", "}"]) do
+            # Escape and quote multi-line or special args
+            escaped = String.replace(arg, "\"", "\\\"")
+            "\"#{escaped}\""
+          else
+            arg
           end
         end)
 
-        # Spawn Claude process
-        script_args = ["-q", "/dev/null", claude_path] ++ args
+        full_command = """
+        cd #{project_path} && \\
+        #{claude_path} #{quoted_args}
+        """
 
+        # Save command to file for debugging
+        command_file = "/tmp/claude_spawn_command_#{session_id}.sh"
+        File.write!(command_file, full_command)
+
+        Logger.info("🚀 SPAWNING CHANNEL AGENT: #{claude_path} #{Enum.join(args, " ")}")
+        Logger.info("📂 Project path: #{project_path}")
+        Logger.info("💬 Channel ID: #{channel_id}")
+        Logger.info("📏 Init prompt length: #{String.length(init_prompt)} chars")
+        Logger.info("👀 Init prompt preview: #{String.slice(init_prompt, 0, 200)}...")
+        Logger.info("💾 Full command saved to: #{command_file}")
+
+        session_ref = make_ref()
+
+        # Spawn output handler with channel_id context and line buffer
+        handler_pid = spawn_link(fn ->
+          receive do
+            {:port, port} ->
+              handle_channel_output(port, session_ref, caller, channel_id, session_id, "")
+          end
+        end)
+
+        # Spawn Claude process directly (without script wrapper for channel agents)
         port = Port.open(
-          {:spawn_executable, "/usr/bin/script"},
+          {:spawn_executable, claude_path},
           [
             :binary,
             :exit_status,
             :use_stdio,
             :stderr_to_stdout,
-            {:args, script_args},
+            {:args, args},
             {:cd, project_path},
             {:env, build_env()}
           ]
@@ -181,6 +208,31 @@ defmodule EyeInTheSkyWeb.Claude.CLI do
   end
 
   # Private functions
+
+  defp build_init_prompt(session_id, agent_id, prompt_name, instructions) do
+    prompt_info = if prompt_name, do: "\nPrompt Template: #{prompt_name}", else: ""
+
+    """
+    INITIALIZATION - Channel Agent Context:
+
+    Session ID: #{session_id}
+    Agent ID: #{agent_id}#{prompt_info}
+
+    CRITICAL FIRST STEP: Call i-start-session MCP tool to register with Eye in the Sky:
+
+    i-start-session({
+      "session_id": "#{session_id}",
+      "description": "#{instructions}",
+      "agent_description": "#{prompt_name || "Channel agent"}",
+      "project_name": "eye-in-the-sky",
+      "worktree_path": "#{File.cwd!()}"
+    })
+
+    COMMUNICATION: Use i-chat-send MCP tool to send all messages to the channel.
+
+    YOUR TASK: #{instructions}
+    """
+  end
 
   defp spawn_with_flag(prompt, flag, opts) do
     model = Keyword.get(opts, :model, "sonnet")
@@ -302,59 +354,76 @@ defmodule EyeInTheSkyWeb.Claude.CLI do
     end
   end
 
-  defp handle_channel_output(port, session_ref, caller, channel_id, session_id) do
+  defp handle_channel_output(port, session_ref, caller, channel_id, session_id, buffer) do
     require Logger
 
     receive do
       {^port, {:data, data}} ->
-        Logger.debug("Channel agent output received: #{byte_size(data)} bytes")
+        Logger.info("📨 Channel agent output received: #{byte_size(data)} bytes")
 
-        # Parse Claude's stream-json output and send as channel messages
-        data
-        |> String.split("\n", trim: true)
-        |> Enum.each(fn line ->
-          Logger.debug("Channel agent line: #{line}")
+        # Append new data to buffer
+        new_buffer = buffer <> data
 
-          # Try to parse JSON output
-          case Jason.decode(line) do
-            {:ok, %{"type" => "text", "text" => text}} when text != "" ->
-              # Claude text output - agent should use i-chat-send MCP tool
-              # This path is for fallback/legacy stdout parsing
-              Logger.debug("Claude stdout text (agent should use i-chat-send instead): #{text}")
+        # Split by newlines, keeping incomplete last line in buffer
+        lines = String.split(new_buffer, "\n")
+        {complete_lines, remaining} = case List.pop_at(lines, -1) do
+          {last, rest} ->
+            # If data ended with newline, last will be empty string
+            if String.ends_with?(data, "\n") do
+              {lines, ""}
+            else
+              {rest, last || ""}
+            end
+        end
 
-            {:ok, %{"type" => "error", "error" => error_msg}} ->
-              Logger.error("Claude error: #{error_msg}")
+        # Process complete lines
+        Enum.each(complete_lines, fn line ->
+          unless line == "" do
+            Logger.info("📄 Channel agent line: #{line}")
 
-              # Send error as system message
-              {:ok, error_message} = EyeInTheSkyWeb.Messages.send_channel_message(%{
-                channel_id: channel_id,
-                session_id: "system",
-                sender_role: "system",
-                recipient_role: "user",
-                provider: "system",
-                body: "⚠️ Agent error: #{error_msg}"
-              })
+            # Try to parse JSON output
+            case Jason.decode(line) do
+              {:ok, %{"type" => "text", "text" => text}} when text != "" ->
+                # Claude text output - agent should use i-chat-send MCP tool
+                # This path is for fallback/legacy stdout parsing
+                Logger.debug("Claude stdout text (agent should use i-chat-send instead): #{text}")
 
-              Phoenix.PubSub.broadcast(
-                EyeInTheSkyWeb.PubSub,
-                "channel:#{channel_id}:messages",
-                {:new_message, error_message}
-              )
+              {:ok, %{"type" => "error", "error" => error_msg}} ->
+                Logger.error("Claude error: #{error_msg}")
 
-            {:ok, _other} ->
-              # Other JSON types (metadata, thinking, etc.) - log but don't display
-              Logger.debug("Claude metadata: #{line}")
+                # Send error as system message
+                {:ok, error_message} = EyeInTheSkyWeb.Messages.send_channel_message(%{
+                  channel_id: channel_id,
+                  session_id: "system",
+                  sender_role: "system",
+                  recipient_role: "user",
+                  provider: "system",
+                  body: "⚠️ Agent error: #{error_msg}"
+                })
 
-            {:error, _} ->
-              # Not JSON - might be stderr or startup messages
-              Logger.debug("Non-JSON output: #{line}")
+                Phoenix.PubSub.broadcast(
+                  EyeInTheSkyWeb.PubSub,
+                  "channel:#{channel_id}:messages",
+                  {:new_message, error_message}
+                )
+
+              {:ok, _other} ->
+                # Other JSON types (metadata, thinking, etc.) - log but don't display
+                Logger.debug("Claude metadata: #{line}")
+
+              {:error, err} ->
+                # Not JSON - might be stderr or startup messages
+                Logger.warning("⚠  FAILED TO PARSE JSON: #{inspect(err)} - Line: #{line}")
+            end
           end
         end)
 
-        handle_channel_output(port, session_ref, caller, channel_id, session_id)
+        handle_channel_output(port, session_ref, caller, channel_id, session_id, remaining)
 
       {^port, {:exit_status, status}} ->
-        Logger.info("Channel agent process exited with status #{status}")
+        Logger.error("❌ Channel agent process exited with status #{status}")
+        Logger.error("💀 Session ID: #{session_id}")
+        Logger.error("📡 Channel ID: #{channel_id}")
 
         # Send exit notification
         {:ok, exit_msg} = EyeInTheSkyWeb.Messages.send_channel_message(%{
