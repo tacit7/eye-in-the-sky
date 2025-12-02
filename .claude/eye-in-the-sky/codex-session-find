@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+"""
+codex-session-find
+------------------
+Find a Codex/Claude CLI session_id by searching ~/.codex/history.jsonl
+for a provided agent identifier string (exact or substring).
+
+Usage:
+  .claude/eye-in-the-sky/codex-session-find <agent_id>
+  .claude/eye-in-the-sky/codex-session-find <agent_id> --file /path/to/history.jsonl
+
+Behavior:
+  - Scans the JSONL history file (default: ~/.codex/history.jsonl), where each
+    line is a JSON object. Example fields commonly present:
+      {"session_id": "...", "ts": 1764499478, "text": "..."}
+  - Filters lines by substring match of the provided agent_id string.
+  - Parses matching lines as JSON and extracts the 'session_id'.
+  - If multiple matches exist, returns the most recent by numeric 'ts' value
+    (falls back to later line order if 'ts' is missing/non-numeric).
+  - Prints only the session_id to stdout for easy scripting.
+
+Exit codes:
+  0  success
+  1  no matching session found for the provided agent identifier
+  2  history file missing or unreadable
+"""
+
+import argparse
+import json
+import os
+import sys
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="codex-session-find",
+        description="Find session_id in ~/.codex/history.jsonl for a given agent identifier",
+    )
+    parser.add_argument("agent_id", help="Agent identifier string to search for (substring match)")
+    parser.add_argument(
+        "-f",
+        "--file",
+        default=os.path.expanduser("~/.codex/history.jsonl"),
+        help="Path to history JSONL file (default: ~/.codex/history.jsonl)",
+    )
+
+    args = parser.parse_args()
+
+    history_path = os.path.expanduser(args.file)
+    if not os.path.exists(history_path):
+        print(f"error: history file not found: {history_path}", file=sys.stderr)
+        sys.exit(2)
+
+    agent_str = args.agent_id
+    # Tracks the best (latest) match seen so far.
+    # Structure: {"session": str, "ts": int|float, "line": int}
+    best = None
+
+    try:
+        with open(history_path, "r", encoding="utf-8") as f:
+            for ln, line in enumerate(f, start=1):
+                # Fast path: only inspect lines that contain the agent string
+                if agent_str not in line:
+                    continue
+                # Parse JSONL line; skip invalid lines gracefully
+                try:
+                    obj = json.loads(line)
+                except Exception:
+                    continue
+                session_id = obj.get("session_id")
+                if not session_id:
+                    continue
+                ts = obj.get("ts", 0)
+                # Prefer the highest numeric timestamp; if missing, later lines win
+                if best is None:
+                    best = {"session": session_id, "ts": ts, "line": ln}
+                else:
+                    prev_ts = best.get("ts", 0)
+                    # Choose by numeric ts when possible; otherwise by line number
+                    use_new = False
+                    if isinstance(ts, (int, float)) and isinstance(prev_ts, (int, float)):
+                        use_new = ts >= prev_ts
+                    else:
+                        use_new = ln >= best.get("line", 0)
+                    if use_new:
+                        best = {"session": session_id, "ts": ts, "line": ln}
+    except FileNotFoundError:
+        print(f"error: history file not found: {history_path}", file=sys.stderr)
+        sys.exit(2)
+    except Exception as e:
+        print(f"error: failed reading {history_path}: {e}", file=sys.stderr)
+        sys.exit(2)
+
+    if not best:
+        print(
+            f"error: no session_id found in {history_path} for agent identifier: {agent_str}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    # Print only the session_id for easy scripting
+    print(best["session"]) 
+
+
+if __name__ == "__main__":
+    main()

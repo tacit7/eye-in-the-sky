@@ -36,6 +36,24 @@ defmodule EyeInTheSkyWeb.Agents do
   end
 
   @doc """
+  Returns counts of agents by status for the given project.
+  Returns a map like %{active: 2, idle: 1, working: 3, completed: 5, failed: 1}
+  """
+  def get_agent_status_counts(project_id \\ nil) do
+    query = if project_id do
+      from a in Agent, where: a.project_id == ^project_id
+    else
+      Agent
+    end
+
+    query
+    |> group_by([a], a.status)
+    |> select([a], {a.status, count(a.id)})
+    |> Repo.all()
+    |> Enum.into(%{})
+  end
+
+  @doc """
   Gets a single agent.
 
   Raises `Ecto.NoResultsError` if the Agent does not exist.

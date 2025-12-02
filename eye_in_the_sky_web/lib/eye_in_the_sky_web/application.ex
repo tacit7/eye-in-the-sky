@@ -18,6 +18,8 @@ defmodule EyeInTheSkyWeb.Application do
       {Phoenix.PubSub, name: EyeInTheSkyWeb.PubSub},
       # NATS consumer for agent messaging
       EyeInTheSkyWeb.NATS.Consumer,
+      # Message broadcaster for external tool integration
+      EyeInTheSkyWeb.Messages.Broadcaster,
       # Claude CLI session manager
       EyeInTheSkyWeb.Claude.SessionManager,
       # Start to serve requests, typically the last entry

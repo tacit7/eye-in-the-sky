@@ -57,7 +57,7 @@ func (m *Model) handleListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.config.Theme = "dark"
 		}
 		// Reinitialize styles with new theme
-		m.styles = NewStyles(m.theme)
+		m.styles = createStyles(m.theme)
 		// Save config to persist theme choice
 		_ = SaveConfig(m.config)
 		m.statusMsg = "Theme: " + m.theme.Name

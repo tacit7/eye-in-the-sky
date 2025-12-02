@@ -37,6 +37,7 @@ import CommitsTab from "../svelte/components/tabs/CommitsTab.svelte"
 import LogsTab from "../svelte/components/tabs/LogsTab.svelte"
 import NotesTab from "../svelte/components/tabs/NotesTab.svelte"
 import AgentDetail from "../svelte/components/AgentDetail.svelte"
+import AgentMessagesPanel from "../svelte/components/tabs/AgentMessagesPanel.svelte"
 
 let Hooks = getHooks({
   SessionsSidebar,
@@ -46,7 +47,8 @@ let Hooks = getHooks({
   CommitsTab,
   LogsTab,
   NotesTab,
-  AgentDetail
+  AgentDetail,
+  AgentMessagesPanel
 })
 Hooks.CopyToClipboard = CopyToClipboard
 Hooks.CopySessionId = CopySessionId

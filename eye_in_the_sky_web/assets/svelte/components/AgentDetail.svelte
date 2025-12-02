@@ -64,8 +64,19 @@
     live.pushEvent("change_tab", { tab })
   }
 
+  let copied = false
+  let copiedTimeout
+
   function copySessionId() {
-    navigator.clipboard.writeText(header.session_id)
+    navigator.clipboard.writeText(header.session_id).then(() => {
+      copied = true
+      if (copiedTimeout) clearTimeout(copiedTimeout)
+      copiedTimeout = setTimeout(() => {
+        copied = false
+      }, 2000)
+    }).catch(err => {
+      console.error('Failed to copy session ID:', err)
+    })
   }
 </script>
 
@@ -96,9 +107,27 @@
 
             <!-- Meta chips -->
             <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-xs sm:text-sm">
-              <div class="bg-base-200 rounded-lg px-3 py-1.5">
-                <span class="text-base-content/70 font-medium">Session</span>
-                <span class="ml-2 font-mono font-semibold">#{shortId(header.session_id)}</span>
+              <div class="bg-base-200 rounded-lg px-3 py-1.5 flex items-center justify-between gap-2">
+                <div>
+                  <span class="text-base-content/70 font-medium">Session</span>
+                  <span class="ml-2 font-mono font-semibold">#{shortId(header.session_id)}</span>
+                </div>
+                <button
+                  on:click={copySessionId}
+                  class="btn btn-ghost btn-xs btn-circle {copied ? 'btn-success' : ''}"
+                  title={copied ? 'Copied!' : 'Copy full session ID'}
+                  aria-label="Copy session ID"
+                >
+                  {#if copied}
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                    </svg>
+                  {:else}
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                  {/if}
+                </button>
               </div>
 
               <div class="bg-base-200 rounded-lg px-3 py-1.5">

@@ -261,6 +261,32 @@ func (s *Server) registerTools() {
 		Description: "Speak a message aloud using macOS text-to-speech with premium voices",
 	}, s.handleISpeak)
 
+	// Subagent Prompts Tools
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "i-prompt-create",
+		Description: "Create a new subagent prompt template (global or project-scoped)",
+	}, s.handlePromptCreate)
+
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "i-prompt-get",
+		Description: "Retrieve a subagent prompt by slug or ID (project-aware fallback)",
+	}, s.handlePromptGet)
+
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "i-prompt-list",
+		Description: "List subagent prompts with filtering and deduplication options",
+	}, s.handlePromptList)
+
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "i-prompt-update",
+		Description: "Update a subagent prompt with optimistic locking",
+	}, s.handlePromptUpdate)
+
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "i-prompt-delete",
+		Description: "Delete a subagent prompt (soft delete by default)",
+	}, s.handlePromptDelete)
+
 	// NATS Messaging Tools
 	mcp.AddTool(s.mcp, &mcp.Tool{
 		Name: "i-nats-send",
@@ -296,6 +322,25 @@ Returns messages where receiver_id matches your session_id or is empty (broadcas
 Example:
 {"session_id": "abc123", "last_sequence": 5, "max_messages": 20}`,
 	}, s.handleNATSListen)
+
+	// Chat Messaging Tool
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name: "i-chat-send",
+		Description: `Send a message directly to a chat channel
+
+Allows agents to proactively send messages to channels without going through stdout.
+
+Parameters:
+- channel_id (required): Channel ID to send message to
+- session_id (required): Session ID of the sender
+- body (required): Message body text
+- sender_role (optional): Sender role (default: 'agent')
+- recipient_role (optional): Recipient role (default: 'user')
+- provider (optional): Provider name (default: 'claude')
+
+Example:
+{"channel_id": "channel-uuid", "session_id": "session-uuid", "body": "Task completed successfully"}`,
+	}, s.handleChatSend)
 }
 
 // Tool handlers using the generic AddTool pattern
@@ -659,6 +704,73 @@ func (s *Server) handleISpeak(ctx context.Context, req *mcp.CallToolRequest, arg
 	}, result, nil
 }
 
+// Subagent Prompts Handlers
+
+func (s *Server) handlePromptCreate(ctx context.Context, req *mcp.CallToolRequest, args CreatePromptArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.CreateSubagentPrompt(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: result.Message},
+		},
+	}, result, nil
+}
+
+func (s *Server) handlePromptGet(ctx context.Context, req *mcp.CallToolRequest, args GetPromptArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.GetSubagentPrompt(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: result.Message},
+		},
+	}, result, nil
+}
+
+func (s *Server) handlePromptList(ctx context.Context, req *mcp.CallToolRequest, args ListPromptsArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.ListSubagentPrompts(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: result.Message},
+		},
+	}, result, nil
+}
+
+func (s *Server) handlePromptUpdate(ctx context.Context, req *mcp.CallToolRequest, args UpdatePromptArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.UpdateSubagentPrompt(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: result.Message},
+		},
+	}, result, nil
+}
+
+func (s *Server) handlePromptDelete(ctx context.Context, req *mcp.CallToolRequest, args DeletePromptArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.DeleteSubagentPrompt(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: result.Message},
+		},
+	}, result, nil
+}
+
 func (s *Server) handleNATSSend(ctx context.Context, req *mcp.CallToolRequest, args NATSSendArgs) (*mcp.CallToolResult, any, error) {
 	result, err := s.tools.NATSSend(args)
 	if err != nil {
@@ -674,6 +786,19 @@ func (s *Server) handleNATSSend(ctx context.Context, req *mcp.CallToolRequest, a
 
 func (s *Server) handleNATSListen(ctx context.Context, req *mcp.CallToolRequest, args NATSListenArgs) (*mcp.CallToolResult, any, error) {
 	result, err := s.tools.NATSListen(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: result.Message},
+		},
+	}, result, nil
+}
+
+func (s *Server) handleChatSend(ctx context.Context, req *mcp.CallToolRequest, args ChatSendArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.ChatSend(args)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -30,7 +30,7 @@
 
   function renderMarkdown(content) {
     try {
-      return marked.parse(content || '', { async: false })
+      return marked.parse(content || '')
     } catch (e) {
       console.error('Markdown parse error:', e)
       return content || ''

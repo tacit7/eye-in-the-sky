@@ -14,6 +14,8 @@ defmodule EyeInTheSkyWeb.Messages.Message do
     field :body, :string
     field :status, :string, default: "sent"
     field :metadata, :map
+    field :thread_reply_count, :integer, default: 0
+    field :last_thread_reply_at, :utc_datetime
 
     belongs_to :project, EyeInTheSkyWeb.Projects.Project, type: :integer
     belongs_to :session, EyeInTheSkyWeb.Sessions.Session,
@@ -21,7 +23,23 @@ defmodule EyeInTheSkyWeb.Messages.Message do
       foreign_key: :session_id,
       type: :string
 
+    belongs_to :channel, EyeInTheSkyWeb.Channels.Channel,
+      define_field: false,
+      foreign_key: :channel_id,
+      type: :string
+
+    belongs_to :parent_message, __MODULE__,
+      define_field: false,
+      foreign_key: :parent_message_id,
+      type: :string
+
+    has_many :thread_replies, __MODULE__, foreign_key: :parent_message_id
+    has_many :reactions, EyeInTheSkyWeb.Messages.MessageReaction
+    has_many :attachments, EyeInTheSkyWeb.Messages.FileAttachment
+
     field :session_id, :string
+    field :channel_id, :string
+    field :parent_message_id, :string
     field :inserted_at, :utc_datetime
     field :updated_at, :utc_datetime
   end
@@ -33,6 +51,8 @@ defmodule EyeInTheSkyWeb.Messages.Message do
       :id,
       :project_id,
       :session_id,
+      :channel_id,
+      :parent_message_id,
       :sender_role,
       :recipient_role,
       :provider,
@@ -41,6 +61,8 @@ defmodule EyeInTheSkyWeb.Messages.Message do
       :body,
       :status,
       :metadata,
+      :thread_reply_count,
+      :last_thread_reply_at,
       :inserted_at,
       :updated_at
     ])
