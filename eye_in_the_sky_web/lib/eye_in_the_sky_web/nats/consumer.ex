@@ -23,11 +23,10 @@ defmodule EyeInTheSkyWeb.NATS.Consumer do
     # Register connection globally
     Process.register(conn, :gnat)
 
-    # Subscribe to agent reply topics
-    {:ok, _sub} = Gnat.sub(conn, self(), "events.chat")
-    {:ok, _sub} = Gnat.sub(conn, self(), "events.protocol")
+    # Subscribe to all events.* topics with wildcard
+    {:ok, _sub} = Gnat.sub(conn, self(), "events.>")
 
-    Logger.info("NATS Consumer started, subscribed to events.chat and events.protocol")
+    Logger.info("NATS Consumer started, subscribed to events.>")
 
     {:ok, %{conn: conn}}
   end
@@ -38,10 +37,25 @@ defmodule EyeInTheSkyWeb.NATS.Consumer do
 
     case Jason.decode(body) do
       {:ok, envelope} ->
+        # Broadcast ALL messages to NATS viewer
+        Phoenix.PubSub.broadcast(
+          EyeInTheSkyWeb.PubSub,
+          "nats:events",
+          {:nats_message, topic, envelope}
+        )
+
+        # Also handle specific message types
         handle_envelope(envelope, topic)
 
       {:error, reason} ->
         Logger.error("Failed to decode NATS message: #{inspect(reason)}")
+
+        # Still broadcast raw messages to viewer
+        Phoenix.PubSub.broadcast(
+          EyeInTheSkyWeb.PubSub,
+          "nats:events",
+          {:nats_message, topic, body}
+        )
     end
 
     {:noreply, state}

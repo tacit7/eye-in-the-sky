@@ -113,6 +113,17 @@ defmodule EyeInTheSkyWeb.Sessions do
   end
 
   @doc """
+  Lists all sessions with agent preloaded for the overview page.
+  Returns sessions ordered by most recent first.
+  """
+  def list_sessions_with_agent do
+    Session
+    |> preload(:agent)
+    |> order_by([s], desc: s.started_at)
+    |> Repo.all()
+  end
+
+  @doc """
   Returns session overview rows for the sessions table.
   Joins sessions with agents and projects to get complete information.
   """

@@ -1,7 +1,7 @@
 defmodule EyeInTheSkyWebWeb.AgentLive.Index do
   use EyeInTheSkyWebWeb, :live_view
 
-  alias EyeInTheSkyWeb.Agents
+  alias EyeInTheSkyWeb.Sessions
   alias Phoenix.LiveView.JS
   import EyeInTheSkyWebWeb.Helpers.ViewHelpers
 
@@ -9,15 +9,23 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Index do
 
   @impl true
   def mount(_params, _session, socket) do
-    agents = Agents.list_agents_with_sessions()
+    # Subscribe to agent updates if connected
+    if connected?(socket) do
+      Phoenix.PubSub.subscribe(EyeInTheSkyWeb.PubSub, "agents")
+      # Refresh agents list every 30 seconds (less aggressive)
+      :timer.send_interval(30_000, self(), :refresh_agents)
+    end
+
+    sessions = Sessions.list_sessions_with_agent()
 
     socket =
       socket
-      |> assign(:page_title, "Eye in the Sky - Agents")
-      |> assign(:agents, agents)
+      |> assign(:page_title, "Eye in the Sky - Sessions")
+      |> assign(:sessions, sessions)
       |> assign(:search_query, "")
       |> assign(:status_filter, "all")
-      |> assign(:sort_by, "updated_desc")
+      |> assign(:sort_by, "recent")
+      |> assign(:filtered_sessions, sessions)  # Initialize filtered_sessions
 
     {:ok, socket}
   end
@@ -29,17 +37,51 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Index do
 
   @impl true
   def handle_event("search", %{"query" => query}, socket) do
-    {:noreply, assign(socket, :search_query, query)}
+    socket = socket
+      |> assign(:search_query, query)
+      |> update_filtered_sessions()
+    {:noreply, socket}
   end
 
   @impl true
   def handle_event("filter_status", %{"status" => status}, socket) do
-    {:noreply, assign(socket, :status_filter, status)}
+    IO.puts("Filter clicked: #{status}")
+    socket = socket
+      |> assign(:status_filter, status)
+      |> update_filtered_sessions()
+    {:noreply, socket}
   end
 
   @impl true
   def handle_event("sort", %{"by" => sort_by}, socket) do
-    {:noreply, assign(socket, :sort_by, sort_by)}
+    socket = socket
+      |> assign(:sort_by, sort_by)
+      |> update_filtered_sessions()
+    {:noreply, socket}
+  end
+
+  defp update_filtered_sessions(socket) do
+    filtered = filter_and_sort_sessions(socket.assigns)
+    assign(socket, :filtered_sessions, filtered)
+  end
+
+  @impl true
+  def handle_info(:refresh_agents, socket) do
+    sessions = Sessions.list_sessions_with_agent()
+    socket = socket
+      |> assign(:sessions, sessions)
+      |> update_filtered_sessions()
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:agent_updated, _agent}, socket) do
+    # Reload sessions when we receive PubSub notifications
+    sessions = Sessions.list_sessions_with_agent()
+    socket = socket
+      |> assign(:sessions, sessions)
+      |> update_filtered_sessions()
+    {:noreply, socket}
   end
 
   defp apply_action(socket, :index, _params) do
@@ -49,9 +91,6 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Index do
 
   @impl true
   def render(assigns) do
-    # Apply filters and search
-    assigns = assign(assigns, :filtered_agents, filter_and_sort_agents(assigns))
-
     ~H"""
     <div class="px-4 sm:px-6 lg:px-8">
       <div class="sm:flex sm:items-center sm:justify-between">
@@ -145,32 +184,36 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Index do
             </tr>
           </thead>
           <tbody>
-            <%= if @filtered_agents == [] do %>
+            <%= if @filtered_sessions == [] do %>
               <tr>
                 <td colspan="5" class="text-center">
-                  No agents found matching your criteria.
+                  No sessions found matching your criteria.
                 </td>
               </tr>
             <% else %>
-              <%= for agent <- @filtered_agents do %>
+              <%= for session <- @filtered_sessions do %>
                 <tr
-                  phx-click={JS.navigate(~p"/agents/#{agent.id}")}
+                  phx-click={JS.navigate(~p"/agents/#{session.agent.id}")}
                   class="hover cursor-pointer group"
                 >
                   <td>
-                    {render_status_badge(assigns, agent)}
+                    <%= if is_nil(session.ended_at) do %>
+                      <span class="badge badge-success badge-sm">Active</span>
+                    <% else %>
+                      <span class="badge badge-ghost badge-sm">Completed</span>
+                    <% end %>
                   </td>
                   <td>
                     <div class="flex items-center gap-2">
                       <span class="font-mono font-semibold">
-                        {agent.session_id && String.slice(agent.session_id, 0..7) || "—"}
+                        {session.id && String.slice(session.id, 0..7) || "—"}
                       </span>
-                      <%= if agent.session_id do %>
+                      <%= if session.id do %>
                         <button
-                          id={"copy-btn-#{agent.session_id}"}
+                          id={"copy-btn-#{session.id}"}
                           type="button"
                           phx-hook="CopySessionId"
-                          data-session-id={agent.session_id}
+                          data-session-id={session.id}
                           class="relative text-base-content/40 hover:text-base-content/70 transition-colors"
                           aria-label="Copy full session ID"
                         >
@@ -178,20 +221,22 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Index do
                         </button>
                       <% end %>
                     </div>
-                    {render_agent_meta(assigns, agent)}
+                    <div class="mt-0.5 text-xs text-gray-500 dark:text-gray-400 font-normal">
+                      <span>{session.name || "Unnamed session"}</span>
+                    </div>
                   </td>
                   <td>
-                    {render_project_badge(assigns, agent.project_name)}
+                    {render_project_badge(assigns, session.agent.project_name)}
                   </td>
                   <td>
-                    <div class="line-clamp-1" title={agent.description || agent.feature_description}>
-                      {agent.description || agent.feature_description || "—"}
+                    <div class="line-clamp-1" title={session.agent.description}>
+                      {session.agent.description || "—"}
                     </div>
                   </td>
                   <td>
                     <div class="flex items-center justify-between gap-2">
-                      <span class="text-sm" title={format_datetime_full(agent.last_activity_at)}>
-                        {relative_time(agent.last_activity_at)}
+                      <span class="text-sm" title={format_datetime_full(session.started_at)}>
+                        {relative_time(session.started_at)}
                       </span>
                       <svg class="h-5 w-5 text-base-content/40 opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 20 20" fill="currentColor">
                         <path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd" />
@@ -209,73 +254,66 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Index do
   end
 
 
-  defp filter_and_sort_agents(assigns) do
-    agents = assigns.agents
+  defp filter_and_sort_sessions(assigns) do
+    sessions = assigns.sessions
     query = String.downcase(assigns.search_query)
     status_filter = assigns.status_filter
 
-    agents
-    |> Enum.filter(fn agent ->
+    IO.puts("Filtering sessions: status_filter=#{status_filter}, total_sessions=#{length(sessions)}")
+
+    sessions
+    |> Enum.filter(fn session ->
       # Search filter
       search_match =
         if query == "" do
           true
         else
-          String.contains?(String.downcase(agent.session_id || ""), query) ||
-            String.contains?(String.downcase(agent.description || ""), query) ||
-            String.contains?(String.downcase(agent.feature_description || ""), query) ||
-            String.contains?(String.downcase(agent.project_name || ""), query)
+          String.contains?(String.downcase(session.id || ""), query) ||
+            String.contains?(String.downcase(session.name || ""), query) ||
+            String.contains?(String.downcase(session.agent.description || ""), query) ||
+            String.contains?(String.downcase(session.agent.project_name || ""), query)
         end
 
-      # Status filter
+      # Status filter - based on session ended_at
       status_match =
         case status_filter do
           "all" -> true
-          "stale" -> is_stale?(agent, @stale_threshold_hours)
-          status -> agent.status == status
+          "active" -> is_nil(session.ended_at)  # Session hasn't ended
+          "completed" -> not is_nil(session.ended_at)  # Session has ended
+          "stale" -> is_session_stale?(session, @stale_threshold_hours)
+          _ -> true
         end
 
       search_match && status_match
     end)
-    |> sort_agents(assigns.sort_by)
+    |> tap(fn filtered ->
+      IO.puts("After filtering: #{length(filtered)} sessions (filter: #{status_filter})")
+    end)
+    |> sort_sessions(assigns.sort_by)
   end
 
-  defp sort_agents(agents, "updated_desc") do
-    Enum.sort_by(agents, &parse_last_activity/1, {:desc, DateTime})
+  defp sort_sessions(sessions, "recent") do
+    Enum.sort_by(sessions, &parse_started_at/1, {:desc, DateTime})
   end
 
-  defp parse_last_activity(%{last_activity_at: nil}), do: ~U[1970-01-01 00:00:00Z]
-  defp parse_last_activity(%{last_activity_at: %DateTime{} = dt}), do: dt
-  defp parse_last_activity(%{last_activity_at: str}) when is_binary(str) do
+  defp parse_started_at(%{started_at: nil}), do: ~U[1970-01-01 00:00:00Z]
+  defp parse_started_at(%{started_at: %DateTime{} = dt}), do: dt
+  defp parse_started_at(%{started_at: str}) when is_binary(str) do
     case parse_datetime(str) do
       {:ok, dt} -> dt
       :error -> ~U[1970-01-01 00:00:00Z]
     end
   end
 
-  defp render_agent_meta(assigns, agent) do
-    # Count sessions and tasks from preloaded associations
-    session_count = if agent.sessions, do: length(agent.sessions), else: 0
-    task_count = if agent.tasks, do: length(agent.tasks), else: 0
-
-    assigns = Map.merge(assigns, %{
-      session_count: session_count,
-      task_count: task_count,
-      last_active: relative_time(agent.last_activity_at)
-    })
-
-    ~H"""
-    <div class="mt-0.5 text-xs text-gray-500 dark:text-gray-400 font-normal">
-      <span class="inline-flex items-center gap-1.5">
-        <span>Session #{@session_count || "—"}</span>
-        <span class="text-gray-400">·</span>
-        <span>{@last_active}</span>
-        <%= if @task_count > 0 do %>
-          <span class="text-gray-400">·</span>
-          <span>{@task_count} tasks</span>
-        <% end %>
-      </span>
-    </div>
-    """
+  defp is_session_stale?(%{ended_at: ended_at}, _hours) when not is_nil(ended_at), do: false
+  defp is_session_stale?(%{started_at: started_at}, hours) do
+    case parse_datetime(started_at) do
+      {:ok, dt} ->
+        now = DateTime.utc_now()
+        diff_hours = DateTime.diff(now, dt, :hour)
+        diff_hours > hours
+      :error -> false
+    end
   end
+
 end

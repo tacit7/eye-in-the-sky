@@ -666,6 +666,24 @@ func getLatestCommits(count int, workDir string) ([]string, []string, error) {
 
 // StartSession implements the i-start-session tool
 func (t *Tools) StartSession(args StartSessionArgs) (StartSessionResult, error) {
+	// Check if session already exists first (idempotent behavior)
+	sessionID := args.SessionID
+	existingSession, err := t.db.GetSession(sessionID)
+	if err == nil && existingSession != nil {
+		// Session exists - return existing agent_id instead of failing
+		message := fmt.Sprintf("Session %s already exists, using existing agent %s",
+			existingSession.ID, existingSession.AgentID)
+		fmt.Fprintf(os.Stderr, "[DEBUG] %s\n", message)
+
+		return StartSessionResult{
+			Success:   true,
+			Message:   message,
+			AgentID:   existingSession.AgentID,
+			SessionID: existingSession.ID,
+		}, nil
+	}
+
+	// Session doesn't exist - create new agent and session
 	// Always generate a new UUID agent ID
 	agentID := utils.GenerateGitStyleAgentID()
 
@@ -778,9 +796,6 @@ func (t *Tools) StartSession(args StartSessionArgs) (StartSessionResult, error) 
 	if err := t.db.CreateAgent(agent); err != nil {
 		return StartSessionResult{}, fmt.Errorf("failed to create agent: %w", err)
 	}
-
-	// Use the mandatory session_id provided
-	sessionID := args.SessionID
 
 	// Use name if provided, otherwise use description as session name
 	sessionName := args.Name

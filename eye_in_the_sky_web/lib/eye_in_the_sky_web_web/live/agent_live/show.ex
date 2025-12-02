@@ -2,7 +2,7 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Show do
   use EyeInTheSkyWebWeb, :live_view
 
   alias EyeInTheSkyWeb.{Agents, Sessions, Messages}
-  alias EyeInTheSkyWeb.Claude.SessionManager
+  alias EyeInTheSkyWeb.Claude.{SessionManager, SessionReader}
   alias EyeInTheSkyWeb.NATS.Publisher
 
   @impl true
@@ -45,7 +45,7 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Show do
     # Load ONLY the data for the active tab
     tab_data =
       if active_session do
-        load_tab_data(active_tab, active_session.id)
+        load_tab_data(active_tab, active_session, dashboard_data.agent)
       else
         %{}
       end
@@ -181,7 +181,7 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Show do
           case result do
             {:ok, _session_ref} ->
               # Reload messages for the current tab
-              updated_messages = group_and_serialize_messages(Messages.list_messages_for_session(session_id))
+              updated_messages = group_and_serialize_messages(Messages.list_recent_messages(session_id, 10))
               {:noreply, assign(socket, :messages, updated_messages)}
 
             {:error, reason} ->
@@ -207,7 +207,7 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Show do
     session_id = socket.assigns.session_id
 
     # Reload messages and update UI
-    updated_messages = group_and_serialize_messages(Messages.list_messages_for_session(session_id))
+    updated_messages = group_and_serialize_messages(Messages.list_recent_messages(session_id, 10))
 
     # Update message count
     counts = Sessions.get_session_counts(session_id)
@@ -226,7 +226,7 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Show do
     # Just trigger a reload - the SessionManager already saved it to database
     if socket.assigns.active_tab == :messages do
       session_id = socket.assigns.session_id
-      updated_messages = group_and_serialize_messages(Messages.list_messages_for_session(session_id))
+      updated_messages = group_and_serialize_messages(Messages.list_recent_messages(session_id, 10))
       {:noreply, assign(socket, :messages, updated_messages)}
     else
       {:noreply, socket}
@@ -244,40 +244,56 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Show do
   end
 
   # Lazy load tab data
-  defp load_tab_data(:tasks, session_id) do
-    %{tasks: serialize_tasks(Sessions.load_session_tasks(session_id))}
+  defp load_tab_data(:tasks, session, _agent) do
+    %{tasks: serialize_tasks(Sessions.load_session_tasks(session.id))}
   end
 
-  defp load_tab_data(:commits, session_id) do
-    %{commits: serialize_commits(Sessions.load_session_commits(session_id))}
+  defp load_tab_data(:commits, session, _agent) do
+    %{commits: serialize_commits(Sessions.load_session_commits(session.id))}
   end
 
-  defp load_tab_data(:logs, session_id) do
-    %{logs: serialize_logs(Sessions.load_session_logs(session_id, limit: 100))}
+  defp load_tab_data(:logs, session, _agent) do
+    %{logs: serialize_logs(Sessions.load_session_logs(session.id, limit: 100))}
   end
 
-  defp load_tab_data(:context, session_id) do
-    %{context: serialize_context(Sessions.load_session_context(session_id))}
+  defp load_tab_data(:context, session, _agent) do
+    %{context: serialize_context(Sessions.load_session_context(session.id))}
   end
 
-  defp load_tab_data(:notes, session_id) do
-    %{notes: serialize_notes(Sessions.load_session_notes(session_id))}
+  defp load_tab_data(:notes, session, _agent) do
+    %{notes: serialize_notes(Sessions.load_session_notes(session.id))}
   end
 
-  defp load_tab_data(:messages, session_id) do
-    %{messages: group_and_serialize_messages(Messages.list_messages_for_session(session_id))}
+  defp load_tab_data(:messages, session, agent) do
+    # Read from Claude session file using session.id (not claude_session_id)
+    messages =
+      if agent.git_worktree_path do
+        case SessionReader.read_recent_messages(session.id, agent.git_worktree_path, 10) do
+          {:ok, raw_messages} ->
+            SessionReader.format_messages(raw_messages)
+
+          {:error, _} ->
+            # Fallback to database messages if Claude session file not found
+            Messages.list_recent_messages(session.id, 10)
+        end
+      else
+        # Fallback to database messages
+        Messages.list_recent_messages(session.id, 10)
+      end
+
+    %{messages: serialize_claude_messages(messages)}
   end
 
   # Serialization functions
   defp serialize_tasks(tasks) when is_list(tasks) do
     Enum.map(tasks, fn task ->
       %{
-        id: task.id,
+        id: to_string(task.id),  # Convert to string to prevent JavaScript precision loss
         title: task.title,
         description: task.description,
         priority: task.priority,
         state_name: task.state && task.state.name,
-        tags: task.tags && Enum.map(task.tags, &%{id: &1.id, name: &1.name}),
+        tags: task.tags && Enum.map(task.tags, &%{id: to_string(&1.id), name: &1.name}),
         created_at: task.created_at
       }
     end)
@@ -287,7 +303,7 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Show do
   defp serialize_commits(commits) when is_list(commits) do
     Enum.map(commits, fn commit ->
       %{
-        id: commit.id,
+        id: to_string(commit.id),  # Convert to string to prevent JavaScript precision loss
         commit_hash: commit.commit_hash,
         commit_message: commit.commit_message,
         created_at: commit.created_at
@@ -299,7 +315,7 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Show do
   defp serialize_logs(logs) when is_list(logs) do
     Enum.map(logs, fn log ->
       %{
-        id: log.id,
+        id: to_string(log.id),  # Convert to string to prevent JavaScript precision loss
         type: log.type,
         message: log.message,
         timestamp: log.timestamp
@@ -320,7 +336,7 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Show do
   defp serialize_notes(notes) when is_list(notes) do
     Enum.map(notes, fn note ->
       %{
-        id: note.id,
+        id: to_string(note.id),  # Convert to string to prevent JavaScript precision loss
         body: note.body,
         created_at: note.created_at
       }
@@ -331,7 +347,7 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Show do
   defp serialize_messages(messages) when is_list(messages) do
     Enum.map(messages, fn message ->
       %{
-        id: message.id,
+        id: to_string(message.id),  # Convert to string to prevent JavaScript precision loss
         sender_role: message.sender_role,
         recipient_role: message.recipient_role,
         direction: message.direction,
@@ -343,6 +359,51 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Show do
     end)
   end
   defp serialize_messages(_), do: []
+
+  defp serialize_claude_messages(messages) when is_list(messages) do
+    # Convert Claude messages to match UI expected format
+    # Group by consecutive sender to create message groups
+    messages
+    |> Enum.map(fn msg ->
+      %{
+        sender_role: msg[:role] || msg["role"],
+        direction: if((msg[:role] || msg["role"]) == "user", do: "outbound", else: "inbound"),
+        body: msg[:content] || msg["content"],
+        inserted_at: msg[:timestamp] || msg["timestamp"]
+      }
+    end)
+    |> Enum.chunk_by(&{&1.sender_role, &1.direction})
+    |> Enum.map(fn group ->
+      first_message = List.first(group)
+      last_message = List.last(group)
+
+      %{
+        sender_role: first_message.sender_role,
+        direction: first_message.direction,
+        provider: "claude",
+        timestamp: first_message.inserted_at,
+        date: parse_date_from_timestamp(first_message.inserted_at),
+        status: "delivered",
+        messages: Enum.map(group, fn msg ->
+          %{
+            body: msg.body,
+            inserted_at: msg.inserted_at
+          }
+        end)
+      }
+    end)
+    |> add_date_separators()
+  end
+  defp serialize_claude_messages(_), do: []
+
+  defp parse_date_from_timestamp(timestamp) when is_binary(timestamp) do
+    case DateTime.from_iso8601(timestamp) do
+      {:ok, dt, _} -> DateTime.to_date(dt)
+      _ -> Date.utc_today()
+    end
+  end
+  defp parse_date_from_timestamp(%DateTime{} = dt), do: DateTime.to_date(dt)
+  defp parse_date_from_timestamp(_), do: Date.utc_today()
 
   defp group_and_serialize_messages(messages) when is_list(messages) do
     messages
@@ -360,7 +421,7 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Show do
         status: last_message.status,
         messages: Enum.map(group, fn msg ->
           %{
-            id: msg.id,
+            id: to_string(msg.id),  # Convert to string to prevent JavaScript precision loss
             body: msg.body,
             inserted_at: msg.inserted_at
           }
