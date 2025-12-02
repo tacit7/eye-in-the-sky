@@ -85,6 +85,78 @@ defmodule EyeInTheSkyWeb.Claude.CLI do
   end
 
   @doc """
+  Spawns a channel agent with tracked session-id and agent-id.
+
+  Uses: claude --dangerously-skip-permissions --session-id UUID "session-id UUID agent-id UUID" -p "instructions"
+
+  ## Options
+    * `:model` - Model to use. Default: "sonnet"
+    * `:project_path` - Working directory. Default: current directory
+    * `:channel_id` - Channel ID for routing messages
+    * `:caller` - PID to send output to. Default: self()
+  """
+  def spawn_channel_agent(session_id, agent_id, instructions, opts \\ []) do
+    model = Keyword.get(opts, :model, "sonnet")
+    project_path = Keyword.get(opts, :project_path, File.cwd!())
+    channel_id = Keyword.get(opts, :channel_id)
+    caller = Keyword.get(opts, :caller, self())
+
+    case find_claude_binary() do
+      {:ok, claude_path} ->
+        # Build description with session-id and agent-id
+        description = "session-id #{session_id} agent-id #{agent_id}"
+
+        # Build args: --dangerously-skip-permissions --session-id UUID "description" -p "instructions"
+        args = [
+          "--dangerously-skip-permissions",
+          "--session-id", session_id,
+          description,
+          "-p", instructions,
+          "--model", model,
+          "--output-format", "stream-json"
+        ]
+
+        Logger.info("🚀 SPAWNING CHANNEL AGENT: #{claude_path} #{Enum.join(args, " ")}")
+        Logger.info("Project path: #{project_path}")
+        Logger.info("Channel ID: #{channel_id}")
+
+        session_ref = make_ref()
+
+        # Spawn output handler with channel_id context
+        handler_pid = spawn_link(fn ->
+          receive do
+            {:port, port} ->
+              handle_channel_output(port, session_ref, caller, channel_id, session_id)
+          end
+        end)
+
+        # Spawn Claude process
+        script_args = ["-q", "/dev/null", claude_path] ++ args
+
+        port = Port.open(
+          {:spawn_executable, "/usr/bin/script"},
+          [
+            :binary,
+            :exit_status,
+            :use_stdio,
+            :stderr_to_stdout,
+            {:args, script_args},
+            {:cd, project_path},
+            {:env, build_env()}
+          ]
+        )
+
+        Port.connect(port, handler_pid)
+        send(handler_pid, {:port, port})
+
+        {:ok, port, session_ref}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  @doc """
   Continues an existing session (uses `-c` flag).
   """
   def continue_session(prompt, opts \\ []) do
@@ -225,6 +297,104 @@ defmodule EyeInTheSkyWeb.Claude.CLI do
         300_000 ->
           Logger.warning("No output from Claude after 5 minutes, timing out")
           Port.close(port)  # Kill the subprocess to prevent zombie process
+          send(caller, {:claude_exit, session_ref, :timeout})
+          :ok
+    end
+  end
+
+  defp handle_channel_output(port, session_ref, caller, channel_id, session_id) do
+    require Logger
+
+    receive do
+      {^port, {:data, data}} ->
+        Logger.debug("Channel agent output received: #{byte_size(data)} bytes")
+
+        # Parse Claude's stream-json output and send as channel messages
+        data
+        |> String.split("\n", trim: true)
+        |> Enum.each(fn line ->
+          Logger.debug("Channel agent line: #{line}")
+
+          # Try to parse JSON output
+          case Jason.decode(line) do
+            {:ok, %{"type" => "text", "text" => text}} when text != "" ->
+              # Claude text output - agent should use i-chat-send MCP tool
+              # This path is for fallback/legacy stdout parsing
+              Logger.debug("Claude stdout text (agent should use i-chat-send instead): #{text}")
+
+            {:ok, %{"type" => "error", "error" => error_msg}} ->
+              Logger.error("Claude error: #{error_msg}")
+
+              # Send error as system message
+              {:ok, error_message} = EyeInTheSkyWeb.Messages.send_channel_message(%{
+                channel_id: channel_id,
+                session_id: "system",
+                sender_role: "system",
+                recipient_role: "user",
+                provider: "system",
+                body: "⚠️ Agent error: #{error_msg}"
+              })
+
+              Phoenix.PubSub.broadcast(
+                EyeInTheSkyWeb.PubSub,
+                "channel:#{channel_id}:messages",
+                {:new_message, error_message}
+              )
+
+            {:ok, _other} ->
+              # Other JSON types (metadata, thinking, etc.) - log but don't display
+              Logger.debug("Claude metadata: #{line}")
+
+            {:error, _} ->
+              # Not JSON - might be stderr or startup messages
+              Logger.debug("Non-JSON output: #{line}")
+          end
+        end)
+
+        handle_channel_output(port, session_ref, caller, channel_id, session_id)
+
+      {^port, {:exit_status, status}} ->
+        Logger.info("Channel agent process exited with status #{status}")
+
+        # Send exit notification
+        {:ok, exit_msg} = EyeInTheSkyWeb.Messages.send_channel_message(%{
+          channel_id: channel_id,
+          session_id: "system",
+          sender_role: "system",
+          recipient_role: "user",
+          provider: "system",
+          body: "Agent session ended (exit code: #{status})"
+        })
+
+        Phoenix.PubSub.broadcast(
+          EyeInTheSkyWeb.PubSub,
+          "channel:#{channel_id}:messages",
+          {:new_message, exit_msg}
+        )
+
+        send(caller, {:claude_exit, session_ref, status})
+        :ok
+
+      after
+        300_000 ->
+          Logger.warning("No output from channel agent after 5 minutes, timing out")
+          Port.close(port)
+
+          {:ok, timeout_msg} = EyeInTheSkyWeb.Messages.send_channel_message(%{
+            channel_id: channel_id,
+            session_id: "system",
+            sender_role: "system",
+            recipient_role: "user",
+            provider: "system",
+            body: "⏱️ Agent session timed out (no activity for 5 minutes)"
+          })
+
+          Phoenix.PubSub.broadcast(
+            EyeInTheSkyWeb.PubSub,
+            "channel:#{channel_id}:messages",
+            {:new_message, timeout_msg}
+          )
+
           send(caller, {:claude_exit, session_ref, :timeout})
           :ok
     end

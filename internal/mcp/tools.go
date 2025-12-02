@@ -1059,3 +1059,263 @@ func (t *Tools) ISpeak(args ISpeakArgs) (ISpeakResult, error) {
 		VoiceUsed: voice,
 	}, nil
 }
+
+// CreateSubagentPrompt implements the i-prompt-create MCP tool
+func (t *Tools) CreateSubagentPrompt(args CreatePromptArgs) (PromptResult, error) {
+	prompt := &database.SubagentPrompt{
+		Name:        args.Name,
+		Slug:        args.Slug,
+		Description: args.Description,
+		PromptText:  args.PromptText,
+		ProjectID:   args.ProjectID,
+		Active:      true,
+		Tags:        args.Tags,
+		CreatedBy:   args.CreatedBy,
+	}
+
+	if err := t.db.CreateSubagentPrompt(prompt); err != nil {
+		return PromptResult{
+			Success: false,
+			Message: fmt.Sprintf("Failed to create prompt: %v", err),
+		}, nil
+	}
+
+	return PromptResult{
+		Success: true,
+		Message: fmt.Sprintf("Prompt created with ID: %s", prompt.ID),
+		Prompt:  prompt,
+	}, nil
+}
+
+// GetSubagentPrompt implements the i-prompt-get MCP tool
+func (t *Tools) GetSubagentPrompt(args GetPromptArgs) (PromptResult, error) {
+	var prompt *database.SubagentPrompt
+	var err error
+
+	if args.ID != "" {
+		prompt, err = t.db.GetSubagentPromptByID(args.ID)
+	} else if args.Slug != "" {
+		prompt, err = t.db.GetSubagentPromptBySlug(args.Slug, args.ProjectID)
+	} else {
+		return PromptResult{
+			Success: false,
+			Message: "Either id or slug must be provided",
+		}, nil
+	}
+
+	if err != nil {
+		return PromptResult{
+			Success: false,
+			Message: fmt.Sprintf("Failed to get prompt: %v", err),
+		}, nil
+	}
+
+	// Optionally exclude prompt_text
+	if !args.IncludeText {
+		prompt.PromptText = ""
+	}
+
+	return PromptResult{
+		Success: true,
+		Message: "Prompt retrieved successfully",
+		Prompt:  prompt,
+	}, nil
+}
+
+// ListSubagentPrompts implements the i-prompt-list MCP tool
+func (t *Tools) ListSubagentPrompts(args ListPromptsArgs) (ListPromptsResult, error) {
+	opts := database.ListSubagentPromptsOptions{
+		ProjectID:   args.ProjectID,
+		Active:      args.Active,
+		Tags:        args.Tags,
+		Resolve:     args.Resolve,
+		IncludeText: args.IncludeText,
+		Limit:       args.Limit,
+		Offset:      args.Offset,
+	}
+
+	prompts, err := t.db.ListSubagentPrompts(opts)
+	if err != nil {
+		return ListPromptsResult{
+			Success: false,
+			Message: fmt.Sprintf("Failed to list prompts: %v", err),
+		}, nil
+	}
+
+	return ListPromptsResult{
+		Success: true,
+		Message: fmt.Sprintf("Found %d prompts", len(prompts)),
+		Prompts: prompts,
+		Count:   len(prompts),
+	}, nil
+}
+
+// UpdateSubagentPrompt implements the i-prompt-update MCP tool
+func (t *Tools) UpdateSubagentPrompt(args UpdatePromptArgs) (PromptResult, error) {
+	if args.ID == "" {
+		return PromptResult{
+			Success: false,
+			Message: "id is required",
+		}, nil
+	}
+
+	if args.ExpectedVersion == 0 {
+		return PromptResult{
+			Success: false,
+			Message: "expected_version is required for optimistic locking",
+		}, nil
+	}
+
+	updates := make(map[string]interface{})
+	if args.Name != nil {
+		updates["name"] = *args.Name
+	}
+	if args.Slug != nil {
+		updates["slug"] = *args.Slug
+	}
+	if args.Description != nil {
+		updates["description"] = *args.Description
+	}
+	if args.PromptText != nil {
+		updates["prompt_text"] = *args.PromptText
+	}
+	if args.ProjectID != nil {
+		updates["project_id"] = *args.ProjectID
+	}
+	if args.Tags != nil {
+		updates["tags"] = *args.Tags
+	}
+	if args.Active != nil {
+		updates["active"] = *args.Active
+	}
+
+	if len(updates) == 0 {
+		return PromptResult{
+			Success: false,
+			Message: "No fields to update",
+		}, nil
+	}
+
+	if err := t.db.UpdateSubagentPrompt(args.ID, updates, args.ExpectedVersion); err != nil {
+		return PromptResult{
+			Success: false,
+			Message: fmt.Sprintf("Failed to update prompt: %v", err),
+		}, nil
+	}
+
+	// Fetch updated prompt
+	prompt, err := t.db.GetSubagentPromptByID(args.ID)
+	if err != nil {
+		return PromptResult{
+			Success: true,
+			Message: "Prompt updated but failed to fetch updated version",
+		}, nil
+	}
+
+	return PromptResult{
+		Success: true,
+		Message: "Prompt updated successfully",
+		Prompt:  prompt,
+	}, nil
+}
+
+// DeleteSubagentPrompt implements the i-prompt-delete MCP tool
+func (t *Tools) DeleteSubagentPrompt(args DeletePromptArgs) (PromptResult, error) {
+	if args.ID == "" {
+		return PromptResult{
+			Success: false,
+			Message: "id is required",
+		}, nil
+	}
+
+	var err error
+	if args.HardDelete {
+		err = t.db.DeleteSubagentPrompt(args.ID)
+	} else {
+		err = t.db.DeactivateSubagentPrompt(args.ID)
+	}
+
+	if err != nil {
+		return PromptResult{
+			Success: false,
+			Message: fmt.Sprintf("Failed to delete prompt: %v", err),
+		}, nil
+	}
+
+	deleteType := "deactivated"
+	if args.HardDelete {
+		deleteType = "deleted"
+	}
+
+	return PromptResult{
+		Success: true,
+		Message: fmt.Sprintf("Prompt %s successfully", deleteType),
+	}, nil
+}
+
+// ChatSend implements the i-chat-send tool
+func (t *Tools) ChatSend(args ChatSendArgs) (ChatSendResult, error) {
+	// Generate message ID
+	messageID := utils.GenerateGitStyleAgentID()
+
+	// Set defaults
+	senderRole := "agent"
+	if args.SenderRole != nil {
+		senderRole = *args.SenderRole
+	}
+
+	recipientRole := "user"
+	if args.RecipientRole != nil {
+		recipientRole = *args.RecipientRole
+	}
+
+	provider := "claude"
+	if args.Provider != nil {
+		provider = *args.Provider
+	}
+
+	// Determine direction based on roles
+	direction := "outbound"
+	if senderRole == "user" {
+		direction = "outbound"
+	} else if senderRole == "agent" || senderRole == "system" {
+		direction = "inbound"
+	}
+
+	// Insert message into database
+	// Use UTC timestamp to match Phoenix format (Z suffix instead of timezone offset)
+	now := time.Now().UTC().Format(time.RFC3339)
+	query := `
+		INSERT INTO messages (
+			id, channel_id, session_id, sender_role, recipient_role,
+			provider, direction, body, status, metadata,
+			inserted_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'sent', '{}', ?, ?)
+	`
+
+	_, err := t.db.Exec(query,
+		messageID,
+		args.ChannelID,
+		args.SessionID,
+		senderRole,
+		recipientRole,
+		provider,
+		direction,
+		args.Body,
+		now,
+		now,
+	)
+
+	if err != nil {
+		return ChatSendResult{
+			Success: false,
+			Message: fmt.Sprintf("Failed to send message: %v", err),
+		}, nil
+	}
+
+	return ChatSendResult{
+		Success:   true,
+		Message:   "Message sent to channel",
+		MessageID: messageID,
+	}, nil
+}

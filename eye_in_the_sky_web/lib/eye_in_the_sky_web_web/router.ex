@@ -22,6 +22,9 @@ defmodule EyeInTheSkyWebWeb.Router do
     live "/agents/:id", AgentLive.Show, :show
     live "/sessions", SessionLive.Index, :index
     live "/nats", NatsLive.Index, :index
+    live "/prompts", PromptLive.Index, :index
+    live "/prompts/:id", PromptLive.Show, :show
+    live "/chat", ChatLive, :index
   end
 
   # Other scopes may use custom stacks.

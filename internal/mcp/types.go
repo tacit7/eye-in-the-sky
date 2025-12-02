@@ -1,5 +1,7 @@
 package mcp
 
+import "github.com/tacit7/eye-in-the-sky/internal/database"
+
 // Removed RegisterAgentArgs and RegisterDesktopAgentArgs - using only StartSession now
 
 // UpdateStatusArgs represents the arguments for update_status tool
@@ -277,4 +279,87 @@ type ISpeakResult struct {
 	Success   bool   `json:"success"`
 	Message   string `json:"message"`
 	VoiceUsed string `json:"voice_used"`
+}
+
+// Subagent Prompts Tool Types
+
+// CreatePromptArgs represents the arguments for i-prompt-create tool
+type CreatePromptArgs struct {
+	Name        string `json:"name" jsonschema:"description:Human-readable name"`
+	Slug        string `json:"slug" jsonschema:"description:URL-friendly identifier (kebab-case)"`
+	Description string `json:"description,omitempty" jsonschema:"description:What this prompt does"`
+	PromptText  string `json:"prompt_text" jsonschema:"description:The actual prompt template"`
+	ProjectID   string `json:"project_id,omitempty" jsonschema:"description:Project ID for project-scoped prompt (omit for global)"`
+	Tags        string `json:"tags,omitempty" jsonschema:"description:Comma-separated tags"`
+	CreatedBy   string `json:"created_by,omitempty" jsonschema:"description:Who created this prompt"`
+}
+
+// GetPromptArgs represents the arguments for i-prompt-get tool
+type GetPromptArgs struct {
+	ID          string `json:"id,omitempty" jsonschema:"description:Prompt ID"`
+	Slug        string `json:"slug,omitempty" jsonschema:"description:Prompt slug"`
+	ProjectID   string `json:"project_id,omitempty" jsonschema:"description:Project context for slug lookup (checks project-scoped first, falls back to global)"`
+	IncludeText bool   `json:"include_text,omitempty" jsonschema:"description:Include prompt_text in response (default: true)"`
+}
+
+// ListPromptsArgs represents the arguments for i-prompt-list tool
+type ListPromptsArgs struct {
+	ProjectID   string   `json:"project_id,omitempty" jsonschema:"description:Filter by project ID"`
+	Active      *bool    `json:"active,omitempty" jsonschema:"description:Filter by active status"`
+	Tags        []string `json:"tags,omitempty" jsonschema:"description:Filter by tags"`
+	Resolve     bool     `json:"resolve,omitempty" jsonschema:"description:Deduplicate by slug (project overrides global)"`
+	IncludeText bool     `json:"include_text,omitempty" jsonschema:"description:Include prompt_text in results (default: false for list)"`
+	Limit       int      `json:"limit,omitempty" jsonschema:"description:Maximum number of results"`
+	Offset      int      `json:"offset,omitempty" jsonschema:"description:Offset for pagination"`
+}
+
+// UpdatePromptArgs represents the arguments for i-prompt-update tool
+type UpdatePromptArgs struct {
+	ID              string  `json:"id" jsonschema:"description:Prompt ID to update"`
+	ExpectedVersion int     `json:"expected_version" jsonschema:"description:Expected version for optimistic locking"`
+	Name            *string `json:"name,omitempty" jsonschema:"description:New name"`
+	Slug            *string `json:"slug,omitempty" jsonschema:"description:New slug (kebab-case)"`
+	Description     *string `json:"description,omitempty" jsonschema:"description:New description"`
+	PromptText      *string `json:"prompt_text,omitempty" jsonschema:"description:New prompt text (auto-increments version)"`
+	ProjectID       *string `json:"project_id,omitempty" jsonschema:"description:New project ID"`
+	Tags            *string `json:"tags,omitempty" jsonschema:"description:New tags"`
+	Active          *bool   `json:"active,omitempty" jsonschema:"description:New active status"`
+}
+
+// DeletePromptArgs represents the arguments for i-prompt-delete tool
+type DeletePromptArgs struct {
+	ID         string `json:"id" jsonschema:"description:Prompt ID to delete"`
+	HardDelete bool   `json:"hard_delete,omitempty" jsonschema:"description:Permanently delete (default: soft delete by setting active=0)"`
+}
+
+// PromptResult represents the result for prompt operations
+type PromptResult struct {
+	Success bool                        `json:"success"`
+	Message string                      `json:"message"`
+	Prompt  *database.SubagentPrompt    `json:"prompt,omitempty"`
+}
+
+// ListPromptsResult represents the result for list operation
+type ListPromptsResult struct {
+	Success bool                       `json:"success"`
+	Message string                     `json:"message"`
+	Prompts []database.SubagentPrompt  `json:"prompts,omitempty"`
+	Count   int                        `json:"count"`
+}
+
+// ChatSendArgs represents the arguments for i-chat-send tool
+type ChatSendArgs struct {
+	ChannelID    string  `json:"channel_id" jsonschema:"description:Channel ID to send message to"`
+	SessionID    string  `json:"session_id" jsonschema:"description:Session ID of the sender"`
+	Body         string  `json:"body" jsonschema:"description:Message body text"`
+	SenderRole   *string `json:"sender_role,omitempty" jsonschema:"description:Sender role (default: 'agent')"`
+	RecipientRole *string `json:"recipient_role,omitempty" jsonschema:"description:Recipient role (default: 'user')"`
+	Provider     *string `json:"provider,omitempty" jsonschema:"description:Provider name (default: 'claude')"`
+}
+
+// ChatSendResult represents the result for i-chat-send tool
+type ChatSendResult struct {
+	Success   bool   `json:"success"`
+	Message   string `json:"message"`
+	MessageID string `json:"message_id,omitempty"`
 }

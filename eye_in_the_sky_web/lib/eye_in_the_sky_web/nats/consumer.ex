@@ -61,8 +61,54 @@ defmodule EyeInTheSkyWeb.NATS.Consumer do
     {:noreply, state}
   end
 
+  defp handle_envelope(%{"op" => "msg", "channel" => "chat", "version" => "eits-messaging-v2"} = envelope, _topic) do
+    # Handle v2 channel messages
+    message_id = get_in(envelope, ["meta", "message_id"])
+
+    if message_id && Messages.message_exists?(message_id) do
+      Logger.debug("Skipping duplicate channel message #{message_id}")
+      :ok
+    else
+      channel_id = envelope["channel_id"]
+      parent_message_id = envelope["parent_message_id"]
+      sender_session_id = get_in(envelope, ["meta", "sender_session_id"])
+      provider = get_in(envelope, ["meta", "provider"]) || "unknown"
+      message_body = envelope["msg"]
+
+      # Create incoming channel message
+      attrs = %{
+        id: message_id || Ecto.UUID.generate(),
+        channel_id: channel_id,
+        parent_message_id: parent_message_id,
+        session_id: sender_session_id,
+        sender_role: "agent",
+        recipient_role: "user",
+        provider: provider,
+        direction: "inbound",
+        body: message_body,
+        status: "delivered",
+        metadata: %{}
+      }
+
+      case Messages.create_message(attrs) do
+        {:ok, message} ->
+          Logger.info("Recorded incoming channel message #{message.id} for channel #{channel_id}")
+
+          # Broadcast to Phoenix PubSub for LiveView updates (channel-specific)
+          Phoenix.PubSub.broadcast(
+            EyeInTheSkyWeb.PubSub,
+            "channel:#{channel_id}:messages",
+            {:new_message, message}
+          )
+
+        {:error, reason} ->
+          Logger.error("Failed to record incoming channel message: #{inspect(reason)}")
+      end
+    end
+  end
+
   defp handle_envelope(%{"op" => "msg", "channel" => "chat"} = envelope, _topic) do
-    # Check if this message already exists (avoid duplicating our own outbound messages)
+    # Handle v1 session-based messages (backward compatibility)
     message_id = get_in(envelope, ["meta", "message_id"])
 
     if message_id && Messages.message_exists?(message_id) do
