@@ -34,6 +34,18 @@ defmodule EyeInTheSkyWeb.Sessions do
   end
 
   @doc """
+  Gets a single session, returning {:ok, session} or {:error, :not_found}.
+
+  This is the safe version that doesn't raise exceptions.
+  """
+  def get_session(id) do
+    case Repo.get(Session, id) do
+      nil -> {:error, :not_found}
+      session -> {:ok, session}
+    end
+  end
+
+  @doc """
   Gets a single session with logs preloaded.
   """
   def get_session_with_logs!(id) do

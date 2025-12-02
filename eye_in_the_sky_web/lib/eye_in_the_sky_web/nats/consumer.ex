@@ -48,24 +48,32 @@ defmodule EyeInTheSkyWeb.NATS.Consumer do
   end
 
   defp handle_envelope(%{"op" => "msg", "channel" => "chat"} = envelope, _topic) do
-    # This is an agent reply message
-    session_id = envelope["reply_to"]
-    provider = get_in(envelope, ["meta", "provider"]) || "unknown"
-    message_body = envelope["msg"]
+    # Check if this message already exists (avoid duplicating our own outbound messages)
+    message_id = get_in(envelope, ["meta", "message_id"])
 
-    case Messages.record_incoming_reply(session_id, provider, message_body) do
-      {:ok, message} ->
-        Logger.info("Recorded incoming message #{message.id} for session #{session_id}")
+    if message_id && Messages.message_exists?(message_id) do
+      Logger.debug("Skipping duplicate message #{message_id}")
+      :ok
+    else
+      # This is an agent reply message
+      session_id = envelope["reply_to"]
+      provider = get_in(envelope, ["meta", "provider"]) || "unknown"
+      message_body = envelope["msg"]
 
-        # Broadcast to Phoenix PubSub for LiveView updates
-        Phoenix.PubSub.broadcast(
-          EyeInTheSkyWeb.PubSub,
-          "session:#{session_id}:messages",
-          {:new_message, message}
-        )
+      case Messages.record_incoming_reply(session_id, provider, message_body) do
+        {:ok, message} ->
+          Logger.info("Recorded incoming message #{message.id} for session #{session_id}")
 
-      {:error, reason} ->
-        Logger.error("Failed to record incoming message: #{inspect(reason)}")
+          # Broadcast to Phoenix PubSub for LiveView updates
+          Phoenix.PubSub.broadcast(
+            EyeInTheSkyWeb.PubSub,
+            "session:#{session_id}:messages",
+            {:new_message, message}
+          )
+
+        {:error, reason} ->
+          Logger.error("Failed to record incoming message: #{inspect(reason)}")
+      end
     end
   end
 

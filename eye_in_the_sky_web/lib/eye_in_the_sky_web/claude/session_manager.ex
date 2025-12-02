@@ -179,16 +179,20 @@ defmodule EyeInTheSkyWeb.Claude.SessionManager do
   def handle_info({:claude_output, session_ref, line}, state) do
     case Map.get(state, session_ref) do
       nil ->
+        Logger.warning("Received output for unknown session_ref: #{inspect(session_ref)}")
         {:noreply, state}
 
       session_info ->
+        Logger.debug("📥 RAW CLAUDE LINE: #{line}")
+
         # Parse the JSON line
         case Jason.decode(line) do
           {:ok, parsed} ->
             handle_parsed_output(session_ref, session_info, parsed, state)
 
-          {:error, _} ->
+          {:error, reason} ->
             # Not JSON, just buffer it
+            Logger.warning("⚠️  FAILED TO PARSE JSON: #{inspect(reason)} - Line: #{line}")
             updated_info = update_in(session_info.output_buffer, &[line | &1])
             {:noreply, Map.put(state, session_ref, updated_info)}
         end
@@ -217,44 +221,77 @@ defmodule EyeInTheSkyWeb.Claude.SessionManager do
     end
   end
 
+  @impl true
+  def handle_info({port, {:data, data}}, state) when is_port(port) do
+    # Port message leaked through - this shouldn't happen but handle gracefully
+    Logger.warning("Unexpected port data received directly in SessionManager: #{inspect(data)}")
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_info({port, {:exit_status, status}}, state) when is_port(port) do
+    # Port exit leaked through - log it
+    Logger.warning("Port exited with status #{status}")
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_info(msg, state) do
+    # Catch-all for unexpected messages
+    Logger.debug("Unhandled message in SessionManager: #{inspect(msg)}")
+    {:noreply, state}
+  end
+
   # Private Helpers
 
   defp handle_parsed_output(session_ref, session_info, parsed, state) do
+    # DEBUG: Log all parsed messages to understand Claude's output format
+    Logger.info("🔍 PARSED CLAUDE OUTPUT: #{inspect(parsed, pretty: true)}")
+
     # Extract Claude session ID from init message
     updated_info =
       if parsed["type"] == "system" && parsed["subtype"] == "init" do
         claude_session_id = parsed["session_id"]
         Logger.info("Claude session ID: #{claude_session_id}")
 
-        # Store Claude session ID in database
-        case Sessions.get_session!(session_info.session_id) do
-          session when not is_nil(session) ->
-            Sessions.update_claude_session_id(session, claude_session_id)
-            Logger.info("Stored Claude session ID #{claude_session_id} for session #{session_info.session_id}")
-          _ ->
-            Logger.warning("Could not find session #{session_info.session_id} to store Claude session ID")
-        end
+        # Store Claude session ID in database (async to avoid blocking GenServer)
+        Task.start(fn ->
+          case Sessions.get_session(session_info.session_id) do
+            {:ok, session} ->
+              Sessions.update_claude_session_id(session, claude_session_id)
+              Logger.info("Stored Claude session ID #{claude_session_id} for session #{session_info.session_id}")
+            {:error, :not_found} ->
+              Logger.warning("Could not find session #{session_info.session_id} to store Claude session ID")
+          end
+        end)
 
         %{session_info | claude_session_id: claude_session_id}
       else
         session_info
       end
 
-    # Handle assistant messages
+    # Handle assistant messages - check multiple possible field structures
     updated_info =
-      if parsed["type"] == "assistant" do
-        content = parsed["content"] || parsed["message"]
+      if parsed["type"] == "assistant" || parsed["role"] == "assistant" do
+        # Extract text from Claude's content array structure
+        content = extract_text_content(parsed)
 
-        # Create inbound message in database
-        if content do
-          {:ok, message} = Messages.record_incoming_reply(
-            session_info.session_id,
-            "claude",  # provider
-            content
-          )
+        Logger.info("🤖 ASSISTANT MESSAGE DETECTED - Content: #{inspect(content)}")
 
-          # Publish agent reply to NATS for agent-to-agent communication
-          Publisher.publish_message(message)
+        # Create inbound message in database (async to avoid blocking GenServer)
+        if content && is_binary(content) do
+          session_id = session_info.session_id
+          Task.start(fn ->
+            case Messages.record_incoming_reply(session_id, "claude", content) do
+              {:ok, message} ->
+                Publisher.publish_message(message)
+                Logger.info("✅ Recorded and published assistant message for session #{session_id}")
+              {:error, reason} ->
+                Logger.error("❌ Failed to record assistant message for session #{session_id}: #{inspect(reason)}")
+            end
+          end)
+        else
+          Logger.warning("⚠️  ASSISTANT MESSAGE BUT NO VALID TEXT CONTENT: #{inspect(parsed)}")
         end
 
         updated_info
@@ -274,4 +311,44 @@ defmodule EyeInTheSkyWeb.Claude.SessionManager do
 
     {:noreply, Map.put(state, session_ref, updated_info)}
   end
+
+  # Extract text content from Claude's response structure
+  # Claude returns: {"message": {"content": [{"type": "text", "text": "actual message"}]}}
+  defp extract_text_content(parsed) do
+    cond do
+      # Check if there's a "message" wrapper with "content" array
+      message = parsed["message"] ->
+        extract_from_content_array(message["content"])
+
+      # Check if "content" is directly in parsed
+      content = parsed["content"] ->
+        extract_from_content_array(content)
+
+      # Fallback to old structure checks
+      true ->
+        parsed["text"] || parsed["body"]
+    end
+  end
+
+  defp extract_from_content_array(content) when is_list(content) do
+    # Find all text blocks and tool_use blocks, combine them
+    content
+    |> Enum.map(fn item ->
+      case item do
+        %{"type" => "text", "text" => text} -> text
+        %{"type" => "tool_use", "name" => name, "input" => input} ->
+          # Format tool use as readable text
+          "Using #{name} with #{inspect(input)}"
+        _ -> nil
+      end
+    end)
+    |> Enum.filter(&(&1 != nil))
+    |> Enum.join("\n")
+    |> case do
+      "" -> nil
+      text -> text
+    end
+  end
+
+  defp extract_from_content_array(_), do: nil
 end

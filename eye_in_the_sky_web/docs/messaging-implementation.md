@@ -437,12 +437,268 @@ assets/svelte/components/
 └── AgentDetail.svelte          # Messages UI (lines 348-429)
 ```
 
+## Message Grouping & WhatsApp-Style UI
+
+**Date**: 2025-12-01
+
+### Overview
+
+Messages are now grouped by sender to create a clean, WhatsApp-style interface. Consecutive messages from the same sender appear as a single group with one sender label, improving readability and reducing visual clutter.
+
+### Backend Grouping
+
+**File**: `lib/eye_in_the_sky_web_web/live/agent_live/show.ex:336-373`
+
+Messages are grouped server-side using `Enum.chunk_by/2`:
+
+```elixir
+defp group_and_serialize_messages(messages) when is_list(messages) do
+  messages
+  |> Enum.chunk_by(&{&1.sender_role, &1.direction})
+  |> Enum.map(fn group ->
+    first_message = List.first(group)
+    last_message = List.last(group)
+
+    %{
+      sender_role: first_message.sender_role,
+      direction: first_message.direction,
+      provider: first_message.provider,
+      timestamp: first_message.inserted_at,
+      date: NaiveDateTime.to_date(first_message.inserted_at),
+      status: last_message.status,  # Status of last message in group
+      messages: Enum.map(group, fn msg ->
+        %{
+          id: msg.id,
+          body: msg.body,
+          inserted_at: msg.inserted_at
+        }
+      end)
+    }
+  end)
+  |> add_date_separators()
+end
+```
+
+**Key Features:**
+- Groups by `{sender_role, direction}` tuple
+- Stores sender metadata at group level (not per-message)
+- Status represents the last message in the group
+- Individual messages keep only: `id`, `body`, `inserted_at`
+
+### Date Separators
+
+**File**: `lib/eye_in_the_sky_web_web/live/agent_live/show.ex:364-373`
+
+Automatically adds date separators when messages cross day boundaries:
+
+```elixir
+defp add_date_separators(groups) do
+  groups
+  |> Enum.with_index()
+  |> Enum.map(fn {group, idx} ->
+    prev_date = if idx > 0, do: Enum.at(groups, idx - 1).date, else: nil
+    show_date = prev_date && group.date != prev_date
+
+    Map.put(group, :show_date_separator, show_date)
+  end)
+end
+```
+
+Shows "Today", "Yesterday", or formatted dates between different days.
+
+### Frontend Rendering
+
+**File**: `assets/svelte/components/tabs/MessagesTab.svelte:252-304`
+
+Messages render in grouped structure:
+
+```svelte
+{#each messages as messageGroup}
+  <!-- Date separator -->
+  {#if messageGroup.show_date_separator}
+    <div class="date-separator">
+      <span>{formatDate(messageGroup.date)}</span>
+    </div>
+  {/if}
+
+  <!-- Message group -->
+  <div class="message-group {messageGroup.direction}">
+    <!-- Sender label (once per group) -->
+    {#if messageGroup.direction === 'inbound'}
+      <div class="group-sender-label">
+        {messageGroup.sender_role === 'user' ? 'You' : 'Agent'}
+        {#if messageGroup.provider}
+          · {messageGroup.provider}
+        {/if}
+      </div>
+    {/if}
+
+    <!-- Multiple message bubbles in tight group -->
+    <div class="message-bubbles-container">
+      {#each messageGroup.messages as message, idx}
+        <div class="message-bubble {messageGroup.direction}">
+          <div class="message-text">{message.body}</div>
+
+          <!-- Show time/status only on last message -->
+          {#if idx === messageGroup.messages.length - 1}
+            <div class="message-meta">
+              <span class="message-time">{formatTime(message.inserted_at)}</span>
+              <!-- Status icons for outbound messages -->
+            </div>
+          {/if}
+        </div>
+      {/each}
+    </div>
+  </div>
+{/each}
+```
+
+### Visual Design
+
+**Spacing:**
+- **Between groups** (different senders): 1.5rem (24px)
+- **Within groups** (same sender): 0.25rem (4px)
+- **Date separators**: 1.5rem margin
+
+**Colors:**
+- **Sent messages** (outbound): `#d9fdd3` (light green)
+- **Received messages** (inbound): `white`
+- **Dark mode sent**: `#005c4b` (dark green)
+- **Dark mode received**: `#202c33` (dark gray)
+- **Background**: `#efeae2` (WhatsApp beige)
+
+**Status Indicators:**
+- Pending: Clock icon
+- Failed: X icon
+- Delivered: Double checkmarks (WhatsApp-style)
+
+### Data Structure Transformation
+
+**Before** (flat array):
+```json
+[
+  {"id": "1", "sender_role": "user", "direction": "outbound", "body": "How?", "status": "delivered"},
+  {"id": "2", "sender_role": "user", "direction": "outbound", "body": "Why?", "status": "delivered"},
+  {"id": "3", "sender_role": "agent", "direction": "inbound", "body": "Because...", "status": "delivered"}
+]
+```
+
+**After** (grouped):
+```json
+[
+  {
+    "sender_role": "user",
+    "direction": "outbound",
+    "provider": "claude",
+    "timestamp": "2025-12-01T10:00:00Z",
+    "date": "2025-12-01",
+    "show_date_separator": false,
+    "status": "delivered",
+    "messages": [
+      {"id": "1", "body": "How?", "inserted_at": "..."},
+      {"id": "2", "body": "Why?", "inserted_at": "..."}
+    ]
+  },
+  {
+    "sender_role": "agent",
+    "direction": "inbound",
+    "provider": "claude",
+    "timestamp": "2025-12-01T10:00:45Z",
+    "date": "2025-12-01",
+    "show_date_separator": false,
+    "status": "delivered",
+    "messages": [
+      {"id": "3", "body": "Because...", "inserted_at": "..."}
+    ]
+  }
+]
+```
+
+### Testing Message Grouping
+
+**IEx Example:**
+
+```elixir
+# Open IEx and spawn Claude CLI
+port = Port.open(
+  {:spawn_executable, "/opt/homebrew/bin/claude"},
+  [
+    :binary,
+    :exit_status,
+    :use_stdio,
+    :stderr_to_stdout,
+    {:args, ["--resume", "session-id", "-p", "test message", "--output-format", "stream-json"]},
+    {:cd, "/path/to/project"}
+  ]
+)
+
+# Check output
+flush()
+# Should see JSON stream with message exchanges
+```
+
+**UI Testing:**
+
+1. Navigate to agent detail page → Messages tab
+2. Send 3 consecutive messages → Should appear as **one group** with **one label**
+3. Agent replies → New group created with agent label
+4. Send messages on different days → Date separator appears
+5. Verify spacing: tight within groups, loose between groups
+
+### Provider Selector Enhancement
+
+**File**: `assets/svelte/components/tabs/MessagesTab.svelte:360-395`
+
+Provider selector now shows a badge with current selection:
+
+```svelte
+<div class="provider-selector">
+  <div class="dropdown dropdown-top">
+    <label class="btn btn-ghost btn-sm gap-2" title="Select AI Provider">
+      <svg><!-- Monitor icon --></svg>
+      <span class="badge badge-sm badge-primary">{selectedProvider}</span>
+    </label>
+    <ul class="dropdown-content menu">
+      <!-- Dropdown items with checkmarks for selected option -->
+    </ul>
+  </div>
+</div>
+```
+
+**Features:**
+- Badge displays: "claude" or "openai"
+- Checkmark appears next to selected provider in dropdown
+- Placeholder updated to: "Send instruction to agent..."
+
+### Performance Benefits
+
+**Backend grouping advantages:**
+- Groups calculated once server-side (not on every render)
+- Reduced data transfer (metadata only sent once per group)
+- Testable with ExUnit independently
+- Consistent across all clients
+
+**Before:** 100 messages = 100 sender labels
+**After:** 100 messages = ~10-20 groups = 10-20 sender labels
+
+### Call Sites Updated
+
+All message loading uses `group_and_serialize_messages/1`:
+
+1. **Line 257**: `load_tab_data(:messages, session_id)`
+2. **Line 184**: `handle_event("send_message", ...)` - After sending
+3. **Line 199**: `handle_info({:new_message, ...})` - Real-time updates
+4. **Line 218**: `handle_info({:claude_output, ...})` - Claude output streaming
+
 ## Future Enhancements
 
 1. **Acknowledgment system**: Implement retry logic with exponential backoff
 2. **Task routing**: Use `events.task` for inter-agent task delegation
 3. **Broadcast messages**: Implement empty `receiver_id` for announcements
 4. **Message persistence**: Archive messages to separate table for long-term storage
-5. **Read receipts**: Track when messages are viewed
+5. **Read receipts**: Track when messages are viewed (per group)
 6. **Typing indicators**: Real-time typing status via `events.protocol`
 7. **File attachments**: Support file sharing via metadata + blob storage
+8. **Message reactions**: Add emoji reactions to specific messages
+9. **Message search**: Full-text search across grouped messages
+10. **Collapsible groups**: Allow expanding/collapsing message groups for long conversations

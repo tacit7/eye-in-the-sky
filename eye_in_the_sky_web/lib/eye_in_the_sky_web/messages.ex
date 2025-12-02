@@ -44,6 +44,15 @@ defmodule EyeInTheSkyWeb.Messages do
   end
 
   @doc """
+  Checks if a message with the given ID exists.
+  """
+  def message_exists?(id) do
+    Message
+    |> where([m], m.id == ^id)
+    |> Repo.exists?()
+  end
+
+  @doc """
   Creates a message.
   """
   def create_message(attrs \\ %{}) do

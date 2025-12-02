@@ -145,40 +145,51 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Show do
     session_id = socket.assigns.session_id
 
     # Create outbound message
-    {:ok, message} = Messages.send_message(%{
+    case Messages.send_message(%{
       session_id: session_id,
       sender_role: "user",
       recipient_role: "agent",
       provider: provider,
       body: body
-    })
+    }) do
+      {:ok, message} ->
+        # Publish to NATS for agent consumption
+        handle_message_publish(message, session_id, body, provider, socket)
 
-    # Publish to NATS for agent consumption
+      {:error, changeset} ->
+        {:noreply, put_flash(socket, :error, "Failed to send message: #{inspect(changeset.errors)}")}
+    end
+  end
+
+  defp handle_message_publish(message, session_id, body, provider, socket) do
     case Publisher.publish_message(message) do
       {:ok, _} ->
         # Message published to NATS successfully
-        # Get session and agent to get project path
-        session = Sessions.get_session!(session_id)
-        agent = Agents.get_agent!(socket.assigns.agent_id)
+        # Get session and agent to get project path (using safe versions)
+        with {:ok, session} <- Sessions.get_session(session_id),
+             {:ok, agent} <- Agents.get_agent(socket.assigns.agent_id) do
+          # Use git_worktree_path as project_path for Claude
+          project_path = agent.git_worktree_path || File.cwd!()
 
-        # Use git_worktree_path as project_path for Claude
-        project_path = agent.git_worktree_path || File.cwd!()
+          # Always start a new session (don't use --resume)
+          # Claude sessions are directory-specific and hard to manage across restarts
+          result = SessionManager.start_session(session_id, body,
+            model: provider_to_model(provider),
+            project_path: project_path
+          )
 
-        # Always use resume with the Eye in the Sky session ID
-        result = SessionManager.resume_session(session_id, body,
-          session_id: session_id,
-          model: provider_to_model(provider),
-          project_path: project_path
-        )
+          case result do
+            {:ok, _session_ref} ->
+              # Reload messages for the current tab
+              updated_messages = group_and_serialize_messages(Messages.list_messages_for_session(session_id))
+              {:noreply, assign(socket, :messages, updated_messages)}
 
-        case result do
-          {:ok, _session_ref} ->
-            # Reload messages for the current tab
-            updated_messages = serialize_messages(Messages.list_messages_for_session(session_id))
-            {:noreply, assign(socket, :messages, updated_messages)}
-
-          {:error, reason} ->
-            {:noreply, put_flash(socket, :error, "Failed to start/resume Claude session: #{inspect(reason)}")}
+            {:error, reason} ->
+              {:noreply, put_flash(socket, :error, "Failed to start/resume Claude session: #{inspect(reason)}")}
+          end
+        else
+          {:error, :not_found} ->
+            {:noreply, put_flash(socket, :error, "Session or agent not found")}
         end
 
       {:error, reason} ->
@@ -196,7 +207,7 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Show do
     session_id = socket.assigns.session_id
 
     # Reload messages and update UI
-    updated_messages = serialize_messages(Messages.list_messages_for_session(session_id))
+    updated_messages = group_and_serialize_messages(Messages.list_messages_for_session(session_id))
 
     # Update message count
     counts = Sessions.get_session_counts(session_id)
@@ -215,7 +226,7 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Show do
     # Just trigger a reload - the SessionManager already saved it to database
     if socket.assigns.active_tab == :messages do
       session_id = socket.assigns.session_id
-      updated_messages = serialize_messages(Messages.list_messages_for_session(session_id))
+      updated_messages = group_and_serialize_messages(Messages.list_messages_for_session(session_id))
       {:noreply, assign(socket, :messages, updated_messages)}
     else
       {:noreply, socket}
@@ -254,7 +265,7 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Show do
   end
 
   defp load_tab_data(:messages, session_id) do
-    %{messages: serialize_messages(Messages.list_messages_for_session(session_id))}
+    %{messages: group_and_serialize_messages(Messages.list_messages_for_session(session_id))}
   end
 
   # Serialization functions
@@ -332,6 +343,45 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Show do
     end)
   end
   defp serialize_messages(_), do: []
+
+  defp group_and_serialize_messages(messages) when is_list(messages) do
+    messages
+    |> Enum.chunk_by(&{&1.sender_role, &1.direction})
+    |> Enum.map(fn group ->
+      first_message = List.first(group)
+      last_message = List.last(group)
+
+      %{
+        sender_role: first_message.sender_role,
+        direction: first_message.direction,
+        provider: first_message.provider,
+        timestamp: first_message.inserted_at,
+        date: NaiveDateTime.to_date(first_message.inserted_at),
+        status: last_message.status,
+        messages: Enum.map(group, fn msg ->
+          %{
+            id: msg.id,
+            body: msg.body,
+            inserted_at: msg.inserted_at
+          }
+        end)
+      }
+    end)
+    |> add_date_separators()
+  end
+
+  defp group_and_serialize_messages(_), do: []
+
+  defp add_date_separators(groups) do
+    groups
+    |> Enum.with_index()
+    |> Enum.map(fn {group, idx} ->
+      prev_date = if idx > 0, do: Enum.at(groups, idx - 1).date, else: nil
+      show_date = prev_date && group.date != prev_date
+
+      Map.put(group, :show_date_separator, show_date)
+    end)
+  end
 
   # Build header map
   defp build_header(agent, nil) do

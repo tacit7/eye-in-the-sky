@@ -48,22 +48,34 @@ defmodule EyeInTheSkyWeb.Claude.CLI do
 
         session_ref = make_ref()
 
-        # Spawn the process
+        # Spawn output handler first
+        handler_pid = spawn_link(fn ->
+          receive do
+            {:port, port} ->
+              handle_port_output(port, session_ref, caller)
+          end
+        end)
+
+        # Spawn the process using 'script' to provide a pseudo-TTY
+        # macOS: script -q /dev/null command args...
+        script_args = ["-q", "/dev/null", claude_path] ++ args
+
         port = Port.open(
-          {:spawn_executable, claude_path},
+          {:spawn_executable, "/usr/bin/script"},
           [
             :binary,
             :exit_status,
             :use_stdio,
             :stderr_to_stdout,
-            {:args, args},
+            {:args, script_args},
             {:cd, project_path},
             {:env, build_env()}
           ]
         )
 
-        # Start output handler
-        spawn_link(fn -> handle_port_output(port, session_ref, caller) end)
+        # Connect port to handler
+        Port.connect(port, handler_pid)
+        send(handler_pid, {:port, port})
 
         {:ok, port, session_ref}
 
@@ -125,20 +137,33 @@ defmodule EyeInTheSkyWeb.Claude.CLI do
 
         session_ref = make_ref()
 
+        # Spawn output handler first
+        handler_pid = spawn_link(fn ->
+          receive do
+            {:port, port} ->
+              handle_port_output(port, session_ref, caller)
+          end
+        end)
+
+        # Spawn the process using 'script' to provide a pseudo-TTY
+        script_args = ["-q", "/dev/null", claude_path] ++ args
+
         port = Port.open(
-          {:spawn_executable, claude_path},
+          {:spawn_executable, "/usr/bin/script"},
           [
             :binary,
             :exit_status,
             :use_stdio,
             :stderr_to_stdout,
-            {:args, args},
+            {:args, script_args},
             {:cd, project_path},
             {:env, build_env()}
           ]
         )
 
-        spawn_link(fn -> handle_port_output(port, session_ref, caller) end)
+        # Connect port to handler
+        Port.connect(port, handler_pid)
+        send(handler_pid, {:port, port})
 
         {:ok, port, session_ref}
 
@@ -150,7 +175,6 @@ defmodule EyeInTheSkyWeb.Claude.CLI do
   defp build_args(prompt, model, output_format, skip_permissions) do
     base = [
       "-p", prompt,
-      "--model", model,
       "--output-format", output_format,
       "--verbose"
     ]
@@ -163,12 +187,17 @@ defmodule EyeInTheSkyWeb.Claude.CLI do
   end
 
   defp build_env do
-    # Copy critical environment variables like opcode does
-    for {key, value} <- System.get_env(),
-        key in ["PATH", "HOME", "USER", "NODE_PATH", "NVM_DIR", "NVM_BIN"] or
-        String.starts_with?(key, "HOMEBREW_") do
+    # Pass ALL environment variables to subprocess
+    base_env = for {key, value} <- System.get_env() do
       {String.to_charlist(key), String.to_charlist(value)}
     end
+
+    # Force non-interactive mode for Claude (disable TTY requirements)
+    [
+      {'CI', 'true'},  # Tell Claude it's running in CI (no TTY)
+      {'TERM', 'dumb'} # Disable terminal features
+      | base_env
+    ]
   end
 
   defp handle_port_output(port, session_ref, caller) do
@@ -195,6 +224,7 @@ defmodule EyeInTheSkyWeb.Claude.CLI do
       after
         300_000 ->
           Logger.warning("No output from Claude after 5 minutes, timing out")
+          Port.close(port)  # Kill the subprocess to prevent zombie process
           send(caller, {:claude_exit, session_ref, :timeout})
           :ok
     end

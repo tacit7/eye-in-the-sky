@@ -45,6 +45,18 @@ defmodule EyeInTheSkyWeb.Agents do
   end
 
   @doc """
+  Gets a single agent, returning {:ok, agent} or {:error, :not_found}.
+
+  This is the safe version that doesn't raise exceptions.
+  """
+  def get_agent(id) do
+    case Repo.get(Agent, id) do
+      nil -> {:error, :not_found}
+      agent -> {:ok, agent}
+    end
+  end
+
+  @doc """
   Gets a single agent with all associations preloaded.
   """
   def get_agent_with_associations!(id) do
