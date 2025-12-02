@@ -36,6 +36,10 @@ test-mcp:
 	@echo "🔧 Testing MCP package..."
 	@go test ./internal/mcp -v
 
+test-ui:
+	@echo "🎨 Testing UI package..."
+	@go test ./internal/ui/app -v
+
 # Run integration tests
 test-integration:
 	@echo "🔗 Running integration tests..."

@@ -1,27 +1,83 @@
 {
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "permissions": {
     "allow": [
-      "Bash(lsof:*)",
-      "WebSearch",
-      "Bash(go mod:*)",
-      "Bash(gh repo list:*)",
-      "Bash(git rm:*)",
-      "Bash(./scripts/build.sh:*)",
+      "mcp__eye-in-the-sky__i-speak",
+      "mcp__eye-in-the-sky__i-action",
+      "mcp__eye-in-the-sky__i-update-status",
+      "Bash(mkdir:*)",
       "Bash(sqlite3:*)",
-      "Bash(curl:*)",
+      "mcp__eye-in-the-sky__i-end-session",
       "Bash(go build:*)",
-      "mcp__eye-in-the-sky__i-action"
+      "Bash(go test:*)",
+      "WebSearch",
+      "mcp__eye-in-the-sky__i-nats-send",
+      "mcp__eye-in-the-sky__i-nats-listen",
+      "Bash(mix compile:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "mcp__eye-in-the-sky__i-commits",
+      "mcp__eye-in-the-sky__i-todo-done",
+      "mcp__eye-in-the-sky__i-todo-annotate",
+      "Bash(find:*)",
+      "Bash(mix assets.build:*)"
     ],
     "deny": [],
-    "ask": [],
-    "mcp": {
-      "servers": {
-        "eye-in-the-sky": {
-          "command": "./bin/eye-in-the-sky",
-          "args": [],
-          "env": {}
-        }
+    "ask": []
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/urielmaldonado/projects/eye-in-the-sky/.claude/hooks/session-stop.sh"
+          }
+        ]
       }
-    }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/urielmaldonado/projects/eye-in-the-sky/.claude/hooks/session-end.sh"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/urielmaldonado/projects/eye-in-the-sky/.claude/hooks/session-clear.sh"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/urielmaldonado/projects/eye-in-the-sky/.claude/hooks/log-tool.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/urielmaldonado/projects/eye-in-the-sky/.claude/hooks/log-tool.sh"
+          }
+        ]
+      }
+    ]
   }
 }

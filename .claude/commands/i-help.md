@@ -23,6 +23,7 @@ Use the i-help MCP tool with:
 
 - `/i-start-session` - Register agent and start tracking
 - `/i-end-session` - Complete session with summary
+- `/i-sessions` - List all sessions with filtering options
 - `/i-track` - Quick status update
 - `/i-save` - Save session context for resumption
 - `/i-note` - Add contextual note
@@ -41,6 +42,7 @@ Use the i-help MCP tool with:
 - `i-save-context` - Save session state
 - `i-load-context` - Load session state
 - `i-note` - Add session note
+- `i-list-sessions` - List all sessions with filtering
 - `i-window` - Get current window (macOS)
 - `i-bring-front` - Bring window to front (macOS)
 - `i-help` - Get tool documentation

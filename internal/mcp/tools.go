@@ -3,13 +3,16 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/tacit7/eye-in-the-sky/internal/database"
 	"github.com/tacit7/eye-in-the-sky/internal/utils"
+	"github.com/tacit7/eye-in-the-sky/internal/window"
 )
 
 type Tools struct {
@@ -20,94 +23,47 @@ func NewTools(db *database.DB) *Tools {
 	return &Tools{db: db}
 }
 
-// RegisterAgent implements the register_agent MCP tool
-func (t *Tools) RegisterAgent(args RegisterAgentArgs) (RegisterAgentResult, error) {
-	// Generate git-style agent ID if not provided
-	var agentID string
-	if args.AgentID == nil || *args.AgentID == "" {
-		agentID = utils.GenerateGitStyleAgentID()
-	} else {
-		agentID = *args.AgentID
-		// Validate provided ID
-		if !utils.ValidateAgentID(agentID) {
-			return RegisterAgentResult{Success: false, Message: "Agent ID must be exactly 8 hex characters"}, nil
-		}
+// getGitRemoteURL extracts the git remote URL from a worktree path
+func getGitRemoteURL(worktreePath string) (string, error) {
+	if worktreePath == "" {
+		return "", fmt.Errorf("worktree path is empty")
 	}
 
-	// Check if agent already exists
-	existing, err := t.db.GetAgent(agentID)
-	if err == nil && existing != nil {
-		return RegisterAgentResult{Success: false, Message: fmt.Sprintf("Agent %s already exists", agentID)}, nil
+	cmd := exec.Command("git", "-C", worktreePath, "config", "--get", "remote.origin.url")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get git remote URL: %w", err)
 	}
 
-	// Create new agent and log registration action atomically
-	agent := &database.Agent{
-		ID:                 agentID,
-		Status:             database.StatusActive,
-		Source:             database.SourceWorktree,
-		GitWorktreePath:    args.WorktreePath,
-		FeatureDescription: &args.Description,
-		ProjectName:        args.ProjectName,
-		LastActivityAt:     timePtr(time.Now()),
+	remoteURL := strings.TrimSpace(string(output))
+	if remoteURL == "" {
+		return "", fmt.Errorf("no remote URL found")
 	}
 
-	action := &database.Action{
-		AgentID:     agentID,
-		ActionType:  database.ActionStatusUpdate,
-		Description: fmt.Sprintf("Agent registered: %s", args.Description),
-	}
-
-	if err := t.db.RegisterAgentWithAction(context.Background(), agent, action); err != nil {
-		return RegisterAgentResult{Success: false, Message: fmt.Sprintf("Failed to register agent: %v", err)}, fmt.Errorf("database error: %w", err)
-	}
-
-	return RegisterAgentResult{Success: true, Message: fmt.Sprintf("Agent %s registered successfully", agentID)}, nil
+	return remoteURL, nil
 }
 
-// RegisterDesktopAgent implements the register_claude_desktop_agent MCP tool
-func (t *Tools) RegisterDesktopAgent(args RegisterDesktopAgentArgs) (RegisterDesktopAgentResult, error) {
-	// Generate git-style agent ID if not provided
-	var agentID string
-	if args.AgentID == nil || *args.AgentID == "" {
-		agentID = utils.GenerateGitStyleAgentID()
-	} else {
-		agentID = *args.AgentID
-		// Validate provided ID
-		if !utils.ValidateAgentID(agentID) {
-			return RegisterDesktopAgentResult{Success: false, Message: "Agent ID must be exactly 8 hex characters"}, nil
-		}
+// getGitRoot finds the git repository root from a given path
+func getGitRoot(path string) (string, error) {
+	if path == "" {
+		return "", fmt.Errorf("path is empty")
 	}
 
-	// Check if agent already exists
-	existing, err := t.db.GetAgent(agentID)
-	if err == nil && existing != nil {
-		return RegisterDesktopAgentResult{Success: false, Message: fmt.Sprintf("Agent %s already exists", agentID)}, nil
+	cmd := exec.Command("git", "-C", path, "rev-parse", "--show-toplevel")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("not a git repository or git not found: %w", err)
 	}
 
-	// Create new Claude Desktop agent and log registration action atomically
-	agent := &database.Agent{
-		ID:                 agentID,
-		Status:             database.StatusActive,
-		Source:             database.SourceDesktop,
-		GitWorktreePath:    nil, // Desktop agents don't have worktree paths
-		FeatureDescription: &args.Description,
-		ProjectName:        &args.ProjectName,
-		LastActivityAt:     timePtr(time.Now()),
-		WindowID:           args.WindowID,
+	gitRoot := strings.TrimSpace(string(output))
+	if gitRoot == "" {
+		return "", fmt.Errorf("could not determine git root")
 	}
 
-	action := &database.Action{
-		AgentID:     agentID,
-		ActionType:  database.ActionStatusUpdate,
-		Description: fmt.Sprintf("Claude Desktop agent registered: %s (Project: %s)", args.Description, args.ProjectName),
-	}
-
-	if err := t.db.RegisterAgentWithAction(context.Background(), agent, action); err != nil {
-		return RegisterDesktopAgentResult{Success: false, Message: fmt.Sprintf("Failed to register agent: %v", err)}, fmt.Errorf("database error: %w", err)
-	}
-
-	return RegisterDesktopAgentResult{Success: true, Message: fmt.Sprintf("Claude Desktop agent %s registered successfully", agentID)}, nil
+	return gitRoot, nil
 }
+
+// Removed RegisterAgent and RegisterDesktopAgent - now using only StartSession
 
 // UpdateStatus implements the update_status MCP tool
 func (t *Tools) UpdateStatus(args UpdateStatusArgs) (UpdateStatusResult, error) {
@@ -169,14 +125,14 @@ func (t *Tools) LogCommits(args LogCommitsArgs) (LogCommitsResult, error) {
 	var commitMessages []string
 	var err error
 
+	// Get agent first to obtain full UUID for database operations
+	agent, err := t.db.GetAgent(args.AgentID)
+	if err != nil {
+		return LogCommitsResult{Success: false, Message: fmt.Sprintf("Failed to get agent: %v", err)}, nil
+	}
+
 	// If no hashes provided, try to get latest commits automatically
 	if len(args.CommitHashes) == 0 {
-		// Get agent to find worktree path
-		agent, err := t.db.GetAgent(args.AgentID)
-		if err != nil {
-			return LogCommitsResult{Success: false, Message: fmt.Sprintf("Failed to get agent: %v", err)}, nil
-		}
-
 		workDir := "."
 		if agent.GitWorktreePath != nil {
 			workDir = *agent.GitWorktreePath
@@ -193,9 +149,9 @@ func (t *Tools) LogCommits(args LogCommitsArgs) (LogCommitsResult, error) {
 		commitMessages = args.CommitMessages
 	}
 
-	// Use transaction-safe method
+	// Use transaction-safe method with full agent UUID
 	err = t.db.WithTransaction(context.Background(), func(tx *database.Tx) error {
-		return tx.CreateCommitsTx(args.AgentID, commitHashes, commitMessages)
+		return tx.CreateCommitsTx(agent.ID, commitHashes, commitMessages)
 	})
 
 	if err != nil {
@@ -276,6 +232,85 @@ func (t *Tools) EndSession(args EndSessionArgs) (EndSessionResult, error) {
 	return EndSessionResult{Success: true, Message: message}, nil
 }
 
+// LogSessionCost implements the i-log-session-cost MCP tool
+func (t *Tools) LogSessionCost(args LogSessionCostArgs) (LogSessionCostResult, error) {
+	// Validate agent exists
+	agent, err := t.db.GetAgent(args.AgentID)
+	if err != nil {
+		return LogSessionCostResult{Success: false, Message: fmt.Sprintf("Agent not found: %v", err)}, nil
+	}
+
+	// Create session metrics record
+	metrics := &database.SessionMetrics{
+		AgentID:          args.AgentID,
+		SessionID:        args.SessionID,
+		TokensUsed:       args.TokensUsed,
+		TokensBudget:     args.TokensBudget,
+		TokensRemaining:  args.TokensRemaining,
+		InputTokens:      args.InputTokens,
+		OutputTokens:     args.OutputTokens,
+		EstimatedCostUSD: args.EstimatedCostUSD,
+		ModelName:        args.ModelName,
+		Notes:            args.Notes,
+	}
+
+	// Log to database
+	if err := t.db.LogSessionMetrics(metrics); err != nil {
+		return LogSessionCostResult{Success: false, Message: fmt.Sprintf("Failed to log session cost: %v", err)}, nil
+	}
+
+	// Build success message
+	message := fmt.Sprintf("Session cost logged for agent %s: %d/%d tokens used",
+		args.AgentID, args.TokensUsed, args.TokensBudget)
+
+	if args.EstimatedCostUSD != nil {
+		message += fmt.Sprintf(" (~$%.4f)", *args.EstimatedCostUSD)
+	}
+
+	// Also log as action for visibility in timeline
+	action := &database.Action{
+		AgentID:     args.AgentID,
+		ActionType:  database.ActionStatusUpdate,
+		Description: message,
+	}
+
+	if err := t.db.CreateAction(action); err != nil {
+		// Don't fail the whole operation if action logging fails
+		fmt.Fprintf(os.Stderr, "Warning: Failed to log cost action: %v\n", err)
+	}
+
+	_ = agent // Suppress unused variable warning
+	return LogSessionCostResult{Success: true, Message: message}, nil
+}
+
+// UpdateFeatureDescription implements the i-update-description MCP tool
+func (t *Tools) UpdateFeatureDescription(args UpdateFeatureDescriptionArgs) (UpdateFeatureDescriptionResult, error) {
+	// Validate agent exists
+	_, err := t.db.GetAgent(args.AgentID)
+	if err != nil {
+		return UpdateFeatureDescriptionResult{Success: false, Message: fmt.Sprintf("Agent not found: %v", err)}, nil
+	}
+
+	// Update feature description
+	if err := t.db.UpdateAgentFeatureDescription(args.AgentID, args.FeatureDescription); err != nil {
+		return UpdateFeatureDescriptionResult{Success: false, Message: fmt.Sprintf("Failed to update feature description: %v", err)}, nil
+	}
+
+	// Log the update as an action
+	action := &database.Action{
+		AgentID:     args.AgentID,
+		ActionType:  database.ActionStatusUpdate,
+		Description: fmt.Sprintf("Feature description updated to: %s", args.FeatureDescription),
+	}
+
+	if err := t.db.CreateAction(action); err != nil {
+		// Don't fail the whole operation if action logging fails
+		fmt.Fprintf(os.Stderr, "Warning: Failed to log description update action: %v\n", err)
+	}
+
+	return UpdateFeatureDescriptionResult{Success: true, Message: "Feature description updated successfully"}, nil
+}
+
 // GetCurrentWindow implements the get_current_window MCP tool
 func (t *Tools) GetCurrentWindow(args GetCurrentWindowArgs) (GetCurrentWindowResult, error) {
 	if runtime.GOOS != "darwin" {
@@ -338,8 +373,8 @@ func (t *Tools) BringWindowFront(args BringWindowFrontArgs) (BringWindowFrontRes
 		return BringWindowFrontResult{Success: false, Message: fmt.Sprintf("Agent not found: %v", err)}, nil
 	}
 
-	// For desktop agents, we can use the window ID if available
-	if agent.Source == database.SourceDesktop && agent.WindowID != nil {
+	// Use the window ID if available
+	if agent.WindowID != nil {
 		// Parse window ID to get application name
 		windowID := *agent.WindowID
 		parts := strings.Split(windowID, "_")
@@ -360,323 +395,228 @@ func (t *Tools) BringWindowFront(args BringWindowFrontArgs) (BringWindowFrontRes
 		}
 	}
 
-	// Fallback: try to bring ghostty to front (since that's what you're using)
-	bringCmd := exec.Command("osascript", "-e", `tell application "ghostty" to activate`)
-	err = bringCmd.Run()
-	if err != nil {
-		return BringWindowFrontResult{Success: false, Message: fmt.Sprintf("Failed to bring terminal to front: %v", err)}, nil
+	// Fallback: try to bring terminal to front
+	if agent.TerminalApplication != nil {
+		bringCmd := exec.Command("osascript", "-e", fmt.Sprintf(`tell application "%s" to activate`, *agent.TerminalApplication))
+		err = bringCmd.Run()
+		if err == nil {
+			return BringWindowFrontResult{
+				Success: true,
+				Message: fmt.Sprintf("Brought %s window to front", *agent.TerminalApplication),
+			}, nil
+		}
 	}
 
 	return BringWindowFrontResult{
-		Success: true,
-		Message: "Brought terminal window to front",
+		Success: false,
+		Message: "No window information available for this agent",
 	}, nil
 }
 
+// Instructions implements the i-instructions MCP tool
+func (t *Tools) Instructions(args InstructionsArgs) (InstructionsResult, error) {
+	instructions := `Eye in the Sky - Agent Lifecycle Management
 
-// Help implements the help MCP tool
-func (t *Tools) Help(args HelpArgs) (HelpResult, error) {
-	if args.Tool != nil {
-		// Return detailed help for specific tool
-		toolHelp := t.getToolHelp(*args.Tool)
-		if toolHelp == nil {
-			return HelpResult{Success: false, Message: fmt.Sprintf("Tool '%s' not found", *args.Tool)}, nil
-		}
-		return HelpResult{
-			Success: true,
-			Message: fmt.Sprintf("Help for tool '%s'", *args.Tool),
-			Tools:   []Tool{*toolHelp},
-		}, nil
-	}
+═══════════════════════════════════════════════════════════════
+INITIALIZATION - CRITICAL: Do this FIRST on EVERY new session
+═══════════════════════════════════════════════════════════════
 
-	// Return help for all tools
-	tools := t.getAllToolsWithHelp()
-	return HelpResult{
-		Success: true,
-		Message: "Eye in the Sky - Claude Code Multi-Agent Management System\n\nAvailable tools for tracking and managing Claude Code agent activities:",
-		Tools:   tools,
+At the start of the session, your session_id will be provided to you.
+Use this ID when starting your session.
+
+To register yourself, call i-start-session with your session ID:
+
+  i-start-session({
+    "session_id": "your_provided_session_id",
+    "description": "What you'll be working on",
+    "worktree_path": "optional",
+    "project_name": "optional",
+    "parent_agent_id": "optional",
+    "parent_session_id": "optional"
+  })
+
+IMPORTANT: The system will return a response containing:
+  {
+    "agent_id": "generated-uuid-for-your-agent",
+    "session_id": "your-session-id",
+    "success": true,
+    "message": "Session started for agent UUID"
+  }
+
+You MUST extract and use this returned agent_id for all subsequent MCP calls.
+The agent_id is auto-generated as a UUID and uniquely identifies your agent instance.
+
+═══════════════════════════════════════════════════════════════
+CLAUDE CODE HOOKS - Manual Mapping File Update Required
+═══════════════════════════════════════════════════════════════
+
+CRITICAL: If you're using Claude Code hooks for logging tool execution:
+
+After calling i-start-session and receiving your agent_id, you MUST manually update
+the session-to-agent mapping file so hooks can look up your agent ID.
+
+STEP 1: Read the current mapping file:
+  Read: .claude/hooks/session_agent_map.json
+
+STEP 2: Add your session→agent mapping:
+  Edit the file to add a new entry:
+  {
+    "existing-session-1": "existing-agent-1",
+    "YOUR_SESSION_ID": "YOUR_AGENT_ID_FROM_START_SESSION"
+  }
+
+STEP 3: Save the file
+
+Why this is needed:
+- Claude Code provides session_id to hooks via JSON stdin
+- Eye-in-the-Sky uses agent_id (UUID) to track agents
+- Hooks need to translate session_id → agent_id
+- The mapping file bridges these two systems
+- JSON file lookup is 6.9% faster than SQLite query
+
+Example mapping file:
+  {
+    "97c212de-24e0-4c8d-b16a-876e406b7c14": "2743c649-18ab-422d-bdbe-bb3b59d2c431",
+    "1a398965-1f97-4329-802d-0bbe0d923564": "354ab567-5a8b-4259-8f25-9ed68d96e7d8"
+  }
+
+Without this mapping:
+- Hooks will fire but agent_id will be "unknown"
+- Logs will be written but not linked to your agent
+- TUI won't show hook activity for your session
+
+═══════════════════════════════════════════════════════════════
+SUBAGENTS - Creating and Managing Child Agents
+═══════════════════════════════════════════════════════════════
+
+Subagents are child agents spawned by a parent agent to handle specific tasks.
+They maintain a hierarchical relationship with their parent for tracking.
+
+Creating a Subagent:
+  When your main agent needs to spawn a subagent (e.g., using Task tool), the subagent should:
+
+  1. Generate its own new session_id (UUID)
+  2. Call i-start-session with parent tracking:
+
+  i-start-session({
+    "session_id": "new-uuid-for-subagent-session",
+    "description": "Specific task for subagent",
+    "parent_agent_id": "your-current-agent-uuid",      // Links to parent agent
+    "parent_session_id": "your-current-session-uuid"   // Links to parent session
+  })
+
+  3. The subagent receives its own agent_id in response
+  4. Subagent operates independently but is tracked as child of parent
+
+Parent-Child Relationships:
+  - parent_agent_id: Links this agent to its parent agent (UUID)
+  - parent_session_id: Links this session to parent session (UUID)
+  - Both help maintain hierarchy for multi-agent workflows
+  - Dashboard/TUI shows subagents indented under parents
+
+Example Workflow:
+  Main Agent (agent: abc-123, session: def-456) needs to analyze code
+  └─> Spawns Subagent for analysis:
+      i-start-session({
+        "session_id": "ghi-789",  // New session ID
+        "description": "Analyze authentication module",
+        "parent_agent_id": "abc-123",
+        "parent_session_id": "def-456"
+      })
+      └─> Subagent (agent: jkl-012, session: ghi-789) works independently
+          but is tracked as child of Main Agent
+
+When to Use Subagents:
+  - Delegating specific subtasks to specialized agents
+  - Parallel processing of independent tasks
+  - Isolating complex operations
+  - When using Task tool with subagent_type parameter
+
+═══════════════════════════════════════════════════════════════
+WORKFLOW - During your session
+═══════════════════════════════════════════════════════════════
+
+After receiving your agent_id from i-start-session, use it in all subsequent calls:
+
+i-status - Update your current status
+  Statuses: active, working, idle, completed, failed
+  Example: i-status({"agent_id": "your-uuid-from-start-session", "status": "working", "current_task": "Building TUI"})
+
+i-action - Log significant activities
+  Types: task_start, file_operation, git_commit, status_update
+  Example: i-action({"agent_id": "your-uuid-from-start-session", "action_type": "file_operation", "description": "Created dashboard component"})
+
+i-commits - Track git commits
+  Example: i-commits({"agent_id": "your-uuid-from-start-session", "commit_hashes": ["abc123f"], "commit_messages": ["Add feature"]})
+
+i-end - End session with summary
+  Example: i-end({"agent_id": "your-uuid-from-start-session", "summary": "Completed TUI implementation", "final_status": "completed"})
+
+═══════════════════════════════════════════════════════════════
+COMPACTION TRACKING
+═══════════════════════════════════════════════════════════════
+
+When Claude detects a conversation compaction (indicated by system message
+'This session is being continued from a previous conversation'), call:
+
+═══════════════════════════════════════════════════════════════
+ADDITIONAL TOOLS
+═══════════════════════════════════════════════════════════════
+
+i-save-context - Save session state for resumption
+i-note-add - Add contextual notes to session
+
+═══════════════════════════════════════════════════════════════
+DASHBOARD & TUI
+═══════════════════════════════════════════════════════════════
+
+Web Dashboard: http://localhost:8080 (if web server running)
+TUI: Run 'bin/dashboard' for terminal interface
+
+TUI KEYBINDINGS:
+Agent List View (Overview Page):
+  [q] Quit          [r] Refresh         [a] Toggle filter (active/all)
+  [j/k] Navigate    [Enter] View details
+  [n] New session   [c] Continue        [s] Start session   [w] Window
+  [L] Logs          [D] Archive
+
+Agent Detail View (Individual Agent Page):
+  [q] Back to list  [r] Refresh         [j/k] Scroll
+  [s] Start session [w] Go to window    [L] View all logs
+
+  Tabs (navigate with letter keys):
+  [O] Overview      [C] Commits         [L] Logs
+  [N] Notes         [A] Actions         [T] Tasks
+  [P] Project tickets (Note: Known issue - may not work when pressed)
+
+STATUS INDICATORS:
+  Active Sessions (shown by default):
+    ● ACTIVE   - Ready for work (green)
+    ● WORKING  - Currently working (blue)
+    ● IDLE     - Waiting for next task (yellow)
+    ● STALE    - Inactive 30min-1hr (gray) - needs attention
+    ? UNKNOWN  - Inactive >1hr (gray) - possibly dead/disconnected
+
+  Completed Sessions (shown with 'a' toggle):
+    ✓ COMPLETE - Finished successfully (cyan)
+    ✗ FAILED   - Ended with error (red)
+
+ACTIVE FILTER:
+  Default view shows: active, working, idle, stale, unknown
+  Press 'a' to toggle between active sessions and all sessions (including completed/failed/archived)
+
+COMMANDS:
+  'n' New Session   - Creates new session with marker file, runs 'claude --session-id <id>' and exits
+  's' Start Session - Runs 'claude -s <session-id>' and exits dashboard
+  'c' Continue      - Runs 'claude --resume <session-id>' and returns to dashboard
+
+═══════════════════════════════════════════════════════════════`
+
+	return InstructionsResult{
+		Success:      true,
+		Message:      "Instructions retrieved successfully",
+		Instructions: instructions,
 	}, nil
-}
-
-// getToolHelp returns detailed help for a specific tool
-func (t *Tools) getToolHelp(toolName string) *Tool {
-	tools := t.getAllToolsWithHelp()
-	for _, tool := range tools {
-		if tool.Name == toolName {
-			return &tool
-		}
-	}
-	return nil
-}
-
-// getAllToolsWithHelp returns all tools with comprehensive documentation
-func (t *Tools) getAllToolsWithHelp() []Tool {
-	return []Tool{
-		{
-			Name:        "register_agent",
-			Description: "Register a new Claude Code agent to start tracking activities",
-			Instructions: `Register a new agent before starting any work. If no agent_id is provided, a git-style 8-character hash will be auto-generated.
-
-This tool:
-- Creates a new agent record in the database
-- Auto-generates git-style hash ID if not provided
-- Sets initial status to 'active'
-- Logs the registration action
-- Enables tracking for all subsequent activities
-
-Required before using any other tools for this agent.`,
-			Parameters: map[string]string{
-				"agent_id":      "Unique 8-character hex identifier (optional - auto-generated if not provided)",
-				"description":   "Brief description of what the agent will work on (required)",
-				"worktree_path": "Path to the git repository (optional)",
-				"project_name":  "Name of the project being worked on (optional)",
-			},
-			Examples: []string{
-				`{"description": "Working on user authentication system"}`,
-				`{"agent_id": "abc123de", "description": "Working on user authentication system", "project_name": "MyApp"}`,
-				`{"description": "Frontend dashboard development", "worktree_path": "/path/to/project", "project_name": "Eye in the Sky"}`,
-			},
-		},
-		{
-			Name:        "register_claude_desktop_agent",
-			Description: "Register a new Claude Desktop agent to start tracking activities",
-			Instructions: `Register a new Claude Desktop agent before starting any work. This tool is specifically for agents running in Claude Desktop (not git worktrees). If no agent_id is provided, a git-style 8-character hash will be auto-generated.
-
-This tool:
-- Creates a new agent record with 'desktop' source
-- Auto-generates git-style hash ID if not provided
-- Sets initial status to 'active'
-- Logs the registration action with project context
-- Does not require git worktree paths`,
-			Parameters: map[string]string{
-				"agent_id":     "Unique 8-character hex identifier (optional - auto-generated if not provided)",
-				"description":  "Brief description of what the agent will work on (required)",
-				"project_name": "Name of the project being worked on (required)",
-				"window_id":    "Claude Desktop window identifier for window management (optional)",
-			},
-			Examples: []string{
-				`{"description": "Building user authentication system", "project_name": "MyApp"}`,
-				`{"agent_id": "desk1234", "description": "Building user authentication system", "project_name": "MyApp"}`,
-				`{"description": "Frontend component development", "project_name": "Dashboard"}`,
-				`{"description": "Working on API endpoints", "project_name": "Backend", "window_id": "win_abc123"}`,
-			},
-		},
-		{
-			Name:        "update_status",
-			Description: "Update agent status and current task being worked on",
-			Instructions: `Update the agent's current status and what they're working on. This helps track progress and current focus.
-
-Valid statuses:
-- 'active': Agent is available and ready to work
-- 'working': Agent is actively working on a task
-- 'idle': Agent is paused or waiting
-- 'completed': Agent has finished all work
-- 'failed': Agent encountered an error
-
-Updates the last activity timestamp automatically.`,
-			Parameters: map[string]string{
-				"agent_id":     "8-character agent identifier (required)",
-				"status":       "One of: active, working, idle, completed, failed (required)",
-				"current_task": "Description of current task (optional)",
-			},
-			Examples: []string{
-				`{"agent_id": "abc123de", "status": "working", "current_task": "Implementing JWT validation"}`,
-				`{"agent_id": "web45678", "status": "completed"}`,
-			},
-		},
-		{
-			Name:        "log_action",
-			Description: "Log agent activities and actions for audit trail",
-			Instructions: `Log important activities performed by the agent. This creates an audit trail of all work done.
-
-Action types:
-- 'task_start': Starting a new task or phase
-- 'file_operation': Creating, editing, or deleting files
-- 'git_commit': Making git commits (use log_commits for detailed commit tracking)
-- 'status_update': Changing status or current task
-
-The details field can contain JSON for structured information.`,
-			Parameters: map[string]string{
-				"agent_id":     "8-character agent identifier (required)",
-				"action_type":  "One of: task_start, file_operation, git_commit, status_update (required)",
-				"description":  "Human-readable description of the action (required)",
-				"details":      "Additional structured information as JSON string (optional)",
-			},
-			Examples: []string{
-				`{"agent_id": "abc123de", "action_type": "task_start", "description": "Started implementing user authentication"}`,
-				`{"agent_id": "web45678", "action_type": "file_operation", "description": "Created login component", "details": "{\"file\": \"src/components/Login.tsx\", \"lines\": 45}"}`,
-			},
-		},
-		{
-			Name:        "log_commits",
-			Description: "Track git commits made by the agent",
-			Instructions: `Record git commits for tracking code changes. This provides a detailed history of code modifications.
-
-You can log multiple commits at once. Commit messages are optional but recommended for better tracking.
-
-This automatically updates the agent's last activity timestamp.`,
-			Parameters: map[string]string{
-				"agent_id":        "8-character agent identifier (required)",
-				"commit_hashes":   "Array of git commit hash strings (required)",
-				"commit_messages": "Array of commit messages, same order as hashes (optional)",
-			},
-			Examples: []string{
-				`{"agent_id": "abc123de", "commit_hashes": ["a1b2c3d"], "commit_messages": ["Add JWT middleware"]}`,
-				`{"agent_id": "web45678", "commit_hashes": ["e4f5g6h", "i7j8k9l"], "commit_messages": ["Fix login bug", "Add error handling"]}`,
-			},
-		},
-		{
-			Name:        "end_session",
-			Description: "Complete agent session with summary and final status",
-			Instructions: `End the agent's work session. This should be called when all work is complete or if the agent encounters a fatal error.
-
-The final status should reflect the outcome:
-- 'completed': All work finished successfully
-- 'failed': Work stopped due to errors
-
-Provide a summary of what was accomplished for better tracking.`,
-			Parameters: map[string]string{
-				"agent_id":     "8-character agent identifier (required)",
-				"summary":      "Summary of work completed (optional but recommended)",
-				"final_status": "Either 'completed' or 'failed' (optional, defaults to 'completed')",
-			},
-			Examples: []string{
-				`{"agent_id": "abc123de", "summary": "Successfully implemented JWT authentication with tests", "final_status": "completed"}`,
-				`{"agent_id": "web45678", "summary": "Failed to deploy due to configuration issues", "final_status": "failed"}`,
-			},
-		},
-		{
-			Name:        "help",
-			Description: "Get help information about available tools",
-			Instructions: `Get help and documentation for the Eye in the Sky MCP tools.
-
-Call without arguments to get help for all tools, or specify a tool name to get detailed help for that specific tool.
-
-This tool provides comprehensive documentation including parameters, examples, and usage instructions.`,
-			Parameters: map[string]string{
-				"tool": "Name of specific tool to get help for (optional)",
-			},
-			Examples: []string{
-				`{}`,
-				`{"tool": "register_agent"}`,
-				`{"tool": "log_action"}`,
-			},
-		},
-		{
-			Name:        "save_session_context",
-			Description: "Save current session state for resumption later",
-			Instructions: `Save the current session context to enable resuming work later. This captures:
-- Current progress and phase
-- Completed and pending tasks
-- Important decisions and notes
-- Key files and dependencies
-- Metrics and environment state
-
-This enables pausing and resuming sessions across different Claude Code instances.`,
-			Parameters: map[string]string{
-				"agent_id":         "8-character agent identifier (required)",
-				"current_phase":    "Current work phase or milestone (required)",
-				"progress":         "Progress information with completion percentage and goals (optional)",
-				"next_actions":     "Array of next steps to take (optional)",
-				"completed_tasks":  "Array of completed tasks (optional)",
-				"pending_tasks":    "Array of remaining tasks (optional)",
-				"key_decisions":    "Array of important decisions made (optional)",
-				"important_files":  "Array of key files modified or created (optional)",
-				"dependencies":     "Array of dependencies or blockers (optional)",
-				"notes":           "Array of contextual notes and observations (optional)",
-				"environment":     "Key-value pairs of environment info (optional)",
-				"metrics":         "Performance and progress metrics (optional)",
-				"auto_save":       "Whether to automatically update agent status to idle (optional)",
-			},
-			Examples: []string{
-				`{"agent_id": "abc123de", "current_phase": "Authentication implementation", "next_actions": ["Implement JWT validation", "Add password hashing"]}`,
-				`{"agent_id": "web45678", "current_phase": "Dashboard frontend", "completed_tasks": ["User login component", "Navigation bar"], "pending_tasks": ["User profile page"], "auto_save": true}`,
-			},
-		},
-		{
-			Name:        "load_session_context",
-			Description: "Load previous session state to resume work",
-			Instructions: `Load the most recent session context for an agent to resume work where it was left off. This retrieves:
-- Progress and current phase
-- Completed and pending tasks
-- Important decisions and notes
-- Key files and dependencies
-- Previous metrics and environment
-
-Enables seamless session resumption across Claude Code instances.`,
-			Parameters: map[string]string{
-				"agent_id":   "8-character agent identifier (required)",
-				"session_id": "Specific session ID to load (optional - loads latest if not provided)",
-			},
-			Examples: []string{
-				`{"agent_id": "abc123de"}`,
-				`{"agent_id": "web45678", "session_id": "web45678_1696847200"}`,
-			},
-		},
-		{
-			Name:        "add_session_note",
-			Description: "Add contextual notes to the current session",
-			Instructions: `Add timestamped notes to the current session context. Useful for:
-- Recording insights and observations
-- Noting important decisions
-- Leaving reminders for later
-- Documenting blockers or issues
-
-Note types: insight, reminder, warning, idea
-Priority levels: low, medium, high`,
-			Parameters: map[string]string{
-				"agent_id": "8-character agent identifier (required)",
-				"type":     "Note type: insight, reminder, warning, idea (required)",
-				"content":  "Note content and description (required)",
-				"priority": "Priority level: low, medium, high (optional, defaults to medium)",
-				"tags":     "Array of tags for categorization (optional)",
-			},
-			Examples: []string{
-				`{"agent_id": "abc123de", "type": "insight", "content": "JWT token validation works better with async/await pattern"}`,
-				`{"agent_id": "web45678", "type": "reminder", "content": "Need to add error handling for API calls", "priority": "high"}`,
-				`{"agent_id": "api67890", "type": "warning", "content": "Database migration needed before deploy", "priority": "high", "tags": ["deployment", "database"]}`,
-			},
-		},
-		{
-			Name:        "get_current_window",
-			Description: "Get information about the current active window (macOS only)",
-			Instructions: `Detect the currently active window and return information about it. This tool helps identify which window/application is currently in focus.
-
-This tool:
-- Detects the frontmost application
-- Gets window title, position, and size
-- Generates a window ID for tracking
-- Only works on macOS systems
-
-Useful for registering agents with accurate window information.`,
-			Parameters: map[string]string{
-				// No parameters needed
-			},
-			Examples: []string{
-				`{}`,
-			},
-		},
-		{
-			Name:        "bring_window_front",
-			Description: "Bring an agent's window to the front (macOS only)",
-			Instructions: `Bring the specified agent's window to the front, making it the active window. This is useful for quickly switching focus to a specific agent's workspace.
-
-This tool:
-- Looks up the agent's window information
-- Uses the stored window ID to identify the application
-- Brings the application/window to the front
-- Falls back to bringing terminal (ghostty) to front if no specific window ID
-
-Only works on macOS systems with AppleScript support.`,
-			Parameters: map[string]string{
-				"agent_id": "8-character agent identifier (required)",
-			},
-			Examples: []string{
-				`{"agent_id": "534002f0"}`,
-				`{"agent_id": "abc123de"}`,
-			},
-		},
-	}
 }
 
 func timePtr(t time.Time) *time.Time {
@@ -726,48 +666,132 @@ func getLatestCommits(count int, workDir string) ([]string, []string, error) {
 
 // StartSession implements the i-start-session tool
 func (t *Tools) StartSession(args StartSessionArgs) (StartSessionResult, error) {
-	// Generate agent ID if not provided
-	var agentID string
-	if args.AgentID == nil || *args.AgentID == "" {
-		agentID = utils.GenerateGitStyleAgentID()
-	} else {
-		agentID = *args.AgentID
-	}
+	// Always generate a new UUID agent ID
+	agentID := utils.GenerateGitStyleAgentID()
 
-	// Load persona if provided
-	var initialContext string
-	var personaID *string
-	if args.PersonaID != nil && *args.PersonaID != "" {
-		persona, err := t.db.GetPersona(*args.PersonaID)
-		if err != nil {
-			return StartSessionResult{}, fmt.Errorf("failed to load persona %s: %w", *args.PersonaID, err)
+	// Auto-detect worktree path if not provided
+	if args.WorktreePath == nil || *args.WorktreePath == "" {
+		// Get current working directory
+		cwd, err := os.Getwd()
+		if err == nil {
+			// Try to find git root from cwd
+			gitRoot, err := getGitRoot(cwd)
+			if err == nil {
+				args.WorktreePath = &gitRoot
+				fmt.Fprintf(os.Stderr, "[DEBUG] Auto-detected worktree path: %s\n", gitRoot)
+			} else {
+				fmt.Fprintf(os.Stderr, "[DEBUG] Could not auto-detect git root: %v\n", err)
+			}
 		}
-		initialContext = persona.InitialContext
-		personaID = args.PersonaID
 	}
 
-	// Create agent
+	// Detect window ID on macOS
+	var windowID *string
+	var terminalApp *string
+	if runtime.GOOS == "darwin" {
+		// Auto-detect current window on macOS
+		wm := window.NewManager()
+		winInfo, err := wm.GetCurrentWindowID("current", "")
+		if err == nil && winInfo != nil {
+			// Format: "Application:WindowID"
+			detectedWindowID := fmt.Sprintf("%s:%s", winInfo.Application, winInfo.ID)
+			windowID = &detectedWindowID
+			// Store terminal application separately
+			terminalApp = &winInfo.Application
+		}
+		// If detection fails, just continue without window ID
+	}
+
+	// Look up project by git remote URL or path if worktree path is provided
+	var projectID *int
+	var foundProject *database.Project
+	if args.WorktreePath != nil && *args.WorktreePath != "" {
+		// First try by remote URL
+		remoteURL, err := getGitRemoteURL(*args.WorktreePath)
+		if err == nil {
+			fmt.Fprintf(os.Stderr, "[DEBUG] Got remote URL: %s\n", remoteURL)
+			project, err := t.db.GetProjectByRemoteURL(remoteURL)
+			if err == nil {
+				fmt.Fprintf(os.Stderr, "[DEBUG] Found project by remote URL: %s\n", project.ID)
+				foundProject = project
+				// Convert string ID to int
+				projID, err := strconv.Atoi(project.ID)
+				if err == nil {
+					projectID = &projID
+				}
+			} else {
+				fmt.Fprintf(os.Stderr, "[DEBUG] Remote URL lookup failed: %v\n", err)
+			}
+		} else {
+			fmt.Fprintf(os.Stderr, "[DEBUG] Failed to get remote URL: %v\n", err)
+		}
+
+		// If remote URL lookup failed, try by path
+		if projectID == nil {
+			fmt.Fprintf(os.Stderr, "[DEBUG] Trying path lookup: %s\n", *args.WorktreePath)
+			project, err := t.db.GetProjectByPath(*args.WorktreePath)
+			if err == nil {
+				fmt.Fprintf(os.Stderr, "[DEBUG] Found project by path: %s\n", project.ID)
+				foundProject = project
+				// Convert string ID to int
+				projID, err := strconv.Atoi(project.ID)
+				if err == nil {
+					projectID = &projID
+				} else {
+					fmt.Fprintf(os.Stderr, "[DEBUG] Failed to convert project ID to int: %v\n", err)
+				}
+			} else {
+				fmt.Fprintf(os.Stderr, "[DEBUG] Path lookup failed: %v\n", err)
+				// Project not found by either method - return helpful error
+				return StartSessionResult{}, fmt.Errorf(
+					"project not found for worktree path '%s'. Please create a project entry first. "+
+					"You can do this by adding a row to the projects table with the path or remote_url set.",
+					*args.WorktreePath,
+				)
+			}
+		}
+	}
+
+	// Auto-populate project name from found project if not provided
+	projectName := args.ProjectName
+	if (projectName == nil || *projectName == "") && foundProject != nil {
+		projectName = &foundProject.Name
+		fmt.Fprintf(os.Stderr, "[DEBUG] Auto-populated project name: %s\n", *projectName)
+	}
+
+	// Create agent with window tracking
 	agent := &database.Agent{
-		ID:                 agentID,
-		Status:             database.StatusActive,
-		Source:             database.SourceWorktree,
-		GitWorktreePath:    args.WorktreePath,
-		FeatureDescription: &args.Description,
-		ProjectName:        args.ProjectName,
-		PersonaID:          personaID,
-		LastActivityAt:     timePtr(time.Now()),
+		ID:                  agentID,
+		Status:              database.StatusActive,
+		Source:              database.SourceWorktree, // Always worktree now
+		Description:         args.AgentDescription,
+		GitWorktreePath:     args.WorktreePath,
+		FeatureDescription:  &args.Description,
+		ProjectName:         projectName, // Use auto-populated project name
+		ProjectID:           projectID,
+		WindowID:            windowID,
+		TerminalApplication: terminalApp,
+		ParentAgentID:       args.ParentAgentID,
+		LastActivityAt:      timePtr(time.Now()),
 	}
 
 	if err := t.db.CreateAgent(agent); err != nil {
 		return StartSessionResult{}, fmt.Errorf("failed to create agent: %w", err)
 	}
 
-	// Create session
-	sessionID := fmt.Sprintf("%s_%d", agentID, time.Now().Unix())
+	// Use the mandatory session_id provided
+	sessionID := args.SessionID
+
+	// Use name if provided, otherwise use description as session name
+	sessionName := args.Name
+	if sessionName == nil || *sessionName == "" {
+		sessionName = &args.Description
+	}
+
 	session := &database.Session{
 		ID:        sessionID,
 		AgentID:   agentID,
-		Name:      args.Name,
+		Name:      sessionName,
 		StartedAt: time.Now(),
 	}
 
@@ -776,12 +800,7 @@ func (t *Tools) StartSession(args StartSessionArgs) (StartSessionResult, error) 
 	}
 
 	// Log initial entry
-	var logMessage string
-	if personaID != nil {
-		logMessage = fmt.Sprintf("Started session with persona '%s': %s", *personaID, args.Description)
-	} else {
-		logMessage = fmt.Sprintf("Started session: %s", args.Description)
-	}
+	logMessage := fmt.Sprintf("Started session: %s", args.Description)
 
 	log := &database.Log{
 		SessionID: sessionID,
@@ -799,19 +818,13 @@ func (t *Tools) StartSession(args StartSessionArgs) (StartSessionResult, error) 
 		return StartSessionResult{}, fmt.Errorf("failed to update current session: %w", err)
 	}
 
-	var message string
-	if personaID != nil {
-		message = fmt.Sprintf("Session %s started for agent %s with persona '%s' loaded", sessionID, agentID, *personaID)
-	} else {
-		message = fmt.Sprintf("Session %s started for agent %s", sessionID, agentID)
-	}
+	message := fmt.Sprintf("Session %s started for agent %s", sessionID, agentID)
 
 	return StartSessionResult{
-		Success:        true,
-		Message:        message,
-		AgentID:        agentID,
-		SessionID:      sessionID,
-		InitialContext: initialContext,
+		Success:   true,
+		Message:   message,
+		AgentID:   agentID,
+		SessionID: sessionID,
 	}, nil
 }
 
@@ -837,9 +850,11 @@ func (t *Tools) AddLog(args AddLogArgs) (AddLogResult, error) {
 // AddNote implements the i-note-add tool
 func (t *Tools) AddNote(args AddNoteArgs) (AddNoteResult, error) {
 	note := &database.Note{
-		SessionID: args.SessionID,
-		Content:   args.Content,
-		Timestamp: time.Now(),
+		ID:         fmt.Sprintf("%d", time.Now().UnixNano()),
+		ParentID:   args.ParentID,
+		ParentType: args.ParentType,
+		Body:       args.Body,
+		CreatedAt:  time.Now(),
 	}
 
 	if err := t.db.CreateNote(note); err != nil {
@@ -878,8 +893,8 @@ func (t *Tools) GetSession(args GetSessionArgs) (GetSessionResult, error) {
 		return GetSessionResult{}, fmt.Errorf("failed to get logs: %w", err)
 	}
 
-	// Get notes
-	notes, err := t.db.GetNotes(args.SessionID)
+	// Get notes for this session
+	notes, err := t.db.GetNotes(args.SessionID, "sessions")
 	if err != nil {
 		return GetSessionResult{}, fmt.Errorf("failed to get notes: %w", err)
 	}
@@ -904,8 +919,8 @@ func (t *Tools) GetSession(args GetSessionArgs) (GetSessionResult, error) {
 	noteResults := make([]SessionNote, len(notes))
 	for i, n := range notes {
 		noteResults[i] = SessionNote{
-			Content:   n.Content,
-			Timestamp: n.Timestamp.Format(time.RFC3339),
+			Content:   n.Body,
+			Timestamp: n.CreatedAt.Format(time.RFC3339),
 		}
 	}
 
@@ -920,131 +935,58 @@ func (t *Tools) GetSession(args GetSessionArgs) (GetSessionResult, error) {
 	}, nil
 }
 
-// CreatePersona implements the i-persona-create MCP tool
-func (t *Tools) CreatePersona(args CreatePersonaArgs) (CreatePersonaResult, error) {
-	// Check if persona already exists
-	existing, _ := t.db.GetPersona(args.ID)
-	if existing != nil {
-		return CreatePersonaResult{
-			Success: false,
-			Message: fmt.Sprintf("Persona %s already exists", args.ID),
-		}, nil
+// ListSessions implements the i-list-sessions MCP tool
+func (t *Tools) ListSessions(args ListSessionsArgs) (ListSessionsResult, error) {
+	var agentID string
+	activeOnly := false
+
+	if args.AgentID != nil {
+		agentID = *args.AgentID
+	}
+	if args.ActiveOnly != nil {
+		activeOnly = *args.ActiveOnly
 	}
 
-	persona := &database.Persona{
-		ID:             args.ID,
-		Name:           args.Name,
-		Description:    args.Description,
-		Expertise:      args.Expertise,
-		InitialContext: args.InitialContext,
-		PreferredTools: args.PreferredTools,
-		Specialization: args.Specialization,
-	}
-
-	if err := t.db.CreatePersona(persona); err != nil {
-		return CreatePersonaResult{
-			Success: false,
-			Message: fmt.Sprintf("Failed to create persona: %v", err),
-		}, fmt.Errorf("database error: %w", err)
-	}
-
-	return CreatePersonaResult{
-		Success: true,
-		Message: fmt.Sprintf("Persona %s created successfully", args.ID),
-	}, nil
-}
-
-// GetPersona implements the i-persona-get MCP tool
-func (t *Tools) GetPersona(args GetPersonaArgs) (GetPersonaResult, error) {
-	persona, err := t.db.GetPersona(args.ID)
+	sessions, err := t.db.ListSessions(agentID, activeOnly)
 	if err != nil {
-		return GetPersonaResult{
-			Success: false,
-			Message: fmt.Sprintf("Persona not found: %s", args.ID),
-		}, nil
+		return ListSessionsResult{}, fmt.Errorf("failed to list sessions: %w", err)
 	}
 
-	return GetPersonaResult{
-		Success:        true,
-		Message:        "Persona retrieved successfully",
-		ID:             persona.ID,
-		Name:           persona.Name,
-		Description:    persona.Description,
-		Expertise:      persona.Expertise,
-		InitialContext: persona.InitialContext,
-		PreferredTools: persona.PreferredTools,
-		Specialization: persona.Specialization,
-	}, nil
-}
+	summaries := make([]SessionSummary, len(sessions))
+	for i, s := range sessions {
+		var endedAt *string
+		if s.EndedAt != nil {
+			formatted := s.EndedAt.Format(time.RFC3339)
+			endedAt = &formatted
+		}
 
-// ListPersonas implements the i-persona-list MCP tool
-func (t *Tools) ListPersonas(args ListPersonasArgs) (ListPersonasResult, error) {
-	var specialization string
-	if args.Specialization != nil {
-		specialization = *args.Specialization
-	}
-
-	personas, err := t.db.ListPersonas(specialization)
-	if err != nil {
-		return ListPersonasResult{
-			Success: false,
-			Message: fmt.Sprintf("Failed to list personas: %v", err),
-		}, fmt.Errorf("database error: %w", err)
-	}
-
-	summaries := make([]PersonaSummary, len(personas))
-	for i, p := range personas {
-		summaries[i] = PersonaSummary{
-			ID:             p.ID,
-			Name:           p.Name,
-			Description:    p.Description,
-			Specialization: p.Specialization,
+		summaries[i] = SessionSummary{
+			ID:                 s.ID,
+			AgentID:            s.AgentID,
+			Name:               s.Name,
+			StartedAt:          s.StartedAt.Format(time.RFC3339),
+			EndedAt:            endedAt,
+			AgentStatus:        s.AgentStatus,
+			FeatureDescription: s.FeatureDescription,
+			CurrentTask:        s.CurrentTask,
+			ProjectName:        s.ProjectName,
+			IsActive:           s.EndedAt == nil,
 		}
 	}
 
-	return ListPersonasResult{
+	var message string
+	if activeOnly {
+		message = fmt.Sprintf("Found %d active sessions", len(sessions))
+	} else if agentID != "" {
+		message = fmt.Sprintf("Found %d sessions for agent %s", len(sessions), agentID)
+	} else {
+		message = fmt.Sprintf("Found %d sessions", len(sessions))
+	}
+
+	return ListSessionsResult{
 		Success:  true,
-		Message:  fmt.Sprintf("Found %d personas", len(personas)),
-		Personas: summaries,
-	}, nil
-}
-
-// SnapshotExpertise implements the i-snapshot-expertise MCP tool
-// The agent provides its current learned context/expertise to create a reusable persona
-func (t *Tools) SnapshotExpertise(args SnapshotExpertiseArgs) (SnapshotExpertiseResult, error) {
-	// Check if persona already exists
-	existing, _ := t.db.GetPersona(args.PersonaID)
-	if existing != nil {
-		return SnapshotExpertiseResult{
-			Success: false,
-			Message: fmt.Sprintf("Persona %s already exists", args.PersonaID),
-		}, nil
-	}
-
-	description := fmt.Sprintf("Expert persona created from learned context on %s",
-		time.Now().Format("2006-01-02"))
-
-	persona := &database.Persona{
-		ID:             args.PersonaID,
-		Name:           args.PersonaName,
-		Description:    description,
-		Expertise:      args.ExpertiseAreas,
-		InitialContext: args.CurrentContext,
-		PreferredTools: args.PreferredTools,
-		Specialization: args.Specialization,
-	}
-
-	if err := t.db.CreatePersona(persona); err != nil {
-		return SnapshotExpertiseResult{
-			Success: false,
-			Message: fmt.Sprintf("Failed to create persona: %v", err),
-		}, fmt.Errorf("database error: %w", err)
-	}
-
-	return SnapshotExpertiseResult{
-		Success:   true,
-		Message:   fmt.Sprintf("Persona %s created successfully. Use persona_id='%s' when starting new sessions to load this expertise.", args.PersonaName, args.PersonaID),
-		PersonaID: args.PersonaID,
+		Message:  message,
+		Sessions: summaries,
 	}, nil
 }
 
@@ -1054,4 +996,51 @@ func strPtrOrEmpty(s *string) string {
 		return "N/A"
 	}
 	return *s
+}
+
+// ISpeak implements the i-speak tool for text-to-speech output
+func (t *Tools) ISpeak(args ISpeakArgs) (ISpeakResult, error) {
+	// Premium voices available (must include " (Premium)" suffix)
+	premiumVoices := map[string]bool{
+		"Ava (Premium)":    true, // en_US
+		"Isha (Premium)":   true, // en_IN
+		"Lee (Premium)":    true, // en_AU
+		"Jamie (Premium)":  true, // en_GB
+		"Serena (Premium)": true, // en_GB
+	}
+
+	// Default to Ava (Premium) if not specified
+	voice := "Ava (Premium)"
+	if args.Voice != nil && *args.Voice != "" {
+		requestedVoice := *args.Voice
+		if premiumVoices[requestedVoice] {
+			voice = requestedVoice
+		}
+	}
+
+	// Default rate is 200 words per minute
+	rate := 200
+	if args.Rate != nil {
+		// Clamp rate between 90 and 450
+		if *args.Rate >= 90 && *args.Rate <= 450 {
+			rate = *args.Rate
+		}
+	}
+
+	// Execute ls && say command in background with rate parameter
+	cmd := fmt.Sprintf("ls && say -v \"%s\" -r %d \"%s\" &", voice, rate, args.Message)
+	output, err := exec.Command("sh", "-c", cmd).CombinedOutput()
+	if err != nil {
+		return ISpeakResult{
+			Success:   false,
+			Message:   fmt.Sprintf("Failed to execute say command: %v - %s", err, string(output)),
+			VoiceUsed: voice,
+		}, nil
+	}
+
+	return ISpeakResult{
+		Success:   true,
+		Message:   "Speech command executed",
+		VoiceUsed: voice,
+	}, nil
 }

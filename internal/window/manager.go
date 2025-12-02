@@ -29,33 +29,16 @@ func (m *Manager) GetCurrentWindowID(application, windowTitle string) (*WindowIn
 
 	switch strings.ToLower(application) {
 	case "ghostty":
-		if windowTitle != "" {
-			// Get Ghostty window by title/content
-			script = fmt.Sprintf(`
-				tell application "System Events"
-					tell application process "Ghostty"
-						set frontWin to first window whose name contains "%s"
-						set winPos to position of frontWin
-						set winTitle to name of frontWin
-						set winID to (item 1 of winPos as string) & "," & (item 2 of winPos as string)
-						return winID & "|" & winTitle
-					end tell
+		// Get current Ghostty window - use title as the unique identifier
+		script = `
+			tell application "System Events"
+				tell application process "Ghostty"
+					set frontWin to first window
+					set winTitle to name of frontWin
+					return winTitle & "|" & winTitle
 				end tell
-			`, windowTitle)
-		} else {
-			// Get current Ghostty window
-			script = `
-				tell application "System Events"
-					tell application process "Ghostty"
-						set frontWin to first window
-						set winPos to position of frontWin
-						set winTitle to name of frontWin
-						set winID to (item 1 of winPos as string) & "," & (item 2 of winPos as string)
-						return winID & "|" & winTitle
-					end tell
-				end tell
-			`
-		}
+			end tell
+		`
 
 	case "terminal":
 		if windowTitle != "" {
@@ -80,6 +63,18 @@ func (m *Manager) GetCurrentWindowID(application, windowTitle string) (*WindowIn
 				end tell
 			`
 		}
+
+	case "iterm2", "iterm":
+		// Get current iTerm2 window ID and tab TTY
+		script = `
+			tell application "iTerm2"
+				set frontWin to current window
+				set winID to id of frontWin
+				set winTitle to name of frontWin
+				set tabTTY to tty of current session of current tab of frontWin
+				return (winID as string) & ":" & tabTTY & "|" & winTitle
+			end tell
+		`
 
 	case "safari", "browser":
 		script = `
@@ -161,21 +156,23 @@ func (m *Manager) GetCurrentWindowID(application, windowTitle string) (*WindowIn
 	}, nil
 }
 
-// BringToFront brings a window to the front by application and optional title
-func (m *Manager) BringToFront(application, windowTitle string) error {
+// BringToFront brings a window to the front by application and optional title/ID
+func (m *Manager) BringToFront(application, windowIdentifier string) error {
 	var script string
 
 	switch strings.ToLower(application) {
 	case "ghostty":
-		if windowTitle != "" {
+		if windowIdentifier != "" {
+			// Use window title to find and raise specific window
 			script = fmt.Sprintf(`
 				tell application "System Events"
 					tell application process "Ghostty"
-						set targetWin to first window whose name contains "%s"
+						set targetWin to first window whose name is "%s"
 						perform action "AXRaise" of targetWin
+						set frontmost to true
 					end tell
 				end tell
-			`, windowTitle)
+			`, windowIdentifier)
 		} else {
 			script = `
 				tell application "System Events"
@@ -192,6 +189,51 @@ func (m *Manager) BringToFront(application, windowTitle string) error {
 				activate
 			end tell
 		`
+
+	case "iterm2", "iterm":
+		if windowIdentifier != "" {
+			// Parse window ID and TTY from format "windowID:tty"
+			parts := strings.Split(windowIdentifier, ":")
+			if len(parts) == 2 {
+				// Window ID + TTY - bring window to front and select tab
+				script = fmt.Sprintf(`
+					tell application "iTerm2"
+						repeat with w in windows
+							if id of w is %s then
+								select w
+								repeat with t in tabs of w
+									if tty of current session of t is "%s" then
+										select t
+										activate
+										return
+									end if
+								end repeat
+							end if
+						end repeat
+						activate
+					end tell
+				`, parts[0], parts[1])
+			} else {
+				// Just window ID - bring window to front
+				script = fmt.Sprintf(`
+					tell application "iTerm2"
+						repeat with w in windows
+							if id of w is %s then
+								select w
+								activate
+								return
+							end if
+						end repeat
+					end tell
+				`, windowIdentifier)
+			}
+		} else {
+			script = `
+				tell application "iTerm2"
+					activate
+				end tell
+			`
+		}
 
 	case "safari", "browser":
 		script = `
@@ -223,9 +265,9 @@ func (m *Manager) BringToFront(application, windowTitle string) error {
 
 	// Execute AppleScript
 	cmd := exec.Command("osascript", "-e", script)
-	_, err := cmd.Output()
+	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to bring window to front: %w", err)
+		return fmt.Errorf("failed to bring window to front: %w (output: %s)", err, string(output))
 	}
 
 	return nil
@@ -255,6 +297,19 @@ func (m *Manager) GetAllWindows(application string) ([]*WindowInfo, error) {
 	case "terminal":
 		script = `
 			tell application "Terminal"
+				set windowList to {}
+				repeat with w in windows
+					set winID to id of w
+					set winTitle to name of w
+					set end of windowList to (winID as string) & "|" & winTitle
+				end repeat
+				return windowList as string
+			end tell
+		`
+
+	case "iterm2", "iterm":
+		script = `
+			tell application "iTerm2"
 				set windowList to {}
 				repeat with w in windows
 					set winID to id of w

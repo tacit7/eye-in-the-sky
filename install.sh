@@ -102,10 +102,7 @@ if 'mcpServers' not in config:
 
 config['mcpServers']['eye-in-the-sky'] = {
     'command': '$BIN_DIR/eye-in-the-sky',
-    'args': [
-        '-db',
-        '$INSTALL_DIR/data/agents.db'
-    ],
+    'args': [],
     'env': {
         'PATH': '/usr/local/bin:/usr/bin:/bin',
         'HOME': '$HOME'
@@ -133,7 +130,7 @@ PORT=${1:-8080}
 
 echo "🔍 Starting Eye in the Sky Dashboard..."
 echo "📊 Dashboard will be available at: http://localhost:$PORT"
-echo "📂 Database: $INSTALL_DIR/data/agents.db"
+echo "📂 Database: ~/.config/eye-in-the-sky/agents.db"
 echo ""
 echo "Press Ctrl+C to stop"
 

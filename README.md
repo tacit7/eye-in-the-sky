@@ -109,9 +109,9 @@ go build -o bin/dashboard ./wt-dashboard/cmd/server
 ./bin/eye-in-the-sky-integrated [options]
 
 Options:
-  -port string    Port for dashboard server (default "8080")
-  -db string      SQLite database path (default "./data/agents.db")
   -help           Show help information
+
+Database location: ~/.config/eye-in-the-sky/agents.db
 ```
 
 ---
@@ -194,13 +194,10 @@ go test ./internal/mcp
 ### Database Management
 ```bash
 # The SQLite database is created automatically
-# Default location: ./data/agents.db
+# Location: ~/.config/eye-in-the-sky/agents.db
 
 # Reset database
-rm ./data/agents.db
-
-# Use custom database path
-./bin/eye-in-the-sky-integrated -db ./custom/agents.db
+rm ~/.config/eye-in-the-sky/agents.db
 ```
 
 ---
@@ -216,7 +213,7 @@ ps aux | grep eye-in-the-sky
 curl -I http://localhost:8080
 
 # Check database
-sqlite3 ./data/agents.db "SELECT COUNT(*) FROM agents;"
+sqlite3 ~/.config/eye-in-the-sky/agents.db "SELECT COUNT(*) FROM agents;"
 ```
 
 ### Common Issues

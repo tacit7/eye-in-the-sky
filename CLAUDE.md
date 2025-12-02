@@ -4,62 +4,92 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is the **Claude Code Multi-Agent Management System** (Eye in the Sky) - a developer tool that provides real-time visibility and control over multiple concurrent Claude Code instances. The system tracks AI agents working across different git worktrees and provides a centralized dashboard showing what each agent is currently doing.
+This is the **Eye in the Sky Claude Code MCP Server** - a Model Context Protocol (MCP) server that provides real-time visibility and control over multiple concurrent Claude Code instances. The system tracks AI agents working across different git worktrees and provides a centralized TUI dashboard showing what each agent is currently doing.
 
 ## Architecture
 
 ### Core Components
 - **MCP Server**: Go-based server implementing Model Context Protocol for Claude Code integration
-- **Web Dashboard**: HTTP server providing real-time agent visibility at localhost:8080
+- **TUI Dashboard**: Terminal UI (Bubble Tea) providing real-time agent visibility and control
 - **Database**: SQLite for tracking agents, actions, and git commits
 - **Integration Layer**: MCP tools interface for seamless Claude Code integration
 
 ### Technology Stack
-- **Backend**: Go 1.21+ with standard library `net/http` and `html/template`
+- **Backend**: Go 1.21+
+- **TUI**: Bubble Tea framework with Lipgloss for styling
 - **Database**: SQLite 3 with `github.com/mattn/go-sqlite3`
-- **Frontend**: HTML5, Bootstrap 5, vanilla JavaScript
 - **MCP**: Official Go SDK `github.com/modelcontextprotocol/go-sdk/mcp`
 
 ### Project Structure
 ```
-claude-code-mcp/
-├── main.go                        # Entry point
-├── cmd/server/main.go             # Main server executable
+eye-in-the-sky/
+├── cmd/
+│   ├── server/main.go             # MCP server executable
+│   └── eye-ui/main.go             # TUI dashboard executable
 ├── internal/
 │   ├── mcp/                       # MCP server implementation
-│   ├── dashboard/                 # HTTP server for web dashboard
+│   ├── ui/                        # TUI dashboard (Bubble Tea)
 │   ├── database/                  # SQLite connection and queries
-│   └── utils/                     # Utility functions
-├── web/
-│   ├── templates/                 # HTML templates
-│   └── static/                    # CSS and JavaScript
-├── data/agents.db                 # SQLite database (created at runtime)
+│   ├── utils/                     # Utility functions
+│   └── window/                    # Window management utilities
 └── tests/                         # Go test files
+
+### Database Locations
+- **Main Database**: `~/.config/eye-in-the-sky/eits.db` (created at runtime)
+- **CCUsage Database**: `~/.config/eye-in-the-sky/ccusage.sqlite` (token usage tracking)
 ```
 
 ## Key Concepts
 
 ### Agent Management
-- Each Claude Code instance gets a unique 8-character hash ID (git-style like "a3f7d2e1")
-- Agent IDs are auto-generated if not provided using SHA1-based git-style hashes
-- Two agent types: "worktree" (git-based) and "desktop" (Claude Desktop)
-- Agent states: "active", "idle", "working", "completed", "failed"
-- Metadata tracking: creation time, git worktree path, feature description, current task, window ID (for desktop agents)
+- Each Claude Code instance gets a unique UUID (e.g., "a1b2c3d4-e5f6-7890-abcd-ef1234567890")
+- Agent IDs are auto-generated as UUIDs when you call i-start-session
+- All agents are worktree-based (git repository tracking)
+- Agent states and lifecycle:
+  - `active`: Session is ongoing, ready for work
+  - `idle`: Session paused, waiting for next task
+  - `working`: Currently executing a task
+  - `completed`: Session is FULLY OVER (use only when ending entire session, not for completing individual features)
+  - `failed`: Session ended with error
+- Metadata tracking: creation time, git worktree path, feature description, current task, session ID
 
 ### Action Logging
-- All major Claude Code activities are logged with timestamps
-- Action types: "task_start", "file_operation", "git_commit", "status_update"
+- Claude Code hooks automatically log all tool execution via PreToolUse/PostToolUse events
+- Hook system manages agent status updates (idle on Stop, completed on SessionEnd)
 - Git commits are tracked separately with hashes and messages
 
 ### MCP Integration
-The system exposes these MCP tools for Claude Code integration:
-- `register_agent(agent_id?, description, worktree_path?)` - Register new worktree agent
-- `register_claude_desktop_agent(agent_id?, description, project_name, window_id?)` - Register new desktop agent
-- `update_status(agent_id, status, current_task?)` - Update agent status
-- `log_action(agent_id, action_type, description, details?)` - Log agent activity
-- `log_commits(agent_id, commit_hashes[], commit_messages?)` - Track git commits
-- `end_session(agent_id, summary?, final_status?)` - Complete agent session
-- `help(tool?)` - Get detailed help and usage instructions
+The system exposes 22 MCP tools for Claude Code integration:
+
+**Session Lifecycle (4 tools):**
+- `i-start-session` - Start new session and receive UUID agent_id
+- `i-end-session` - Complete agent session
+- `i-save-context` - Save session state for resumption
+- `i-instructions` - Get detailed help and usage instructions
+
+**Git & Window (2 tools):**
+- `i-commits` - Track git commits
+- `i-window` - Get current active window info (macOS)
+
+**Session Data (2 tools):**
+- `i-note-add` - Add note to session
+- `i-log-compaction` - Log conversation compaction and backup JSONL file
+
+**Persona Management (1 tool):**
+- `i-snapshot-expertise` - Save agent expertise as reusable persona
+
+**Todo/Task Management (12 tools):**
+- `i-todo-create/annotate/start/done/status/tag/list/search/delete/reindex/vacuum/project-sync`
+
+**Utility (1 tool):**
+- `i-speak` - Text-to-speech with premium macOS voices
+
+**Note:** The following tools are handled automatically by hooks and are NOT exposed to Claude:
+- `i-update-status` - Hooks update status on Stop/SessionEnd events
+- `i-log` - Hooks log all tool calls via PreToolUse/PostToolUse
+- `i-action` - Redundant with hook logging
+- `i-log-session-cost` - Hook logging captures token usage
+- `i-update-description` - Hooks handle this automatically
 
 ## Development Commands
 
@@ -68,14 +98,8 @@ The system exposes these MCP tools for Claude Code integration:
 # Build the application
 go build -o bin/eye-in-the-sky ./cmd/server
 
-# Run with default settings
+# Run with default settings (database at ~/.config/eye-in-the-sky/agents.db)
 ./bin/eye-in-the-sky
-
-# Run with custom port
-./bin/eye-in-the-sky -port 8081
-
-# Run with custom database path
-./bin/eye-in-the-sky -db ./custom/path/agents.db
 ```
 
 ### Testing
@@ -89,7 +113,7 @@ go test -cover ./...
 # Run specific test package
 go test ./internal/database
 go test ./internal/mcp
-go test ./internal/dashboard
+go test ./internal/ui
 
 # Run with verbose output
 go test -v ./...
@@ -97,33 +121,44 @@ go test -v ./...
 
 ### Database Management
 ```bash
-# The SQLite database is created automatically at runtime
-# Default location: ./data/agents.db
+# The SQLite databases are created automatically at runtime
+# Main DB: ~/.config/eye-in-the-sky/eits.db
+# CCUsage DB: ~/.config/eye-in-the-sky/ccusage.sqlite
 
-# To reset the database, simply delete the file
-rm ./data/agents.db
+# To reset the main database, delete the file
+rm ~/.config/eye-in-the-sky/eits.db
 
-# Database schema is initialized on first run
+# To reset usage tracking, delete the CCUsage database
+rm ~/.config/eye-in-the-sky/ccusage.sqlite
+
+# Database schemas are initialized on first run
 ```
+
+### Logging
+
+Log files are written to `~/.config/eye-in-the-sky/`:
+
+- **`tui.log`**: TUI Dashboard debug output
+  - Contains all debug messages from the TUI application
+  - Truncated on startup to clear old logs
+  - Configured with timestamps and source file names
+
+- **`cc_usage.log`**: Claude Code usage data (for future use)
+  - Reserved for CloudCode usage tracking and metrics
 
 ## Multi-Agent Workflow
 
 ### Agent Registration
 
-#### For Git Worktree Agents (Claude Code):
+Start a new session with your Claude Code session ID:
 ```
-"Register yourself for working on user authentication in /path/to/worktree"
+i-start-session({
+  "session_id": "your-claude-code-session-id",
+  "description": "Working on user authentication",
+  "worktree_path": "/path/to/worktree" // optional
+})
 ```
-The system will auto-generate a git-style hash ID like `a3f7d2e1`.
-
-#### For Claude Desktop Agents:
-```
-"Register as Claude Desktop agent working on MyApp project"
-```
-Optionally include window ID for window management:
-```
-"Register as Claude Desktop agent for MyApp project with window ID win_12345"
-```
+The system will return a UUID agent ID for you to use in subsequent calls.
 
 ### Status Updates
 Claude instances should periodically update their status:
@@ -140,41 +175,65 @@ When finishing work:
 
 ## Database Schema
 
-### Agents Table
-- `id`: 8-character hash identifier (auto-generated if not provided)
-- `status`: Current agent status
-- `source`: Agent type ("worktree" or "desktop")
-- `created_at/updated_at`: Timestamps
-- `git_worktree_path`: Path to git worktree (worktree agents only)
-- `feature_description`: High-level feature being worked on
-- `current_task`: Specific current task
-- `last_activity_at`: When agent last reported activity
-- `window_id`: Claude Desktop window identifier (desktop agents only)
+### Main Database (eits.db)
 
-### Actions Table
-- Links to agents via `agent_id`
-- Tracks all agent activities with timestamps
-- Categorizes actions by type
-- Stores human-readable descriptions and JSON details
+**Core Tables:**
+- **agents**: Agent instances (UUID, status, session_id, project, worktree path, etc.)
+- **sessions**: Session tracking (id, agent_id, name, timestamps)
+- **projects**: Git repository tracking (id, name, path, remote_url, branch)
 
-### Commits Table
-- Links to agents via `agent_id`
-- Tracks git commit hashes and messages
-- Associates commits with agent sessions
+**Activity Tracking:**
+- **actions**: Agent action log (agent_id, type, description, timestamp)
+- **commits**: Git commits (agent_id, hash, message, project_id, session_id)
+- **logs**: Simple session logs (session_id, type, message, timestamp)
+- **session_logs**: Detailed logs (agent_id, log_level, category, message)
 
-## Dashboard Features
+**Context & Notes:**
+- **session_context**: Session state persistence (phase, progress, tasks, goals, blockers)
+- **agent_context**: Agent-specific context per project
+- **notes**: Polymorphic notes (parent_id, parent_type, body)
+- **session_notes**: Session-specific notes (agent_id, note_type, content, priority)
 
-### Agent Overview (localhost:8080)
+**Task Management:**
+- **tasks**: Task tracking (id, title, state_id, project_id, agent_id, priority)
+- **workflow_states**: Task states (name, position, color)
+- **task_notes**: Task annotations
+- **tags**: Tag definitions
+- **task_tags**: Task-tag relationships
+- **task_search**: Full-text search (FTS5)
+
+**Metrics:**
+- **session_metrics**: Token usage per session (tokens, cost, model, timestamp)
+
+**Other:**
+- **personas**: Reusable agent personas
+- **compactions**: Conversation compaction tracking
+
+### CCUsage Database (ccusage.sqlite)
+
+**Tables:**
+- **usage_entries**: Claude Code usage data (session_id, timestamp, project, model, tokens, cost)
+- **file_metadata**: JSONL file sync tracking (file_path, last_mtime, last_parsed_at)
+
+## TUI Dashboard Features
+
+### Agent List View (Overview Page)
 - Real-time status of all active agents
-- Visual indicators for agent health (Green/Yellow/Red)
-- Quick access to agent details
-- Summary statistics for active sessions
+- Visual indicators for agent health (color-coded status)
+- Hierarchical display with green │ for subagents
+- Grouped by parent-child relationships
+- j/k navigation, enter to view details
+- This is the main overview page showing all agents
 
-### Agent Details (localhost:8080/agent/<id>)
-- Complete activity timeline
-- All git commits made during session
-- Current status and task information
-- Session management actions
+### Agent Detail View (Individual Agent Page - Tabbed Interface)
+- **[O]verview**: Agent info, recent commits, and notes summary
+- **[C]ommits**: Split-pane view of commits with diff details
+- **[L]ogs**: Session logs with timestamp and type filtering
+- **[N]otes**: Session notes with creation timestamps
+- **[A]ctions**: All agent actions with descriptions
+- **[T]asks**: Agent tasks filtered by session, sorted by priority (H>M>L), deleted tasks at bottom
+- **[P]roject tickets**: Project-specific tasks (Note: Known issue - may not respond to keypress)
+- Keyboard navigation: o/c/l/n/a/t/p for tabs, j/k for items, h/l for scrolling
 
 ## Development Guidelines
 
@@ -201,8 +260,39 @@ When finishing work:
 
 ## Performance Considerations
 
-- Dashboard should load within 2 seconds for up to 100 active agents
+- TUI should render within 100ms and update smoothly at 60fps
 - MCP tool calls must respond within 500ms
 - Database operations should be atomic to prevent corruption
 - System should maintain 99% uptime during development sessions
-- Gracefully handle agent disconnections and network issues
+- Gracefully handle agent disconnections and database lock contention
+
+## Development Workflow
+
+### Task Management
+- **Eye in the Sky MCP tools** (`i-todo-create`, `i-todo-start`, `i-todo-done`, etc.) are the primary task tracking system
+- **TodoWrite** mirrors Eye in the Sky tasks for current session visibility in Claude Code
+- Annotate tasks with progress using `i-todo-annotate` as work happens
+- Tasks remain in their current state until explicitly moved to the next state
+- Only the user decides when work is complete
+
+### Information Tracking
+- Use **logs** for tracking session information by default
+- Use **notes** (`i-note-add`) when the user explicitly requests them
+- Both logs and notes are persistent and searchable across sessions
+
+### Eye-in-the-Sky MCP Integration
+- Use `i-start-session` to begin work and receive an agent_id
+- Use `i-todo-create`, `i-todo-start`, `i-todo-done` for task lifecycle management
+- Use `i-commits` to track git commits
+- Use `i-end-session` when work is complete
+
+### Work Flow Pattern
+1. Start session with `i-start-session`
+2. Create tasks with `i-todo-create`
+3. Work on code changes
+4. Annotate tasks with progress using `i-todo-annotate`
+5. Update TodoWrite to reflect task state
+6. Commit code with meaningful messages
+7. Track commits with `i-commits`
+8. Mark tasks done with `i-todo-done`
+9. End session with `i-end-session`

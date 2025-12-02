@@ -30,6 +30,21 @@ func (tx *Tx) Rollback() error {
 	return tx.tx.Rollback()
 }
 
+// Exec executes a statement within the transaction without returning rows.
+func (tx *Tx) Exec(query string, args ...interface{}) (sql.Result, error) {
+	return tx.tx.Exec(query, args...)
+}
+
+// Query executes a query within the transaction that returns rows.
+func (tx *Tx) Query(query string, args ...interface{}) (*sql.Rows, error) {
+	return tx.tx.Query(query, args...)
+}
+
+// QueryRow executes a query within the transaction that returns a single row.
+func (tx *Tx) QueryRow(query string, args ...interface{}) *sql.Row {
+	return tx.tx.QueryRow(query, args...)
+}
+
 // CreateAgentTx creates an agent within a transaction
 func (tx *Tx) CreateAgentTx(agent *Agent) error {
 	query := `

@@ -1,34 +1,10 @@
 package mcp
 
-// RegisterAgentArgs represents the arguments for register_agent tool
-type RegisterAgentArgs struct {
-	AgentID      *string `json:"agent_id,omitempty" jsonschema:"description:Unique 8-character hex identifier (optional - auto-generated if not provided)"`
-	Description  string  `json:"description" jsonschema:"description:Brief description of what the agent will work on"`
-	WorktreePath *string `json:"worktree_path,omitempty" jsonschema:"description:Path to the git repository (optional)"`
-	ProjectName  *string `json:"project_name,omitempty" jsonschema:"description:Name of the project being worked on (optional)"`
-}
-
-type RegisterAgentResult struct {
-	Success bool   `json:"success"`
-	Message string `json:"message"`
-}
-
-// RegisterDesktopAgentArgs represents the arguments for register_claude_desktop_agent tool
-type RegisterDesktopAgentArgs struct {
-	AgentID     *string `json:"agent_id,omitempty" jsonschema:"description:Unique 8-character hex identifier (optional - auto-generated if not provided)"`
-	Description string  `json:"description" jsonschema:"description:Brief description of what the agent will work on"`
-	ProjectName string  `json:"project_name" jsonschema:"description:Name of the project being worked on"`
-	WindowID    *string `json:"window_id,omitempty" jsonschema:"description:Claude Desktop window identifier for window management (optional)"`
-}
-
-type RegisterDesktopAgentResult struct {
-	Success bool   `json:"success"`
-	Message string `json:"message"`
-}
+// Removed RegisterAgentArgs and RegisterDesktopAgentArgs - using only StartSession now
 
 // UpdateStatusArgs represents the arguments for update_status tool
 type UpdateStatusArgs struct {
-	AgentID     string  `json:"agent_id" jsonschema:"description:8-character agent identifier"`
+	AgentID     string  `json:"agent_id" jsonschema:"description:Agent UUID identifier"`
 	Status      string  `json:"status" jsonschema:"description:One of: active, working, idle, completed, failed"`
 	CurrentTask *string `json:"current_task,omitempty" jsonschema:"description:Description of current task (optional)"`
 }
@@ -40,7 +16,7 @@ type UpdateStatusResult struct {
 
 // LogActionArgs represents the arguments for log_action tool
 type LogActionArgs struct {
-	AgentID     string  `json:"agent_id" jsonschema:"description:8-character agent identifier"`
+	AgentID     string  `json:"agent_id" jsonschema:"description:Agent UUID identifier"`
 	ActionType  string  `json:"action_type" jsonschema:"description:One of: task_start, file_operation, git_commit, status_update"`
 	Description string  `json:"description" jsonschema:"description:Human-readable description of the action"`
 	Details     *string `json:"details,omitempty" jsonschema:"description:Additional structured information as JSON string (optional)"`
@@ -65,7 +41,7 @@ type LogCommitsResult struct {
 
 // EndSessionArgs represents the arguments for end_session tool
 type EndSessionArgs struct {
-	AgentID     string  `json:"agent_id" jsonschema:"description:8-character agent identifier"`
+	AgentID     string  `json:"agent_id" jsonschema:"description:Agent UUID identifier"`
 	Summary     *string `json:"summary,omitempty" jsonschema:"description:Summary of work completed (optional but recommended)"`
 	FinalStatus *string `json:"final_status,omitempty" jsonschema:"description:Either 'completed' or 'failed' (optional, defaults to 'completed')"`
 }
@@ -86,24 +62,15 @@ type SyncCommitsResult struct {
 	Message string `json:"message"`
 }
 
-// Tool represents an MCP tool descriptor
-type Tool struct {
-	Name        string            `json:"name"`
-	Description string            `json:"description"`
-	Instructions string           `json:"instructions,omitempty"`
-	Parameters  map[string]string `json:"parameters,omitempty"`
-	Examples    []string          `json:"examples,omitempty"`
+// InstructionsArgs represents the arguments for i-instructions tool
+type InstructionsArgs struct {
+	// No arguments needed
 }
 
-// HelpArgs represents the arguments for help tool
-type HelpArgs struct {
-	Tool *string `json:"tool,omitempty"`
-}
-
-type HelpResult struct {
-	Success bool   `json:"success"`
-	Message string `json:"message"`
-	Tools   []Tool `json:"tools,omitempty"`
+type InstructionsResult struct {
+	Success      bool   `json:"success"`
+	Message      string `json:"message"`
+	Instructions string `json:"instructions"`
 }
 
 // GetCurrentWindowArgs represents the arguments for get_current_window tool
@@ -123,7 +90,7 @@ type GetCurrentWindowResult struct {
 
 // BringWindowFrontArgs represents the arguments for bring_window_front tool
 type BringWindowFrontArgs struct {
-	AgentID string `json:"agent_id"`
+	AgentID string `json:"agent_id" jsonschema:"description:Agent UUID identifier"`
 }
 
 type BringWindowFrontResult struct {
@@ -133,12 +100,15 @@ type BringWindowFrontResult struct {
 
 // StartSessionArgs represents the arguments for i-start-session tool
 type StartSessionArgs struct {
-	AgentID      *string `json:"agent_id,omitempty" jsonschema:"description:8-character agent identifier (optional - auto-generated if not provided)"`
-	Name         *string `json:"name,omitempty" jsonschema:"description:Human-readable session name (optional)"`
-	Description  string  `json:"description" jsonschema:"description:What you'll be working on"`
-	ProjectName  *string `json:"project_name,omitempty" jsonschema:"description:Project name (optional)"`
-	WorktreePath *string `json:"worktree_path,omitempty" jsonschema:"description:Path to git repository (optional)"`
-	PersonaID    *string `json:"persona_id,omitempty" jsonschema:"description:Persona ID to load initial context from (optional)"`
+	SessionID        string  `json:"session_id" jsonschema:"description:Claude Code session ID (mandatory)"`
+	AgentDescription *string `json:"agent_description,omitempty" jsonschema:"description:Agent name/label (e.g., 'Frontend Dev Agent') (optional)"`
+	Name             *string `json:"name,omitempty" jsonschema:"description:Human-readable session name (optional)"`
+	Description      string  `json:"description" jsonschema:"description:What you'll be working on"`
+	ProjectName      *string `json:"project_name,omitempty" jsonschema:"description:Project name (optional)"`
+	WorktreePath     *string `json:"worktree_path,omitempty" jsonschema:"description:Path to git repository (optional)"`
+	PersonaID        *string `json:"persona_id,omitempty" jsonschema:"description:Persona ID to load initial context from (optional)"`
+	ParentAgentID    *string `json:"parent_agent_id,omitempty" jsonschema:"description:Parent agent ID if this is a subagent (optional)"`
+	ParentSessionID  *string `json:"parent_session_id,omitempty" jsonschema:"description:Parent session ID if this is a subsession (optional)"`
 }
 
 type StartSessionResult struct {
@@ -163,8 +133,9 @@ type AddLogResult struct {
 
 // AddNoteArgs represents the arguments for i-note-add tool
 type AddNoteArgs struct {
-	SessionID string `json:"session_id" jsonschema:"description:Session identifier"`
-	Content   string `json:"content" jsonschema:"description:Note content"`
+	ParentID   string `json:"parent_id" jsonschema:"description:Parent entity identifier (session, agent, context, etc)"`
+	ParentType string `json:"parent_type" jsonschema:"description:Parent entity type (sessions, agents, contexts, etc)"`
+	Body       string `json:"body" jsonschema:"description:Note content"`
 }
 
 type AddNoteResult struct {
@@ -226,57 +197,6 @@ type CreatePersonaResult struct {
 	Message string `json:"message"`
 }
 
-// GetPersonaArgs represents the arguments for i-persona-get tool
-type GetPersonaArgs struct {
-	ID string `json:"id" jsonschema:"description:Persona identifier"`
-}
-
-type GetPersonaResult struct {
-	Success        bool    `json:"success"`
-	Message        string  `json:"message"`
-	ID             string  `json:"id,omitempty"`
-	Name           string  `json:"name,omitempty"`
-	Description    string  `json:"description,omitempty"`
-	Expertise      string  `json:"expertise,omitempty"`
-	InitialContext string  `json:"initial_context,omitempty"`
-	PreferredTools *string `json:"preferred_tools,omitempty"`
-	Specialization *string `json:"specialization,omitempty"`
-}
-
-// ListPersonasArgs represents the arguments for i-persona-list tool
-type ListPersonasArgs struct {
-	Specialization *string `json:"specialization,omitempty" jsonschema:"description:Filter by specialization (optional)"`
-}
-
-type ListPersonasResult struct {
-	Success  bool              `json:"success"`
-	Message  string            `json:"message"`
-	Personas []PersonaSummary  `json:"personas,omitempty"`
-}
-
-type PersonaSummary struct {
-	ID             string  `json:"id"`
-	Name           string  `json:"name"`
-	Description    string  `json:"description"`
-	Specialization *string `json:"specialization,omitempty"`
-}
-
-// SnapshotExpertiseArgs represents arguments for capturing current agent expertise
-type SnapshotExpertiseArgs struct {
-	PersonaID      string  `json:"persona_id" jsonschema:"description:Unique ID for the persona (e.g., 'payment-flow-expert')"`
-	PersonaName    string  `json:"persona_name" jsonschema:"description:Human-readable name"`
-	ExpertiseAreas string  `json:"expertise_areas" jsonschema:"description:JSON array of expertise areas the agent has learned"`
-	CurrentContext string  `json:"current_context" jsonschema:"description:The agent's current understanding and knowledge - provide detailed context about what you've learned"`
-	Specialization *string `json:"specialization,omitempty" jsonschema:"description:Primary domain (optional)"`
-	PreferredTools *string `json:"preferred_tools,omitempty" jsonschema:"description:JSON array of tools used (optional)"`
-}
-
-type SnapshotExpertiseResult struct {
-	Success   bool   `json:"success"`
-	Message   string `json:"message"`
-	PersonaID string `json:"persona_id,omitempty"`
-}
-
 // GetContextArgs represents arguments for retrieving stored context
 type GetContextArgs struct {
 	AgentID string `json:"agent_id" jsonschema:"description:Agent ID to get context from"`
@@ -290,3 +210,71 @@ type GetContextResult struct {
 	SessionID      string `json:"session_id,omitempty"`
 }
 
+// ListSessionsArgs represents the arguments for i-list-sessions tool
+type ListSessionsArgs struct {
+	AgentID    *string `json:"agent_id,omitempty" jsonschema:"description:Filter by agent ID (optional)"`
+	ActiveOnly *bool   `json:"active_only,omitempty" jsonschema:"description:Show only active sessions (optional, default: false)"`
+}
+
+type ListSessionsResult struct {
+	Success  bool             `json:"success"`
+	Message  string           `json:"message"`
+	Sessions []SessionSummary `json:"sessions,omitempty"`
+}
+
+type SessionSummary struct {
+	ID                 string  `json:"id"`
+	AgentID            string  `json:"agent_id"`
+	Name               *string `json:"name,omitempty"`
+	StartedAt          string  `json:"started_at"`
+	EndedAt            *string `json:"ended_at,omitempty"`
+	AgentStatus        string  `json:"agent_status"`
+	FeatureDescription *string `json:"feature_description,omitempty"`
+	CurrentTask        *string `json:"current_task,omitempty"`
+	ProjectName        *string `json:"project_name,omitempty"`
+	IsActive           bool    `json:"is_active"`
+}
+
+// LogSessionCostArgs represents the arguments for i-log-session-cost tool
+type LogSessionCostArgs struct {
+	AgentID          string   `json:"agent_id" jsonschema:"description:Agent UUID identifier"`
+	SessionID        *string  `json:"session_id,omitempty" jsonschema:"description:Session ID (optional)"`
+	TokensUsed       int      `json:"tokens_used" jsonschema:"description:Total tokens used in session"`
+	TokensBudget     int      `json:"tokens_budget" jsonschema:"description:Total token budget for session"`
+	TokensRemaining  int      `json:"tokens_remaining" jsonschema:"description:Remaining tokens in budget"`
+	InputTokens      *int     `json:"input_tokens,omitempty" jsonschema:"description:Input tokens used (optional)"`
+	OutputTokens     *int     `json:"output_tokens,omitempty" jsonschema:"description:Output tokens used (optional)"`
+	EstimatedCostUSD *float64 `json:"estimated_cost_usd,omitempty" jsonschema:"description:Estimated cost in USD (optional)"`
+	ModelName        *string  `json:"model_name,omitempty" jsonschema:"description:Model name (e.g., 'claude-sonnet-4-5') (optional)"`
+	Notes            *string  `json:"notes,omitempty" jsonschema:"description:Additional notes about the session (optional)"`
+}
+
+type LogSessionCostResult struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+// UpdateFeatureDescriptionArgs represents the arguments for i-update-description tool
+type UpdateFeatureDescriptionArgs struct {
+	AgentID            string `json:"agent_id" jsonschema:"description:Agent UUID identifier"`
+	FeatureDescription string `json:"feature_description" jsonschema:"description:New feature description for the session"`
+}
+
+type UpdateFeatureDescriptionResult struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+
+// ISpeakArgs represents the arguments for i-speak tool
+type ISpeakArgs struct {
+	Message string  `json:"message" jsonschema:"description:Message to speak aloud"`
+	Voice   *string `json:"voice,omitempty" jsonschema:"description:Premium voice to use (Ava, Isha, Lee, Jamie, Serena). Defaults to Ava"`
+	Rate    *int    `json:"rate,omitempty" jsonschema:"description:Speaking rate in words per minute (90-450). Defaults to 200"`
+}
+
+type ISpeakResult struct {
+	Success   bool   `json:"success"`
+	Message   string `json:"message"`
+	VoiceUsed string `json:"voice_used"`
+}

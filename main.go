@@ -2,28 +2,21 @@ package main
 
 import (
 	"context"
-	"embed"
 	"flag"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"path/filepath"
-	"sync"
 	"syscall"
 
-	"github.com/tacit7/eye-in-the-sky/internal/dashboard"
 	"github.com/tacit7/eye-in-the-sky/internal/database"
 	"github.com/tacit7/eye-in-the-sky/internal/mcp"
 )
 
-//go:embed web/templates/*.html
-var templateFS embed.FS
-
 func main() {
 	// Command line flags
-	port := flag.String("port", "8080", "Port to run the dashboard server on")
-	dbPath := flag.String("db", "./data/agents.db", "Path to the SQLite database")
+	dbPath := flag.String("db", "./data/eits.db", "Path to the SQLite database")
 	help := flag.Bool("help", false, "Show help")
 	flag.Parse()
 
@@ -39,9 +32,8 @@ func main() {
 		log.Fatalf("Failed to create data directory: %v", err)
 	}
 
-	fmt.Printf("🔍 Eye in the Sky - Integrated Dashboard & MCP Server\n")
-	fmt.Printf("📂 Database: %s\n", *dbPath)
-	fmt.Printf("🌐 Dashboard: http://localhost:%s\n", *port)
+	fmt.Printf("\uf06e Eye in the Sky - MCP Server\n") // nf-fa-eye
+	fmt.Printf("\uf07c Database: %s\n", *dbPath)        // nf-fa-folder_open
 
 	// Initialize database
 	db, err := database.New(*dbPath)
@@ -55,16 +47,10 @@ func main() {
 		log.Fatalf("Database health check failed: %v", err)
 	}
 
-	fmt.Println("✅ Database initialized successfully")
+	fmt.Println("\uf00c Database initialized successfully") // nf-fa-check
 
-	// Create servers
-	dashboardServer := dashboard.NewServer(*port, db)
+	// Create MCP server
 	mcpServer := mcp.NewServer(db)
-
-	// Load templates
-	if err := dashboardServer.LoadTemplates(templateFS, "web/templates/*.html"); err != nil {
-		log.Fatalf("Failed to load templates: %v", err)
-	}
 
 	// Setup graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())
@@ -76,39 +62,15 @@ func main() {
 
 	go func() {
 		<-sigChan
-		fmt.Println("\n🛑 Shutdown signal received...")
+		fmt.Println("\n\uf04d Shutdown signal received...") // nf-fa-stop
 		cancel()
 	}()
 
-	// Start both servers concurrently
-	var wg sync.WaitGroup
-	wg.Add(2)
-
-	// Start Dashboard Server
-	go func() {
-		defer wg.Done()
-		fmt.Println("🚀 Starting Dashboard Server...")
-		if err := dashboardServer.Start(); err != nil {
-			log.Printf("Dashboard Server failed: %v", err)
-			cancel()
-		}
-	}()
-
 	// Start MCP Server
-	go func() {
-		defer wg.Done()
-		fmt.Println("🚀 Starting MCP Server...")
-		if err := mcpServer.Start(ctx); err != nil && ctx.Err() == nil {
-			log.Printf("MCP Server failed: %v", err)
-			cancel()
-		}
-	}()
+	fmt.Println("\uf135 Starting MCP Server...") // nf-fa-rocket
+	if err := mcpServer.Start(ctx); err != nil && ctx.Err() == nil {
+		log.Printf("MCP Server failed: %v", err)
+	}
 
-	fmt.Println("✅ Both servers started successfully")
-	fmt.Printf("📊 Access dashboard at: http://localhost:%s\n", *port)
-
-	// Wait for shutdown signal or server failure
-	<-ctx.Done()
-
-	fmt.Println("✅ Server shutdown complete")
+	fmt.Println("\uf00c Server shutdown complete") // nf-fa-check
 }

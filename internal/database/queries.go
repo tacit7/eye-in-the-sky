@@ -3,16 +3,26 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"strings"
+	"time"
 )
+
+// repeatPlaceholders creates a comma-separated string of ? placeholders
+func repeatPlaceholders(count int) string {
+	if count <= 0 {
+		return ""
+	}
+	return strings.Repeat("?,", count-1) + "?"
+}
 
 // CreateAgent inserts a new agent
 func (db *DB) CreateAgent(agent *Agent) error {
 	query := `
-		INSERT INTO agents (id, status, source, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO agents (id, status, source, git_worktree_path, feature_description, current_task, last_activity_at, window_id, terminal_application, project_name, project_id, session_id, parent_agent_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	_, err := db.conn.Exec(query, agent.ID, agent.Status, agent.Source, agent.GitWorktreePath,
-		agent.FeatureDescription, agent.CurrentTask, agent.LastActivityAt, agent.WindowID, agent.ProjectName)
+		agent.FeatureDescription, agent.CurrentTask, agent.LastActivityAt, agent.WindowID, agent.TerminalApplication, agent.ProjectName, agent.ProjectID, agent.SessionID, agent.ParentAgentID)
 	if err != nil {
 		return fmt.Errorf("failed to create agent: %w", err)
 	}
@@ -21,23 +31,42 @@ func (db *DB) CreateAgent(agent *Agent) error {
 
 // GetAgent retrieves an agent by ID
 func (db *DB) GetAgent(id string) (*Agent, error) {
-	if len(id) != 8 {
-		return nil, NewValidationError("agent_id", id, ErrInvalidAgentID)
-	}
+	// No longer validating agent ID format - accepting UUIDs now
 
 	query := `
-		SELECT id, status, source, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, current_session_id, persona_id
+		SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, project_id, session_id, persona_id, parent_agent_id, bookmarked
 		FROM agents WHERE id = ?
 	`
 	var agent Agent
 	row := db.conn.QueryRow(query, id)
-	err := row.Scan(&agent.ID, &agent.Status, &agent.Source, &agent.CreatedAt, &agent.UpdatedAt,
-		&agent.GitWorktreePath, &agent.FeatureDescription, &agent.CurrentTask, &agent.LastActivityAt, &agent.WindowID, &agent.ProjectName, &agent.CurrentSessionID, &agent.PersonaID)
+	err := row.Scan(&agent.ID, &agent.Status, &agent.Source, &agent.Description, &agent.CreatedAt, &agent.UpdatedAt,
+		&agent.GitWorktreePath, &agent.FeatureDescription, &agent.CurrentTask, &agent.LastActivityAt, &agent.WindowID, &agent.ProjectName, &agent.ProjectID, &agent.SessionID, &agent.PersonaID, &agent.ParentAgentID, &agent.Bookmarked)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, NewAgentError(id, "get", ErrAgentNotFound)
 		}
 		return nil, NewAgentError(id, "get", err)
+	}
+	return &agent, nil
+}
+
+// GetAgentBySessionID retrieves the most recent agent for a session ID
+func (db *DB) GetAgentBySessionID(sessionID string) (*Agent, error) {
+	query := `
+		SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, project_id, session_id, persona_id, parent_agent_id, bookmarked
+		FROM agents WHERE session_id = ?
+		ORDER BY created_at DESC
+		LIMIT 1
+	`
+	var agent Agent
+	row := db.conn.QueryRow(query, sessionID)
+	err := row.Scan(&agent.ID, &agent.Status, &agent.Source, &agent.Description, &agent.CreatedAt, &agent.UpdatedAt,
+		&agent.GitWorktreePath, &agent.FeatureDescription, &agent.CurrentTask, &agent.LastActivityAt, &agent.WindowID, &agent.ProjectName, &agent.ProjectID, &agent.SessionID, &agent.PersonaID, &agent.ParentAgentID, &agent.Bookmarked)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil // Return nil without error if not found
+		}
+		return nil, fmt.Errorf("failed to get agent by session ID: %w", err)
 	}
 	return &agent, nil
 }
@@ -63,6 +92,73 @@ func (db *DB) UpdateAgentStatus(id, status string, currentTask *string) error {
 	}
 
 	return nil
+}
+
+// UpdateAgentDescription updates an agent's description
+func (db *DB) UpdateAgentDescription(id string, description string) error {
+	query := `
+		UPDATE agents SET description = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`
+	result, err := db.conn.Exec(query, description, id)
+	if err != nil {
+		return fmt.Errorf("failed to update agent description: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("agent not found: %s", id)
+	}
+
+	return nil
+}
+
+func (db *DB) UpdateAgentFeatureDescription(id string, featureDescription string) error {
+	query := `
+		UPDATE agents SET feature_description = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`
+	result, err := db.conn.Exec(query, featureDescription, id)
+	if err != nil {
+		return fmt.Errorf("failed to update agent feature description: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("agent not found: %s", id)
+	}
+
+	return nil
+}
+
+// ToggleAgentBookmark toggles the bookmarked status of an agent
+func (db *DB) ToggleAgentBookmark(id string) (bool, error) {
+	// Get current bookmark status
+	agent, err := db.GetAgent(id)
+	if err != nil {
+		return false, fmt.Errorf("failed to get agent: %w", err)
+	}
+
+	newStatus := !agent.Bookmarked
+
+	query := `
+		UPDATE agents SET bookmarked = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`
+	_, err = db.conn.Exec(query, newStatus, id)
+	if err != nil {
+		return false, fmt.Errorf("failed to toggle bookmark: %w", err)
+	}
+
+	return newStatus, nil
 }
 
 // CreateAction logs a new action
@@ -165,6 +261,94 @@ func (db *DB) GetActionsForAgent(agentID string, limit int) ([]*Action, error) {
 	return actions, nil
 }
 
+// GetChildAgentIDs recursively retrieves all descendant agent IDs for a given agent
+func (db *DB) GetChildAgentIDs(agentID string) ([]string, error) {
+	query := `
+		WITH RECURSIVE descendants AS (
+			SELECT id FROM agents WHERE parent_agent_id = ?
+			UNION ALL
+			SELECT a.id FROM agents a
+			INNER JOIN descendants d ON a.parent_agent_id = d.id
+		)
+		SELECT id FROM descendants
+	`
+
+	rows, err := db.conn.Query(query, agentID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get child agent IDs: %w", err)
+	}
+	defer rows.Close()
+
+	var childIDs []string
+	for rows.Next() {
+		var id string
+		err := rows.Scan(&id)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan child agent ID: %w", err)
+		}
+		childIDs = append(childIDs, id)
+	}
+
+	return childIDs, nil
+}
+
+// GetCommitsForAgentHierarchy retrieves commits for an agent and all its descendants
+func (db *DB) GetCommitsForAgentHierarchy(agentID string, limit int) ([]*Commit, error) {
+	// Get all child agent IDs
+	childIDs, err := db.GetChildAgentIDs(agentID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get child agents: %w", err)
+	}
+
+	// Build list of all agent IDs (parent + children)
+	allAgentIDs := []string{agentID}
+	allAgentIDs = append(allAgentIDs, childIDs...)
+
+	// Build the query with placeholders for all agent IDs
+	query := `
+		SELECT id, agent_id, commit_hash, commit_message, timestamp
+		FROM commits
+		WHERE agent_id IN (` + repeatPlaceholders(len(allAgentIDs)) + `)
+		ORDER BY timestamp DESC`
+
+	if limit > 0 {
+		query += ` LIMIT ?`
+	}
+
+	// Convert agent IDs to interface slice for variadic argument
+	args := make([]interface{}, len(allAgentIDs))
+	for i, id := range allAgentIDs {
+		args[i] = id
+	}
+	if limit > 0 {
+		args = append(args, limit)
+	}
+
+	rows, err := db.conn.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get commits for agent hierarchy: %w", err)
+	}
+	defer rows.Close()
+
+	var commits []*Commit
+	for rows.Next() {
+		var commit Commit
+		err := rows.Scan(
+			&commit.ID,
+			&commit.AgentID,
+			&commit.CommitHash,
+			&commit.CommitMessage,
+			&commit.Timestamp,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan commit: %w", err)
+		}
+		commits = append(commits, &commit)
+	}
+
+	return commits, nil
+}
+
 // GetCommitsForAgent retrieves all commits for a specific agent
 func (db *DB) GetCommitsForAgent(agentID string) ([]*Commit, error) {
 	query := `
@@ -232,17 +416,26 @@ func (db *DB) ListAgents(status string) ([]*Agent, error) {
 	var args []interface{}
 
 	if status != "" {
-		query = `
-			SELECT id, status, source, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name
-			FROM agents WHERE status = ?
-			ORDER BY updated_at DESC
-		`
-		args = append(args, status)
+		// Special handling for "active" filter - show all active sessions
+		if status == "active" {
+			query = `
+				SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, project_id, session_id, persona_id, bookmarked
+				FROM agents WHERE status IN ('active', 'working', 'idle')
+				ORDER BY bookmarked DESC, substr(session_id, 1, 8)
+			`
+		} else {
+			query = `
+				SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, project_id, session_id, persona_id, bookmarked
+				FROM agents WHERE status = ?
+				ORDER BY bookmarked DESC, substr(session_id, 1, 8)
+			`
+			args = append(args, status)
+		}
 	} else {
 		query = `
-			SELECT id, status, source, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name
+			SELECT id, status, source, description, created_at, updated_at, git_worktree_path, feature_description, current_task, last_activity_at, window_id, project_name, project_id, session_id, persona_id, bookmarked
 			FROM agents
-			ORDER BY updated_at DESC
+			ORDER BY bookmarked DESC, substr(session_id, 1, 8)
 		`
 	}
 
@@ -259,6 +452,7 @@ func (db *DB) ListAgents(status string) ([]*Agent, error) {
 			&agent.ID,
 			&agent.Status,
 			&agent.Source,
+			&agent.Description,
 			&agent.CreatedAt,
 			&agent.UpdatedAt,
 			&agent.GitWorktreePath,
@@ -267,6 +461,10 @@ func (db *DB) ListAgents(status string) ([]*Agent, error) {
 			&agent.LastActivityAt,
 			&agent.WindowID,
 			&agent.ProjectName,
+			&agent.ProjectID,
+			&agent.SessionID,
+			&agent.PersonaID,
+			&agent.Bookmarked,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan agent: %w", err)
@@ -400,20 +598,54 @@ func (db *DB) GetLogs(sessionID string) ([]*Log, error) {
 	return logs, nil
 }
 
+// GetLogsAfter retrieves logs created after a specific timestamp
+// Used for incremental fetching in the logs viewer (tail -f style)
+func (db *DB) GetLogsAfter(sessionID string, after time.Time) ([]*Log, error) {
+	query := `SELECT id, session_id, type, message, timestamp
+	          FROM logs
+	          WHERE session_id = ? AND timestamp > ?
+	          ORDER BY timestamp ASC`
+	rows, err := db.conn.Query(query, sessionID, after)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get logs after timestamp: %w", err)
+	}
+	defer rows.Close()
+
+	var logs []*Log
+	for rows.Next() {
+		var log Log
+		err := rows.Scan(&log.ID, &log.SessionID, &log.Type, &log.Message, &log.Timestamp)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan log: %w", err)
+		}
+		logs = append(logs, &log)
+	}
+	return logs, nil
+}
+
 // CreateNote inserts a new note
 func (db *DB) CreateNote(note *Note) error {
-	query := `INSERT INTO notes (session_id, content, created_at) VALUES (?, ?, ?)`
-	_, err := db.conn.Exec(query, note.SessionID, note.Content, note.Timestamp)
+	// Let database auto-generate ID with AUTOINCREMENT
+	query := `INSERT INTO notes (parent_id, parent_type, body, created_at) VALUES (?, ?, ?, ?)`
+	result, err := db.conn.Exec(query, note.ParentID, note.ParentType, note.Body, note.CreatedAt)
 	if err != nil {
 		return fmt.Errorf("failed to create note: %w", err)
 	}
+
+	// Get the auto-generated ID
+	id, err := result.LastInsertId()
+	if err != nil {
+		return fmt.Errorf("failed to get note ID: %w", err)
+	}
+	note.ID = fmt.Sprintf("%d", id)
+
 	return nil
 }
 
-// GetNotes retrieves all notes for a session
-func (db *DB) GetNotes(sessionID string) ([]*Note, error) {
-	query := `SELECT id, session_id, content, created_at FROM notes WHERE session_id = ? ORDER BY created_at ASC`
-	rows, err := db.conn.Query(query, sessionID)
+// GetNotes retrieves all notes for a specific parent
+func (db *DB) GetNotes(parentID string, parentType string) ([]*Note, error) {
+	query := `SELECT id, parent_id, parent_type, body, created_at FROM notes WHERE parent_id = ? AND parent_type = ? ORDER BY created_at ASC`
+	rows, err := db.conn.Query(query, parentID, parentType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get notes: %w", err)
 	}
@@ -422,7 +654,7 @@ func (db *DB) GetNotes(sessionID string) ([]*Note, error) {
 	var notes []*Note
 	for rows.Next() {
 		var note Note
-		err := rows.Scan(&note.ID, &note.SessionID, &note.Content, &note.Timestamp)
+		err := rows.Scan(&note.ID, &note.ParentID, &note.ParentType, &note.Body, &note.CreatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan note: %w", err)
 		}
@@ -464,7 +696,7 @@ func (db *DB) GetContext(sessionID string) (map[string]string, error) {
 
 // UpdateAgentCurrentSession sets the current session for an agent
 func (db *DB) UpdateAgentCurrentSession(agentID, sessionID string) error {
-	query := `UPDATE agents SET current_session_id = ? WHERE id = ?`
+	query := `UPDATE agents SET session_id = ? WHERE id = ?`
 	_, err := db.conn.Exec(query, sessionID, agentID)
 	if err != nil {
 		return fmt.Errorf("failed to update current session: %w", err)
@@ -479,11 +711,11 @@ func (db *DB) GetCurrentSessionForAgent(agentID string) (*Session, error) {
 		return nil, err
 	}
 
-	if agent.CurrentSessionID == nil || *agent.CurrentSessionID == "" {
+	if agent.SessionID == nil || *agent.SessionID == "" {
 		return nil, fmt.Errorf("no active session for agent %s", agentID)
 	}
 
-	return db.GetSession(*agent.CurrentSessionID)
+	return db.GetSession(*agent.SessionID)
 }
 
 // CreatePersona inserts a new persona
@@ -633,4 +865,490 @@ func (db *DB) UpdateAgentPersona(agentID string, personaID string) error {
 	}
 
 	return nil
+}
+
+// ListSessions retrieves all sessions with their associated agent information
+func (db *DB) ListSessions(agentID string, activeOnly bool) ([]*SessionWithAgent, error) {
+	var query string
+	var args []interface{}
+
+	if agentID != "" {
+		if activeOnly {
+			query = `
+				SELECT s.id, s.agent_id, s.name, s.started_at, s.ended_at,
+				       a.status, a.feature_description, a.current_task, a.project_name
+				FROM sessions s
+				JOIN agents a ON s.agent_id = a.id
+				WHERE s.agent_id = ? AND s.ended_at IS NULL
+				ORDER BY s.started_at DESC
+			`
+		} else {
+			query = `
+				SELECT s.id, s.agent_id, s.name, s.started_at, s.ended_at,
+				       a.status, a.feature_description, a.current_task, a.project_name
+				FROM sessions s
+				JOIN agents a ON s.agent_id = a.id
+				WHERE s.agent_id = ?
+				ORDER BY s.started_at DESC
+			`
+		}
+		args = append(args, agentID)
+	} else {
+		if activeOnly {
+			query = `
+				SELECT s.id, s.agent_id, s.name, s.started_at, s.ended_at,
+				       a.status, a.feature_description, a.current_task, a.project_name
+				FROM sessions s
+				JOIN agents a ON s.agent_id = a.id
+				WHERE s.ended_at IS NULL
+				ORDER BY s.started_at DESC
+			`
+		} else {
+			query = `
+				SELECT s.id, s.agent_id, s.name, s.started_at, s.ended_at,
+				       a.status, a.feature_description, a.current_task, a.project_name
+				FROM sessions s
+				JOIN agents a ON s.agent_id = a.id
+				ORDER BY s.started_at DESC
+			`
+		}
+	}
+
+	rows, err := db.conn.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list sessions: %w", err)
+	}
+	defer rows.Close()
+
+	var sessions []*SessionWithAgent
+	for rows.Next() {
+		var session SessionWithAgent
+		err := rows.Scan(
+			&session.ID,
+			&session.AgentID,
+			&session.Name,
+			&session.StartedAt,
+			&session.EndedAt,
+			&session.AgentStatus,
+			&session.FeatureDescription,
+			&session.CurrentTask,
+			&session.ProjectName,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan session: %w", err)
+		}
+		sessions = append(sessions, &session)
+	}
+
+	return sessions, nil
+}
+
+// CreateCompaction logs a conversation compaction event
+func (db *DB) CreateCompaction(compaction *Compaction) error {
+	query := `
+		INSERT INTO compactions (agent_id, session_id, summary, jsonl_file_path, jsonl_file_size, message_count)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`
+	_, err := db.conn.Exec(query,
+		compaction.AgentID,
+		compaction.SessionID,
+		compaction.Summary,
+		compaction.JsonlFilePath,
+		compaction.JsonlFileSize,
+		compaction.MessageCount,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create compaction: %w", err)
+	}
+	return nil
+}
+
+// GetCompactionsForAgent retrieves all compactions for a specific agent
+func (db *DB) GetCompactionsForAgent(agentID string) ([]*Compaction, error) {
+	query := `
+		SELECT id, agent_id, session_id, compacted_at, summary, jsonl_file_path, jsonl_file_size, message_count
+		FROM compactions
+		WHERE agent_id = ?
+		ORDER BY compacted_at DESC
+	`
+
+	rows, err := db.conn.Query(query, agentID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get compactions: %w", err)
+	}
+	defer rows.Close()
+
+	var compactions []*Compaction
+	for rows.Next() {
+		var c Compaction
+		err := rows.Scan(
+			&c.ID,
+			&c.AgentID,
+			&c.SessionID,
+			&c.CompactedAt,
+			&c.Summary,
+			&c.JsonlFilePath,
+			&c.JsonlFileSize,
+			&c.MessageCount,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan compaction: %w", err)
+		}
+		compactions = append(compactions, &c)
+	}
+
+	return compactions, nil
+}
+
+// GetActionsByType retrieves all actions for a specific agent filtered by action type
+func (db *DB) GetActionsByType(agentID string, actionType string) ([]*Action, error) {
+	query := `
+		SELECT id, agent_id, action_type, description, details, timestamp
+		FROM actions
+		WHERE agent_id = ? AND action_type = ?
+		ORDER BY timestamp ASC
+	`
+	rows, err := db.conn.Query(query, agentID, actionType)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get actions by type: %w", err)
+	}
+	defer rows.Close()
+
+	var actions []*Action
+	for rows.Next() {
+		var action Action
+		err := rows.Scan(
+			&action.ID,
+			&action.AgentID,
+			&action.ActionType,
+			&action.Description,
+			&action.Details,
+			&action.Timestamp,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan action: %w", err)
+		}
+		actions = append(actions, &action)
+	}
+
+	return actions, nil
+}
+
+// GetSessionContextsForAgent retrieves all saved session contexts for a specific agent
+func (db *DB) GetSessionContextsForAgent(agentID string) ([]*SessionContext, error) {
+	query := `
+		SELECT id, agent_id, session_id, context, created_at, updated_at
+		FROM session_context
+		WHERE agent_id = ?
+		ORDER BY created_at DESC
+	`
+
+	rows, err := db.conn.Query(query, agentID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get session contexts: %w", err)
+	}
+	defer rows.Close()
+
+	var contexts []*SessionContext
+	for rows.Next() {
+		var ctx SessionContext
+		err := rows.Scan(
+			&ctx.ID,
+			&ctx.AgentID,
+			&ctx.SessionID,
+			&ctx.Context,
+			&ctx.CreatedAt,
+			&ctx.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan session context: %w", err)
+		}
+		contexts = append(contexts, &ctx)
+	}
+
+	return contexts, nil
+}
+
+// CreateSessionContext inserts or updates a session context checkpoint
+func (db *DB) CreateSessionContext(ctx *SessionContext) error {
+	query := `
+		INSERT INTO session_context (
+			agent_id, session_id, context
+		) VALUES (?, ?, ?)
+	`
+
+	_, err := db.conn.Exec(query,
+		ctx.AgentID,
+		ctx.SessionID,
+		ctx.Context,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to create session context: %w", err)
+	}
+
+	return nil
+}
+
+// LogSessionMetrics logs token usage and cost information for a session
+func (db *DB) LogSessionMetrics(metrics *SessionMetrics) error {
+	query := `
+		INSERT INTO session_metrics (
+			agent_id, session_id, tokens_used, tokens_budget, tokens_remaining,
+			input_tokens, output_tokens, estimated_cost_usd, model_name, notes
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
+
+	_, err := db.conn.Exec(
+		query,
+		metrics.AgentID,
+		metrics.SessionID,
+		metrics.TokensUsed,
+		metrics.TokensBudget,
+		metrics.TokensRemaining,
+		metrics.InputTokens,
+		metrics.OutputTokens,
+		metrics.EstimatedCostUSD,
+		metrics.ModelName,
+		metrics.Notes,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to log session metrics: %w", err)
+	}
+
+	return nil
+}
+
+// GetSessionMetrics retrieves all metrics for a specific agent
+func (db *DB) GetSessionMetrics(agentID string, limit int) ([]*SessionMetrics, error) {
+	query := `
+		SELECT id, agent_id, session_id, tokens_used, tokens_budget, tokens_remaining,
+		       input_tokens, output_tokens, estimated_cost_usd, model_name, timestamp, created_at, notes
+		FROM session_metrics
+		WHERE agent_id = ?
+		ORDER BY timestamp DESC
+		LIMIT ?
+	`
+
+	rows, err := db.conn.Query(query, agentID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get session metrics: %w", err)
+	}
+	defer rows.Close()
+
+	var metrics []*SessionMetrics
+	for rows.Next() {
+		var m SessionMetrics
+		err := rows.Scan(
+			&m.ID,
+			&m.AgentID,
+			&m.SessionID,
+			&m.TokensUsed,
+			&m.TokensBudget,
+			&m.TokensRemaining,
+			&m.InputTokens,
+			&m.OutputTokens,
+			&m.EstimatedCostUSD,
+			&m.ModelName,
+			&m.Timestamp,
+			&m.CreatedAt,
+			&m.Notes,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan session metrics: %w", err)
+		}
+		metrics = append(metrics, &m)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating session metrics: %w", err)
+	}
+
+	return metrics, nil
+}
+
+// GetMonthlyCosts retrieves all session metrics from the current month with timestamps
+func (db *DB) GetMonthlyCosts() ([]*SessionMetrics, error) {
+	query := `
+		SELECT id, agent_id, session_id, tokens_used, tokens_budget, tokens_remaining,
+		       input_tokens, output_tokens, estimated_cost_usd, model_name, timestamp, created_at, notes
+		FROM session_metrics
+		WHERE strftime('%Y-%m', timestamp) = strftime('%Y-%m', 'now')
+		ORDER BY timestamp DESC
+	`
+
+	rows, err := db.conn.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get monthly costs: %w", err)
+	}
+	defer rows.Close()
+
+	var metrics []*SessionMetrics
+	for rows.Next() {
+		var m SessionMetrics
+		var sessionID, modelName, notes sql.NullString
+		var inputTokens, outputTokens sql.NullInt64
+		var estimatedCost sql.NullFloat64
+
+		err := rows.Scan(
+			&m.ID,
+			&m.AgentID,
+			&sessionID,
+			&m.TokensUsed,
+			&m.TokensBudget,
+			&m.TokensRemaining,
+			&inputTokens,
+			&outputTokens,
+			&estimatedCost,
+			&modelName,
+			&m.Timestamp,
+			&m.CreatedAt,
+			&notes,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan monthly costs: %w", err)
+		}
+
+		if sessionID.Valid {
+			m.SessionID = &sessionID.String
+		}
+		if inputTokens.Valid {
+			val := int(inputTokens.Int64)
+			m.InputTokens = &val
+		}
+		if outputTokens.Valid {
+			val := int(outputTokens.Int64)
+			m.OutputTokens = &val
+		}
+		if estimatedCost.Valid {
+			m.EstimatedCostUSD = &estimatedCost.Float64
+		}
+		if modelName.Valid {
+			m.ModelName = &modelName.String
+		}
+		if notes.Valid {
+			m.Notes = &notes.String
+		}
+
+		metrics = append(metrics, &m)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating monthly costs: %w", err)
+	}
+
+	return metrics, nil
+}
+
+// ============================================================================
+// Project Query Methods
+// ============================================================================
+
+// GetProjectByName retrieves a project by its name
+func (db *DB) GetProjectByName(name string) (*Project, error) {
+	query := `SELECT CAST(id AS TEXT), name, path, remote_url, created_at, updated_at FROM projects WHERE name = ? LIMIT 1`
+
+	var project Project
+	err := db.conn.QueryRow(query, name).Scan(
+		&project.ID, &project.Name, &project.Path, &project.RemoteURL,
+		&project.CreatedAt, &project.UpdatedAt,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("project not found: %s", name)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get project by name: %w", err)
+	}
+
+	return &project, nil
+}
+
+// GetProjectByPath retrieves a project by its path
+func (db *DB) GetProjectByPath(path string) (*Project, error) {
+	query := `SELECT CAST(id AS TEXT), name, path, remote_url, created_at, updated_at FROM projects WHERE path = ? LIMIT 1`
+
+	var project Project
+	err := db.conn.QueryRow(query, path).Scan(
+		&project.ID, &project.Name, &project.Path, &project.RemoteURL,
+		&project.CreatedAt, &project.UpdatedAt,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("project not found: %s", path)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get project by path: %w", err)
+	}
+
+	return &project, nil
+}
+
+// GetProjectByRemoteURL retrieves a project by its git remote URL
+func (db *DB) GetProjectByRemoteURL(remoteURL string) (*Project, error) {
+	query := `SELECT CAST(id AS TEXT), name, path, remote_url, created_at, updated_at FROM projects WHERE remote_url = ? LIMIT 1`
+
+	var project Project
+	err := db.conn.QueryRow(query, remoteURL).Scan(
+		&project.ID, &project.Name, &project.Path, &project.RemoteURL,
+		&project.CreatedAt, &project.UpdatedAt,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("project not found: %s", remoteURL)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get project by remote URL: %w", err)
+	}
+
+	return &project, nil
+}
+
+// GetActiveAgentsByProject retrieves all active agents (active, working, idle) for a specific project
+func (db *DB) GetActiveAgentsByProject(projectID string) ([]*Agent, error) {
+	query := `
+		SELECT id, status, source, description, created_at, updated_at, git_worktree_path,
+		       feature_description, current_task, last_activity_at, window_id, project_name,
+		       project_id, session_id, persona_id, parent_agent_id, bookmarked
+		FROM agents
+		WHERE project_id = ? AND status IN ('active', 'working', 'idle')
+		ORDER BY bookmarked DESC, created_at DESC
+	`
+
+	rows, err := db.conn.Query(query, projectID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get active agents by project: %w", err)
+	}
+	defer rows.Close()
+
+	var agents []*Agent
+	for rows.Next() {
+		var agent Agent
+		err := rows.Scan(
+			&agent.ID,
+			&agent.Status,
+			&agent.Source,
+			&agent.Description,
+			&agent.CreatedAt,
+			&agent.UpdatedAt,
+			&agent.GitWorktreePath,
+			&agent.FeatureDescription,
+			&agent.CurrentTask,
+			&agent.LastActivityAt,
+			&agent.WindowID,
+			&agent.ProjectName,
+			&agent.ProjectID,
+			&agent.SessionID,
+			&agent.PersonaID,
+			&agent.ParentAgentID,
+			&agent.Bookmarked,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan agent: %w", err)
+		}
+		agents = append(agents, &agent)
+	}
+
+	return agents, nil
 }
