@@ -74,6 +74,8 @@ type Session struct {
 	Name      *string    `json:"name,omitempty"`
 	StartedAt time.Time  `json:"started_at"`
 	EndedAt   *time.Time `json:"ended_at,omitempty"`
+	Provider  *string    `json:"provider,omitempty"`
+	Model     *string    `json:"model,omitempty"`
 }
 
 // Log represents a session log entry

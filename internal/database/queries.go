@@ -544,8 +544,8 @@ func (db *DB) ListCommits(agentID string) ([]*Commit, error) {
 
 // CreateSession inserts a new session
 func (db *DB) CreateSession(session *Session) error {
-	query := `INSERT INTO sessions (id, agent_id, name, started_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)`
-	_, err := db.conn.Exec(query, session.ID, session.AgentID, session.Name)
+	query := `INSERT INTO sessions (id, agent_id, name, started_at, provider, model) VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?, ?)`
+	_, err := db.conn.Exec(query, session.ID, session.AgentID, session.Name, session.Provider, session.Model)
 	if err != nil {
 		return fmt.Errorf("failed to create session: %w", err)
 	}
@@ -554,10 +554,10 @@ func (db *DB) CreateSession(session *Session) error {
 
 // GetSession retrieves a session by ID
 func (db *DB) GetSession(id string) (*Session, error) {
-	query := `SELECT id, agent_id, name, started_at, ended_at FROM sessions WHERE id = ?`
+	query := `SELECT id, agent_id, name, started_at, ended_at, provider, model FROM sessions WHERE id = ?`
 	var session Session
 	row := db.conn.QueryRow(query, id)
-	err := row.Scan(&session.ID, &session.AgentID, &session.Name, &session.StartedAt, &session.EndedAt)
+	err := row.Scan(&session.ID, &session.AgentID, &session.Name, &session.StartedAt, &session.EndedAt, &session.Provider, &session.Model)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("session not found: %s", id)
