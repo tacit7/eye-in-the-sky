@@ -67,6 +67,7 @@ defmodule EyeInTheSkyWeb.Projects do
     from(t in EyeInTheSkyWeb.Tasks.Task,
       where: t.project_id == ^project_id_str
     )
+    |> preload([:state, :tags])
     |> Repo.all()
   end
 end
