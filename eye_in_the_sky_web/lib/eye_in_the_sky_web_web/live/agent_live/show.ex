@@ -385,12 +385,12 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Show do
   defp serialize_tasks(tasks) when is_list(tasks) do
     Enum.map(tasks, fn task ->
       %{
-        id: to_string(task.id),  # Convert to string to prevent JavaScript precision loss
+        id: format_uuid(task.id),
         title: task.title,
         description: task.description,
         priority: task.priority,
         state_name: task.state && task.state.name,
-        tags: task.tags && Enum.map(task.tags, &%{id: to_string(&1.id), name: &1.name}),
+        tags: task.tags && Enum.map(task.tags, &%{id: format_uuid(&1.id), name: &1.name}),
         created_at: task.created_at
       }
     end)
@@ -424,16 +424,14 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Show do
   defp serialize_context(nil), do: nil
   defp serialize_context(context) do
     %{
-      context: context.context,
-      current_phase: context.current_phase,
-      progress_percentage: context.progress_percentage
+      context: context.context
     }
   end
 
   defp serialize_notes(notes) when is_list(notes) do
     Enum.map(notes, fn note ->
       %{
-        id: to_string(note.id),  # Convert to string to prevent JavaScript precision loss
+        id: format_uuid(note.id),
         body: note.body,
         created_at: note.created_at
       }
@@ -595,6 +593,31 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Show do
       />
     </div>
     """
+  end
+
+  defp format_uuid(nil), do: nil
+  defp format_uuid(id) when is_binary(id) do
+    # If already formatted with dashes, return as-is
+    if String.contains?(id, "-") do
+      id
+    else
+      # Format binary UUID with dashes
+      case byte_size(id) do
+        32 -> format_uuid_string(id)
+        36 -> id  # Already formatted
+        _ -> id   # Unknown format, return as-is
+      end
+    end
+  end
+
+  defp format_uuid_string(<<
+    a1::binary-size(8),
+    a2::binary-size(4),
+    a3::binary-size(4),
+    a4::binary-size(4),
+    a5::binary-size(12)
+  >>) do
+    "#{a1}-#{a2}-#{a3}-#{a4}-#{a5}"
   end
 
   defp format_timestamp(nil), do: nil
