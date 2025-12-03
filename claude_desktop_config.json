@@ -1,12 +1,10 @@
 {
   "mcpServers": {
-    "eye-in-the-sky": {
-      "command": "/Users/urielmaldonado/projects/eye-in-the-sky/bin/eye-in-the-sky",
-      "args": ["-db", "/Users/urielmaldonado/projects/eye-in-the-sky/data/agents.db"],
-      "env": {
-        "PATH": "/usr/local/bin:/usr/bin:/bin",
-        "HOME": "/Users/urielmaldonado"
-      }
+    "eits": {
+      "command": "/absolute/path/to/eye-in-the-sky/bin/eye-in-the-sky",
+      "args": [],
+      "env": {},
+      "instructions": "Eye in the Sky - Agent tracking for Claude Code. Call i-instructions to learn the complete workflow."
     }
   }
 }

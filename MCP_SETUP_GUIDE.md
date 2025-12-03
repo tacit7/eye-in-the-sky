@@ -1,163 +1,211 @@
-# MCP Auto-Setup Guide for Claude Desktop
+# MCP Setup Guide for Claude Code
 
-This guide helps you configure the Eye in the Sky MCP server to automatically load in Claude Desktop, eliminating the need to manually import it each session.
+This guide helps you configure the Eye in the Sky MCP server for Claude Code using the official CLI.
 
-## Problem
-Currently you need to manually import the MCP server each time with:
-```
-import MCP from Claude desktop app
-```
+## Overview
 
-## Solution
-Configure the MCP server to auto-load in Claude Desktop settings.
+Eye in the Sky provides an MCP (Model Context Protocol) server for tracking Claude Code agent sessions. The server runs in stdio mode and integrates seamlessly with Claude Code.
 
-## Step 1: Locate Claude Desktop Config
+## Prerequisites
 
-Find your Claude Desktop configuration file:
+1. **Build the MCP server binary:**
+   ```bash
+   cd /path/to/eye-in-the-sky
+   go build -o bin/eye-in-the-sky ./cmd/server
+   ```
 
-**macOS:**
+2. **Verify the binary:**
+   ```bash
+   ./bin/eye-in-the-sky --help
+   ```
+
+   Should output:
+   ```
+   Eye in the Sky - Claude Code Multi-Agent Management System (MCP Server)
+   Usage:
+     -db string
+       Database path (default: ~/.config/eye-in-the-sky/eits.db)
+     -help
+       Show help
+   ```
+
+## Step 1: Add MCP Server Using Claude CLI (Recommended)
+
+The easiest way to add the MCP server is using the `claude mcp add` command:
+
 ```bash
-~/Library/Application Support/Claude/claude_desktop_config.json
+# Add the server (no arguments needed for stdio mode)
+claude mcp add --transport stdio eits -- /absolute/path/to/eye-in-the-sky/bin/eye-in-the-sky
 ```
 
-**Windows:**
+**Example:**
 ```bash
-%APPDATA%\Claude\claude_desktop_config.json
+claude mcp add --transport stdio eits -- /Users/urielmaldonado/projects/eye-in-the-sky/bin/eye-in-the-sky
 ```
 
-**Linux:**
+**Important:** Do NOT include the `-db` flag when running in MCP stdio mode. The binary uses the default database location (`~/.config/eye-in-the-sky/eits.db`) automatically.
+
+## Step 2: Verify Installation
+
+Check that the server is registered and healthy:
+
 ```bash
-~/.config/Claude/claude_desktop_config.json
+claude mcp list
 ```
 
-## Step 2: Configure Auto-Loading MCP Server
+You should see:
+```
+Checking MCP server health...
 
-Add the Eye in the Sky MCP server to your config:
+eits: /path/to/eye-in-the-sky/bin/eye-in-the-sky  - ✓ Connected
+```
+
+## Step 3: Get Server Details
+
+View the server configuration:
+
+```bash
+claude mcp get eits
+```
+
+Output:
+```
+eits:
+  Scope: Local config (private to you in this project)
+  Status: ✓ Connected
+  Type: stdio
+  Command: /path/to/eye-in-the-sky/bin/eye-in-the-sky
+  Args:
+  Environment:
+```
+
+## Alternative: Manual Configuration
+
+If you prefer to manually configure, edit `~/.claude/settings.json`:
 
 ```json
 {
   "mcpServers": {
-    "eye-in-the-sky": {
-      "command": "/absolute/path/to/eye-in-the-sky/bin/eye-in-the-sky-integrated",
+    "eits": {
+      "command": "/absolute/path/to/eye-in-the-sky/bin/eye-in-the-sky",
       "args": [],
-      "env": {
-        "PATH": "/usr/local/bin:/usr/bin:/bin"
-      }
+      "env": {},
+      "instructions": "Eye in the Sky - Agent tracking for Claude Code. Call i-instructions to learn the complete workflow."
     }
   }
 }
 ```
 
-## Step 3: Get Absolute Path
-
-Run this command to get the correct absolute path:
-
-```bash
-cd /Users/urielmaldonado/projects/eye-in-the-sky
-pwd
-echo "$(pwd)/bin/eye-in-the-sky-integrated"
-```
-
-## Step 4: Complete Configuration Example
-
-Here's a complete configuration file:
-
-```json
-{
-  "mcpServers": {
-    "eye-in-the-sky": {
-      "command": "/Users/urielmaldonado/projects/eye-in-the-sky/bin/eye-in-the-sky-integrated",
-      "args": ["-port", "8080"],
-      "env": {
-        "PATH": "/usr/local/bin:/usr/bin:/bin",
-        "HOME": "/Users/urielmaldonado"
-      }
-    }
-  }
-}
-```
-
-## Step 5: Restart Claude Desktop
-
-1. Close Claude Desktop completely
-2. Restart Claude Desktop
-3. The MCP server should now be automatically available
-
-## Step 6: Verify Auto-Loading
-
-In a new Claude Desktop session, you should be able to:
-
-1. Say "start session"
-2. I'll automatically register myself using the available MCP tools
-3. No manual MCP import needed!
+**Note:** The CLI method (`claude mcp add`) is recommended as it handles configuration validation automatically.
 
 ## Troubleshooting
 
-### If MCP server doesn't auto-load:
+### Server Shows "Failed to connect"
 
-1. **Check file path**: Ensure the binary exists at the specified path
-2. **Check permissions**: Make sure the binary is executable
-3. **Check JSON syntax**: Validate your config file JSON
-4. **Check logs**: Look at Claude Desktop console for error messages
+If `claude mcp list` shows "✗ Failed to connect":
 
-### Test the binary manually:
+1. **Check the binary exists:**
+   ```bash
+   ls -la /path/to/eye-in-the-sky/bin/eye-in-the-sky
+   ```
+
+2. **Verify it's executable:**
+   ```bash
+   chmod +x /path/to/eye-in-the-sky/bin/eye-in-the-sky
+   ```
+
+3. **Test MCP stdio mode manually:**
+   ```bash
+   echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}' | /path/to/eye-in-the-sky/bin/eye-in-the-sky
+   ```
+
+   Should output JSON-RPC response, not "Eye in the Sky - CLI Mode"
+
+### Common Mistakes
+
+1. **❌ Including `-db` flag:** The `-db` flag is for CLI mode only, not MCP stdio mode
+   ```bash
+   # WRONG - will fail
+   claude mcp add --transport stdio eits -- /path/to/binary -db /path/to/db
+
+   # CORRECT
+   claude mcp add --transport stdio eits -- /path/to/binary
+   ```
+
+2. **❌ Wrong binary:** Make sure you're using `bin/eye-in-the-sky`, not `bin/eye-in-the-sky-integrated` or other variants
+
+3. **❌ Relative paths:** Always use absolute paths, not relative paths like `./bin/eye-in-the-sky`
+
+### Viewing Logs
+
+Check Claude Code debug logs if the server isn't connecting:
+
 ```bash
-/Users/urielmaldonado/projects/eye-in-the-sky/bin/eye-in-the-sky-integrated
+ls -la ~/.claude/debug/
+cat ~/.claude/debug/latest | grep -i "mcp\|eits"
 ```
 
-Should output:
+## Using the MCP Server
+
+Once configured, the MCP tools are available in Claude Code. Call the initialization tool to learn the workflow:
+
 ```
-🔍 Eye in the Sky - Integrated Dashboard & MCP Server
-📂 Database: ./data/agents.db
-🌐 Dashboard: http://localhost:8080
-...
-```
-
-## What Happens Next Session
-
-Once configured:
-
-1. **You say**: "start session"
-2. **I automatically**:
-   - Detect available MCP tools
-   - Register myself as agent with auto-generated ID
-   - Set status to "working"
-   - Begin tracking the session
-3. **Dashboard**: Shows me as active immediately
-4. **No manual steps**: Everything just works!
-
-## Current Session vs Next Session
-
-**Current Session** (manual):
-```
-You: import MCP from Claude desktop app
-You: restart session with agent_id 534002f0
-Claude: [loads session context and continues]
+Use the mcp__eits__i-instructions tool to see all available commands and workflows
 ```
 
-**Next Session** (automatic):
+### Available MCP Tools
+
+The server provides tools prefixed with `mcp__eits__i-*`:
+
+- `i-instructions` - Complete workflow and initialization guide
+- `i-start-session` - Register a new agent session
+- `i-end-session` - Complete an agent session
+- `i-speak` - Text-to-speech notifications (macOS)
+- `i-todo-*` - Task management tools
+- `i-note-add` - Add notes to sessions
+- `i-commits` - Track git commits
+- And more...
+
+## Database Location
+
+The MCP server uses:
 ```
-You: start session
-Claude: [auto-detects MCP, registers new agent, ready to work]
-```
-
-## Configuration Template
-
-Create this as your `claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "eye-in-the-sky": {
-      "command": "/Users/urielmaldonado/projects/eye-in-the-sky/bin/eye-in-the-sky-integrated",
-      "args": ["-port", "8080"],
-      "env": {
-        "PATH": "/usr/local/bin:/usr/bin:/bin",
-        "HOME": "/Users/urielmaldonado"
-      }
-    }
-  }
-}
+~/.config/eye-in-the-sky/eits.db
 ```
 
-After this setup, you'll never need to manually import the MCP server again!
+This is created automatically on first run. No manual setup required.
+
+## Running Modes
+
+The Eye in the Sky binary has two modes:
+
+### 1. MCP Stdio Server Mode (for Claude Code)
+```bash
+# Run without arguments
+./bin/eye-in-the-sky
+```
+Starts the MCP server and listens for JSON-RPC messages on stdin/stdout.
+
+### 2. CLI Mode (for direct commands)
+```bash
+# Run with specific commands
+./bin/eye-in-the-sky i-speak "Hello world"
+./bin/eye-in-the-sky i-start-session -description "My session"
+./bin/eye-in-the-sky -db /custom/path/eits.db i-speak "Using custom DB"
+```
+The `-db` flag only works in CLI mode.
+
+## Removing the Server
+
+If you need to remove the MCP server:
+
+```bash
+claude mcp remove eits -s local
+```
+
+## Additional Resources
+
+- **Full Documentation:** See [MANUAL.md](MANUAL.md)
+- **Quick Start:** See [QUICKSTART.md](QUICKSTART.md)
+- **CLI Mode:** Use `./bin/eye-in-the-sky <command>` for direct CLI access
+- **Web Dashboard:** Run `./bin/eye-ui` for the web interface at http://localhost:8080

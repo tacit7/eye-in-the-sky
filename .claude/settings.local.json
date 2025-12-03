@@ -26,7 +26,8 @@
       "Bash(cat:*)",
       "Bash(jq:*)",
       "mcp__eye-in-the-sky__i-todo-create",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "mcp__eye-in-the-sky__i-note-add"
     ],
     "deny": [],
     "ask": []
