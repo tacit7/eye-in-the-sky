@@ -47,7 +47,7 @@ func (tr *TaskRepo) CreateTask(projectID int, input models.CreateTaskInput) (*mo
 	_, err := tr.executor.Exec(
 		`INSERT INTO tasks (id, project_id, title, description, state_id, priority, due_at, agent_id, created_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		taskID, projectID, input.Title, input.Description, stateID, input.Priority, input.DueAt, input.AgentID, time.Now(),
+		taskID, projectID, input.Title, input.Description, stateID, input.Priority, input.DueAt, input.AgentID, now(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to insert task: %w", err)
@@ -57,7 +57,7 @@ func (tr *TaskRepo) CreateTask(projectID int, input models.CreateTaskInput) (*mo
 	for _, sessionID := range input.SessionIDs {
 		_, err := tr.executor.Exec(
 			`INSERT INTO task_sessions (task_id, session_id, created_at) VALUES (?, ?, ?)`,
-			taskID, sessionID, time.Now(),
+			taskID, sessionID, now(),
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to insert task_session: %w", err)
@@ -199,7 +199,7 @@ func (tr *TaskRepo) Update(taskID string, input models.UpdateTaskInput) (*models
 	}
 
 	updates = append(updates, "updated_at = ?")
-	args = append(args, time.Now())
+	args = append(args, now())
 	args = append(args, taskID)
 
 	query := fmt.Sprintf("UPDATE tasks SET %s WHERE id = ?", strings.Join(updates, ", "))
@@ -235,7 +235,7 @@ func (tr *TaskRepo) AddNote(taskID string, body string) (*models.Note, error) {
 		TaskID:    taskID,
 		Author:    &author,
 		Body:      body,
-		CreatedAt: time.Now(),
+		CreatedAt: now(),
 	}
 
 	return note, nil
@@ -316,7 +316,7 @@ func (tr *TaskRepo) RemoveTag(taskID string, tagName string) error {
 func (tr *TaskRepo) MoveToState(taskID string, stateID int) (*models.Task, error) {
 	_, err := tr.executor.Exec(
 		"UPDATE tasks SET state_id = ?, updated_at = ? WHERE id = ?",
-		stateID, time.Now(), taskID,
+		stateID, now(), taskID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update state: %w", err)
@@ -609,7 +609,7 @@ func (tr *TaskRepo) Search(projectID int, searchQuery string, limit, offset int)
 func (tr *TaskRepo) Archive(taskID string) (*models.Task, error) {
 	_, err := tr.executor.Exec(
 		"UPDATE tasks SET archived = 1, updated_at = ? WHERE id = ?",
-		time.Now(), taskID,
+		now(), taskID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to archive task: %w", err)
@@ -646,7 +646,7 @@ func (tr *TaskRepo) AddSession(taskID string, sessionID string) error {
 	// Insert new task-session relationship
 	_, err = tr.executor.Exec(
 		"INSERT INTO task_sessions (task_id, session_id, created_at) VALUES (?, ?, ?)",
-		taskID, sessionID, time.Now(),
+		taskID, sessionID, now(),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to add session to task: %w", err)
@@ -724,7 +724,7 @@ func (tr *TaskRepo) BulkAddSessionToTasks(sourceSessionID string, targetSessionI
 		// Insert new link
 		_, err = tr.executor.Exec(
 			"INSERT INTO task_sessions (task_id, session_id, created_at) VALUES (?, ?, ?)",
-			taskID, targetSessionID, time.Now(),
+			taskID, targetSessionID, now(),
 		)
 		if err != nil {
 			return addedCount, fmt.Errorf("failed to add session to task %s: %w", taskID, err)
@@ -747,4 +747,10 @@ func getAuthor() string {
 	}
 	// Fallback
 	return "user"
+}
+
+// now returns the current time with monotonic clock stripped.
+// This ensures SQLite timestamps are compatible with Ecto's :naive_datetime type.
+func now() time.Time {
+	return time.Now().Truncate(0)
 }
