@@ -749,8 +749,9 @@ func getAuthor() string {
 	return "user"
 }
 
-// now returns the current time with monotonic clock stripped.
-// This ensures SQLite timestamps are compatible with Ecto's :naive_datetime type.
+// now returns the current time formatted for SQLite/Ecto compatibility.
+// Returns UTC time without timezone or monotonic clock reading.
+// Format: "2006-01-02 15:04:05.999999" (naive datetime)
 func now() time.Time {
-	return time.Now().Truncate(0)
+	return time.Now().UTC().Truncate(time.Microsecond)
 }
