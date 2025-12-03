@@ -152,17 +152,11 @@ defmodule EyeInTheSkyWebWeb.ProjectLive.Files do
     end
   end
 
-  defp render_content(content, :markdown) do
-    case Earmark.as_html(content) do
-      {:ok, html, _} -> {:safe, html}
-      {:error, _, _} -> nil
-    end
-  end
-
   defp render_content(_content, _), do: nil
 
   defp language_class(file_type) do
     case file_type do
+      :markdown -> "markdown"
       :elixir -> "elixir"
       :javascript -> "javascript"
       :typescript -> "typescript"
