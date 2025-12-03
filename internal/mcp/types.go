@@ -145,6 +145,19 @@ type AddNoteResult struct {
 	Message string `json:"message"`
 }
 
+// GetNoteArgs represents the arguments for i-note-get tool
+type GetNoteArgs struct {
+	NoteID string `json:"note_id" jsonschema:"description:Note ID to retrieve"`
+}
+
+type GetNoteResult struct {
+	NoteID     string `json:"note_id"`
+	ParentID   string `json:"parent_id"`
+	ParentType string `json:"parent_type"`
+	Body       string `json:"body"`
+	CreatedAt  string `json:"created_at"`
+}
+
 // SetContextArgs represents the arguments for i-context-set tool
 type SetContextArgs struct {
 	SessionID string `json:"session_id" jsonschema:"description:Session identifier"`

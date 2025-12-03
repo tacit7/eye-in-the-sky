@@ -158,6 +158,11 @@ func (s *Server) registerTools() {
 		Description: "Add note to session",
 	}, s.handleAddNote)
 
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "i-note-get",
+		Description: "Retrieve note by ID",
+	}, s.handleGetNote)
+
 	// mcp.AddTool(s.mcp, &mcp.Tool{
 	// 	Name:        "i-log-session-cost",
 	// 	Description: "Log session token usage and cost metrics",
@@ -622,6 +627,22 @@ func (s *Server) handleAddNote(ctx context.Context, req *mcp.CallToolRequest, ar
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
 			&mcp.TextContent{Text: result.Message},
+		},
+	}, result, nil
+}
+
+func (s *Server) handleGetNote(ctx context.Context, req *mcp.CallToolRequest, args GetNoteArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.GetNote(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	message := fmt.Sprintf("Note ID: %s\nParent: %s (%s)\nCreated: %s\n\n%s",
+		result.NoteID, result.ParentID, result.ParentType, result.CreatedAt, result.Body)
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: message},
 		},
 	}, result, nil
 }

@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"os"
 	"os/exec"
@@ -880,6 +881,33 @@ func (t *Tools) AddNote(args AddNoteArgs) (AddNoteResult, error) {
 		Success: true,
 		Message: "Note added",
 	}, nil
+}
+
+// GetNote implements the i-note-get tool
+func (t *Tools) GetNote(args GetNoteArgs) (GetNoteResult, error) {
+	query := `SELECT id, parent_id, parent_type, body, created_at
+	          FROM notes WHERE id = ?`
+
+	var result GetNoteResult
+	var noteID, parentID int64
+	err := t.db.QueryRow(query, args.NoteID).Scan(
+		&noteID,
+		&parentID,
+		&result.ParentType,
+		&result.Body,
+		&result.CreatedAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return GetNoteResult{}, fmt.Errorf("note not found: %s", args.NoteID)
+		}
+		return GetNoteResult{}, fmt.Errorf("failed to retrieve note: %w", err)
+	}
+
+	result.NoteID = fmt.Sprintf("%d", noteID)
+	result.ParentID = fmt.Sprintf("%d", parentID)
+
+	return result, nil
 }
 
 // SetContext implements the i-context-set tool
