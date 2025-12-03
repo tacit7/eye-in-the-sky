@@ -25,6 +25,7 @@ import {LiveSocket} from "phoenix_live_view"
 import topbar from "../vendor/topbar"
 import {CopyToClipboard} from "./hooks/copy_to_clipboard"
 import {CopySessionId} from "./hooks/copy_session_id"
+import {BookmarkAgent} from "./hooks/bookmark_agent"
 import {getHooks} from "live_svelte"
 import "./theme"
 import hljs from 'highlight.js'
@@ -40,6 +41,7 @@ import LogsTab from "../svelte/components/tabs/LogsTab.svelte"
 import NotesTab from "../svelte/components/tabs/NotesTab.svelte"
 import AgentDetail from "../svelte/components/AgentDetail.svelte"
 import AgentMessagesPanel from "../svelte/components/tabs/AgentMessagesPanel.svelte"
+import FABFlower from "../svelte/components/FABFlower.svelte"
 
 let Hooks = getHooks({
   SessionsSidebar,
@@ -50,10 +52,12 @@ let Hooks = getHooks({
   LogsTab,
   NotesTab,
   AgentDetail,
-  AgentMessagesPanel
+  AgentMessagesPanel,
+  FABFlower
 })
 Hooks.CopyToClipboard = CopyToClipboard
 Hooks.CopySessionId = CopySessionId
+Hooks.BookmarkAgent = BookmarkAgent
 Hooks.Highlight = {
   mounted() {
     hljs.highlightElement(this.el)

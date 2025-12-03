@@ -16,23 +16,128 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Index do
       :timer.send_interval(30_000, self(), :refresh_agents)
     end
 
-    sessions = Sessions.list_sessions_with_agent()
+    # Get tracked sessions from database
+    db_sessions = Sessions.list_sessions_with_agent()
+
+    # Discover all Claude sessions from filesystem
+    discovered_sessions = discover_and_merge_sessions(db_sessions)
 
     socket =
       socket
       |> assign(:page_title, "Eye in the Sky - Sessions")
-      |> assign(:sessions, sessions)
+      |> assign(:sessions, discovered_sessions)
       |> assign(:search_query, "")
-      |> assign(:status_filter, "all")
+      |> assign(:status_filter, "active")
       |> assign(:sort_by, "recent")
-      |> assign(:filtered_sessions, sessions)  # Initialize filtered_sessions
+      |> assign(:filtered_sessions, [])
+      |> update_filtered_sessions()
 
     {:ok, socket}
+  end
+
+  defp discover_and_merge_sessions(db_sessions) do
+    # Get all sessions from Claude filesystem
+    fs_sessions = EyeInTheSkyWeb.Claude.SessionReader.discover_all_sessions()
+
+    # Create a map of db sessions by session_id for quick lookup
+    db_sessions_map = Map.new(db_sessions, fn session -> {session.id, session} end)
+
+    # Merge discovered sessions with database sessions
+    fs_sessions
+    |> Enum.map(fn fs_session ->
+      case Map.get(db_sessions_map, fs_session.session_id) do
+        nil ->
+          # Session not in database - create a virtual session record
+          create_virtual_session(fs_session)
+
+        db_session ->
+          # Session exists in database - use it
+          db_session
+      end
+    end)
+    # Add any database sessions that weren't found on filesystem
+    |> Enum.concat(
+      db_sessions
+      |> Enum.reject(fn db_session ->
+        Enum.any?(fs_sessions, fn fs -> fs.session_id == db_session.id end)
+      end)
+    )
+  end
+
+  defp create_virtual_session(fs_session) do
+    # Convert filesystem session to a virtual session struct
+    %{
+      id: fs_session.session_id,
+      name: "Discovered session",
+      started_at: NaiveDateTime.from_erl!(fs_session.last_modified),
+      ended_at: nil,
+      agent: %{
+        id: nil,
+        status: "discovered",
+        description: "Session from #{Path.basename(fs_session.project_path)}",
+        project_name: Path.basename(fs_session.project_path),
+        git_worktree_path: fs_session.project_path
+      }
+    }
   end
 
   @impl true
   def handle_params(params, _url, socket) do
     {:noreply, apply_action(socket, socket.assigns.live_action, params)}
+  end
+
+  @impl true
+  def handle_event("send_direct_message", %{"session_id" => target_session_id, "body" => body}, socket) do
+    # Get the global channel for this project
+    project_id = 1  # Default project
+    channels = EyeInTheSkyWeb.Channels.list_channels_for_project(project_id)
+    global_channel = Enum.find(channels, fn c -> c.name == "#global" end)
+
+    if global_channel do
+      # Send message via the chat system
+      case EyeInTheSkyWeb.Messages.send_channel_message(%{
+        channel_id: global_channel.id,
+        session_id: "web-user",
+        sender_role: "user",
+        recipient_role: "agent",
+        provider: "claude",
+        body: body
+      }) do
+        {:ok, message} ->
+          # Broadcast to channel
+          Phoenix.PubSub.broadcast(
+            EyeInTheSkyWeb.PubSub,
+            "channel:#{global_channel.id}:messages",
+            {:new_message, message}
+          )
+
+          # Continue the agent's session
+          with {:ok, session} <- EyeInTheSkyWeb.Sessions.get_session(target_session_id),
+               {:ok, agent} <- EyeInTheSkyWeb.Agents.get_agent(session.agent_id) do
+            project_path = agent.git_worktree_path || File.cwd!()
+
+            prompt_with_reminder = """
+            REMINDER: Use i-chat-send MCP tool to send your response to the channel.
+
+            User message: #{body}
+            """
+
+            EyeInTheSkyWeb.Claude.SessionManager.continue_session(
+              target_session_id,
+              prompt_with_reminder,
+              model: "sonnet",
+              project_path: project_path
+            )
+          end
+
+          {:noreply, socket}
+
+        {:error, _} ->
+          {:noreply, put_flash(socket, :error, "Failed to send message")}
+      end
+    else
+      {:noreply, put_flash(socket, :error, "Global channel not found")}
+    end
   end
 
   @impl true
@@ -67,9 +172,10 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Index do
 
   @impl true
   def handle_info(:refresh_agents, socket) do
-    sessions = Sessions.list_sessions_with_agent()
+    db_sessions = Sessions.list_sessions_with_agent()
+    discovered_sessions = discover_and_merge_sessions(db_sessions)
     socket = socket
-      |> assign(:sessions, sessions)
+      |> assign(:sessions, discovered_sessions)
       |> update_filtered_sessions()
     {:noreply, socket}
   end
@@ -77,9 +183,10 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Index do
   @impl true
   def handle_info({:agent_updated, _agent}, socket) do
     # Reload sessions when we receive PubSub notifications
-    sessions = Sessions.list_sessions_with_agent()
+    db_sessions = Sessions.list_sessions_with_agent()
+    discovered_sessions = discover_and_merge_sessions(db_sessions)
     socket = socket
-      |> assign(:sessions, sessions)
+      |> assign(:sessions, discovered_sessions)
       |> update_filtered_sessions()
     {:noreply, socket}
   end
@@ -170,6 +277,13 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Index do
           >
             Stale
           </button>
+          <button
+            phx-click="filter_status"
+            phx-value-status="discovered"
+            class={"btn btn-sm #{if @status_filter == "discovered", do: "btn-active"}"}
+          >
+            Discovered
+          </button>
         </div>
       </div>
 
@@ -182,26 +296,30 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Index do
               <th>Project</th>
               <th>Description</th>
               <th>Last Active</th>
+              <th class="w-12"></th>
             </tr>
           </thead>
           <tbody>
             <%= if @filtered_sessions == [] do %>
               <tr>
-                <td colspan="5" class="text-center">
+                <td colspan="6" class="text-center">
                   No sessions found matching your criteria.
                 </td>
               </tr>
             <% else %>
               <%= for session <- @filtered_sessions do %>
                 <tr
-                  phx-click={JS.navigate(~p"/agents/#{session.agent.id}")}
-                  class="hover cursor-pointer group"
+                  phx-click={if session.agent.id, do: JS.navigate(~p"/agents/#{session.agent.id}"), else: nil}
+                  class={if session.agent.id, do: "hover cursor-pointer group", else: "group"}
                 >
                   <td>
-                    <%= if is_nil(session.ended_at) do %>
-                      <span class="badge badge-success badge-sm">Active</span>
-                    <% else %>
-                      <span class="badge badge-ghost badge-sm">Completed</span>
+                    <%= cond do %>
+                      <% session.agent.status == "discovered" -> %>
+                        <span class="badge badge-info badge-sm">Discovered</span>
+                      <% is_nil(session.ended_at) -> %>
+                        <span class="badge badge-success badge-sm">Active</span>
+                      <% true -> %>
+                        <span class="badge badge-ghost badge-sm">Completed</span>
                     <% end %>
                   </td>
                   <td>
@@ -244,6 +362,26 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Index do
                       </svg>
                     </div>
                   </td>
+                  <td>
+                    <%= if session.agent.id && session.id do %>
+                      <button
+                        id={"bookmark-btn-#{session.id}"}
+                        type="button"
+                        phx-hook="BookmarkAgent"
+                        data-agent-id={session.agent.id}
+                        data-session-id={session.id}
+                        data-agent-name={session.name || session.agent.description || "Agent"}
+                        data-agent-status={session.agent.status}
+                        class="bookmark-button text-base-content/40 hover:text-warning transition-colors"
+                        onclick="event.stopPropagation()"
+                        aria-label="Bookmark agent"
+                      >
+                        <svg class="h-5 w-5 bookmark-icon" viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" />
+                        </svg>
+                      </button>
+                    <% end %>
+                  </td>
                 </tr>
               <% end %>
             <% end %>
@@ -251,6 +389,13 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Index do
         </table>
       </div>
     </div>
+
+    <!-- FAB Flower for bookmarked agents -->
+    <.svelte
+      name="FABFlower"
+      props={%{}}
+      socket={@socket}
+    />
     """
   end
 
@@ -275,13 +420,14 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Index do
             String.contains?(String.downcase(session.agent.project_name || ""), query)
         end
 
-      # Status filter - based on session ended_at
+      # Status filter - based on session ended_at and agent status
       status_match =
         case status_filter do
           "all" -> true
-          "active" -> is_nil(session.ended_at)  # Session hasn't ended
+          "active" -> is_nil(session.ended_at) && session.agent.status != "discovered"  # Session hasn't ended and is not discovered
           "completed" -> not is_nil(session.ended_at)  # Session has ended
           "stale" -> is_session_stale?(session, @stale_threshold_hours)
+          "discovered" -> session.agent.status == "discovered"  # Session discovered from filesystem but not tracked
           _ -> true
         end
 
