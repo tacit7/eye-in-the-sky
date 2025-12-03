@@ -596,6 +596,7 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Show do
   end
 
   defp format_uuid(nil), do: nil
+  defp format_uuid(id) when is_integer(id), do: to_string(id)
   defp format_uuid(id) when is_binary(id) do
     # If already formatted with dashes, return as-is
     if String.contains?(id, "-") do
