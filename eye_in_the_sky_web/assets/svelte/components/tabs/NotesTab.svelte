@@ -48,10 +48,19 @@
     }
   }
 
+  function formatUUID(id) {
+    if (!id) return ''
+    // Remove any existing dashes and format as UUID
+    const clean = id.replace(/-/g, '')
+    if (clean.length !== 32) return id // Return as-is if not valid length
+    return `${clean.slice(0,8)}-${clean.slice(8,12)}-${clean.slice(12,16)}-${clean.slice(16,20)}-${clean.slice(20)}`
+  }
+
   function copyToClipboard(text, event) {
     event.stopPropagation()
-    navigator.clipboard.writeText(text).then(() => {
-      console.log('Copied:', text)
+    const formattedId = formatUUID(text)
+    navigator.clipboard.writeText(formattedId).then(() => {
+      console.log('Copied:', formattedId)
     }).catch(err => {
       console.error('Failed to copy:', err)
     })
