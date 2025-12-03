@@ -24,7 +24,7 @@ func NewProjectRepo(database *database.DB) *ProjectRepo {
 func (pr *ProjectRepo) CreateProject(name string, path *string, remoteURL *string) (*models.Project, error) {
 	result, err := pr.db.Exec(
 		"INSERT INTO projects (name, path, remote_url, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-		name, path, remoteURL, time.Now(), time.Now(),
+		name, path, remoteURL, now(), now(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to insert project: %w", err)
@@ -86,7 +86,7 @@ func (pr *ProjectRepo) ListProjects() ([]models.Project, error) {
 func (pr *ProjectRepo) UpdateProject(id int, updates map[string]interface{}) (*models.Project, error) {
 	// Build dynamic UPDATE query
 	query := "UPDATE projects SET updated_at = ?"
-	args := []interface{}{time.Now()}
+	args := []interface{}{now()}
 
 	if name, ok := updates["name"].(string); ok {
 		query += ", name = ?"
@@ -172,4 +172,11 @@ func (pr *ProjectRepo) GetWorkflowStates() ([]models.WorkflowState, error) {
 	}
 
 	return states, rows.Err()
+}
+
+// now returns the current time formatted for SQLite/Ecto compatibility.
+// Returns UTC time without timezone or monotonic clock reading.
+// Format: "2006-01-02 15:04:05.999999" (naive datetime)
+func now() time.Time {
+	return time.Now().UTC().Truncate(time.Microsecond)
 }

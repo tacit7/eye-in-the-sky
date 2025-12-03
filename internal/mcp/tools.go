@@ -790,7 +790,7 @@ func (t *Tools) StartSession(args StartSessionArgs) (StartSessionResult, error) 
 		WindowID:            windowID,
 		TerminalApplication: terminalApp,
 		ParentAgentID:       args.ParentAgentID,
-		LastActivityAt:      timePtr(time.Now()),
+		LastActivityAt:      timePtr(now()),
 	}
 
 	if err := t.db.CreateAgent(agent); err != nil {
@@ -807,7 +807,7 @@ func (t *Tools) StartSession(args StartSessionArgs) (StartSessionResult, error) 
 		ID:        sessionID,
 		AgentID:   agentID,
 		Name:      sessionName,
-		StartedAt: time.Now(),
+		StartedAt: now(),
 	}
 
 	if err := t.db.CreateSession(session); err != nil {
@@ -821,7 +821,7 @@ func (t *Tools) StartSession(args StartSessionArgs) (StartSessionResult, error) 
 		SessionID: sessionID,
 		Type:      "info",
 		Message:   logMessage,
-		Timestamp: time.Now(),
+		Timestamp: now(),
 	}
 
 	if err := t.db.CreateLog(log); err != nil {
@@ -849,7 +849,7 @@ func (t *Tools) AddLog(args AddLogArgs) (AddLogResult, error) {
 		SessionID: args.SessionID,
 		Type:      args.Type,
 		Message:   args.Message,
-		Timestamp: time.Now(),
+		Timestamp: now(),
 	}
 
 	if err := t.db.CreateLog(log); err != nil {
@@ -869,7 +869,7 @@ func (t *Tools) AddNote(args AddNoteArgs) (AddNoteResult, error) {
 		ParentID:   args.ParentID,
 		ParentType: args.ParentType,
 		Body:       args.Body,
-		CreatedAt:  time.Now(),
+		CreatedAt:  now(),
 	}
 
 	if err := t.db.CreateNote(note); err != nil {
@@ -1318,4 +1318,11 @@ func (t *Tools) ChatSend(args ChatSendArgs) (ChatSendResult, error) {
 		Message:   "Message sent to channel",
 		MessageID: messageID,
 	}, nil
+}
+
+// now returns the current time formatted for SQLite/Ecto compatibility.
+// Returns UTC time without timezone or monotonic clock reading.
+// Format: "2006-01-02 15:04:05.999999" (naive datetime)
+func now() time.Time {
+	return time.Now().UTC().Truncate(time.Microsecond)
 }
