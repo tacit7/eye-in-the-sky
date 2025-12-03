@@ -3,7 +3,6 @@ package repository
 import (
 	"database/sql"
 	"fmt"
-	"time"
 
 	"github.com/tacit7/eye-in-the-sky/internal/database"
 	"github.com/tacit7/eye-in-the-sky/internal/todo/models"
@@ -172,11 +171,4 @@ func (pr *ProjectRepo) GetWorkflowStates() ([]models.WorkflowState, error) {
 	}
 
 	return states, rows.Err()
-}
-
-// now returns the current time formatted for SQLite/Ecto compatibility.
-// Returns UTC time without timezone or monotonic clock reading.
-// Format: "2006-01-02 15:04:05.999999" (naive datetime)
-func now() time.Time {
-	return time.Now().UTC().Truncate(time.Microsecond)
 }
