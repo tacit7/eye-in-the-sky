@@ -4,6 +4,57 @@ defmodule EyeInTheSkyWeb.Claude.SessionReader do
   """
 
   @doc """
+  Discovers all Claude Code sessions by scanning ~/.claude/projects/ directory.
+  Returns a list of session maps with basic metadata.
+  """
+  def discover_all_sessions do
+    home = System.get_env("HOME")
+    projects_dir = Path.join([home, ".claude", "projects"])
+
+    case File.ls(projects_dir) do
+      {:ok, project_dirs} ->
+        project_dirs
+        |> Enum.flat_map(fn project_dir ->
+          project_path = Path.join(projects_dir, project_dir)
+          discover_sessions_in_project(project_path, project_dir)
+        end)
+
+      {:error, _} ->
+        []
+    end
+  end
+
+  defp discover_sessions_in_project(project_path, escaped_project_name) do
+    case File.ls(project_path) do
+      {:ok, files} ->
+        files
+        |> Enum.filter(&String.ends_with?(&1, ".jsonl"))
+        |> Enum.map(fn filename ->
+          session_id = String.replace_suffix(filename, ".jsonl", "")
+          file_path = Path.join(project_path, filename)
+          file_stat = File.stat!(file_path)
+
+          %{
+            session_id: session_id,
+            project_path: unescape_project_path(escaped_project_name),
+            last_modified: file_stat.mtime,
+            file_size: file_stat.size,
+            discovered: true
+          }
+        end)
+
+      {:error, _} ->
+        []
+    end
+  end
+
+  defp unescape_project_path(escaped_path) do
+    escaped_path
+    |> String.replace(~r/^-/, "/")
+    |> String.replace("-", "/")
+  end
+
+  @doc """
   Reads the last N messages from a Claude session file.
 
   ## Parameters
