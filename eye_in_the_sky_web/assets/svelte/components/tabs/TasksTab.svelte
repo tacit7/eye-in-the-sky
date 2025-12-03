@@ -63,7 +63,15 @@
   }
 
   function getShortId(id) {
-    return id ? id.substring(0, 8) : ''
+    if (!id) return ''
+    const idStr = String(id)
+    // For integer IDs, show last 8 chars for better uniqueness
+    // For UUIDs, show first 8 chars
+    if (idStr.includes('-')) {
+      return idStr.substring(0, 8)
+    } else {
+      return idStr.slice(-8)
+    }
   }
 </script>
 
