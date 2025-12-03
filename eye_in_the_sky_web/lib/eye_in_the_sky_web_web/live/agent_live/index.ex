@@ -392,9 +392,8 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Index do
 
     <!-- FAB Flower for bookmarked agents -->
     <.svelte
-      name="FABFlower"
+      name="components/FABFlower"
       props={%{}}
-      socket={@socket}
     />
     """
   end
