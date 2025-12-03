@@ -3,6 +3,7 @@
   import TasksTab from "./tabs/TasksTab.svelte"
   import CommitsTab from "./tabs/CommitsTab.svelte"
   import LogsTab from "./tabs/LogsTab.svelte"
+  import ContextTab from "./tabs/ContextTab.svelte"
   import NotesTab from "./tabs/NotesTab.svelte"
   import MessagesTab from "./tabs/MessagesTab.svelte"
   import { parseDateLike, relativeFrom, elapsedTime, shortId } from "../utils/datetime.js"
@@ -264,22 +265,7 @@
         {:else if activeTab === "logs"}
           <LogsTab {logs} />
         {:else if activeTab === "context"}
-          {#if context?.context}
-            <div class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-6 py-4">
-              <div class="prose prose-gray dark:prose-invert max-w-none text-sm">
-                <pre class="whitespace-pre-wrap text-gray-900 dark:text-gray-100">{context.context}</pre>
-              </div>
-            </div>
-          {:else}
-            <div class={emptyStateStyle}>
-              <div class="mx-auto max-w-md">
-                <h2 class="text-base font-semibold text-gray-900 dark:text-gray-100">No context saved</h2>
-                <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                  Session context will be saved here for resumption.
-                </p>
-              </div>
-            </div>
-          {/if}
+          <ContextTab {context} />
         {:else if activeTab === "notes"}
           <NotesTab {notes} />
         {:else if activeTab === "messages"}
