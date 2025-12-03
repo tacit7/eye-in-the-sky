@@ -43,6 +43,20 @@
     // TODO: Implement task completion via live push
     console.log('Toggle complete:', task.id)
   }
+
+  function copyToClipboard(text, event) {
+    event.stopPropagation()
+    navigator.clipboard.writeText(text).then(() => {
+      // Visual feedback - could add a toast here
+      console.log('Copied:', text)
+    }).catch(err => {
+      console.error('Failed to copy:', err)
+    })
+  }
+
+  function getShortId(id) {
+    return id ? id.substring(0, 8) : ''
+  }
 </script>
 
 <div class="max-w-4xl mx-auto">
@@ -66,7 +80,7 @@
             on:click={(e) => toggleComplete(task, e)}
             aria-label="Complete task"
           >
-            {#if task.state?.name === 'done' || task.completed_at}
+            {#if task.state_name === 'done' || task.completed_at}
               <svg class="w-3.5 h-3.5 text-success" fill="currentColor" viewBox="0 0 20 20">
                 <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
               </svg>
@@ -100,6 +114,15 @@
 
                 <!-- Task Meta -->
                 <div class="flex items-center gap-3 mt-2 text-xs text-base-content/50">
+                  <!-- Task ID Badge -->
+                  <button
+                    class="badge badge-ghost badge-xs hover:badge-primary cursor-pointer font-mono transition-colors"
+                    on:click={(e) => copyToClipboard(task.id, e)}
+                    title="Copy ID: {task.id}"
+                  >
+                    #{getShortId(task.id)}
+                  </button>
+
                   {#if dueDate}
                     <span class="flex items-center gap-1 {overdue ? 'text-error' : ''}">
                       <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -109,9 +132,9 @@
                     </span>
                   {/if}
 
-                  {#if task.state}
+                  {#if task.state_name}
                     <span class="badge badge-ghost badge-xs">
-                      {task.state.name}
+                      {task.state_name}
                     </span>
                   {/if}
 

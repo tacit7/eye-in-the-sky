@@ -47,6 +47,19 @@
       return content || ''
     }
   }
+
+  function copyToClipboard(text, event) {
+    event.stopPropagation()
+    navigator.clipboard.writeText(text).then(() => {
+      console.log('Copied:', text)
+    }).catch(err => {
+      console.error('Failed to copy:', err)
+    })
+  }
+
+  function getShortId(id) {
+    return id ? id.substring(0, 8) : ''
+  }
 </script>
 
 {#if notes && notes.length > 0}
@@ -69,17 +82,27 @@
             {@html renderMarkdown(note.body)}
           </div>
 
-          <!-- Timestamp footer -->
-          {#if note.created_at}
-            <div class="card-actions justify-end mt-3 pt-3 border-t border-base-300">
+          <!-- Footer with ID and Timestamp -->
+          <div class="card-actions justify-between mt-3 pt-3 border-t border-base-300">
+            <!-- Note ID Badge -->
+            <button
+              class="badge badge-ghost badge-sm hover:badge-primary cursor-pointer font-mono transition-colors"
+              on:click={(e) => copyToClipboard(note.id, e)}
+              title="Copy ID: {note.id}"
+            >
+              #{getShortId(note.id)}
+            </button>
+
+            <!-- Timestamp -->
+            {#if note.created_at}
               <div class="badge badge-ghost badge-sm">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 {formatDate(note.created_at)}
               </div>
-            </div>
-          {/if}
+            {/if}
+          </div>
         </div>
       </div>
     {/each}
