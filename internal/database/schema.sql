@@ -406,3 +406,13 @@ BEGIN
     END;
     SELECT CURRENT_TIMESTAMP;
 END;
+
+-- Prompts: Simple prompt templates (user-created)
+CREATE TABLE IF NOT EXISTS prompts (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    prompt TEXT NOT NULL,
+    liked BOOLEAN DEFAULT 0,
+    imported_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
