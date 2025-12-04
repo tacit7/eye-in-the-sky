@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/tacit7/eye-in-the-sky/internal/database"
 	"github.com/tacit7/eye-in-the-sky/internal/utils"
 	"github.com/tacit7/eye-in-the-sky/internal/window"
@@ -425,13 +426,17 @@ func (t *Tools) Instructions(args InstructionsArgs) (InstructionsResult, error) 
 INITIALIZATION - CRITICAL: Do this FIRST on EVERY new session
 ═══════════════════════════════════════════════════════════════
 
-At the start of the session, your session_id will be provided to you.
-Use this ID when starting your session.
+At the start of the session, your session_id should be provided to you.
+
+CRITICAL: Getting Your Session ID
+- If you don't know your session_id, you MUST ask the user for it using /status command
+- The user can provide their session_id which you'll use for registration
+- If no session_id was given, use the agent_id as the session_id
 
 To register yourself, call i-start-session with your session ID:
 
   i-start-session({
-    "session_id": "your_provided_session_id",
+    "session_id": "your_provided_session_id",  // Ask user via /status if not provided
     "description": "What you'll be working on",
     "worktree_path": "optional",
     "project_name": "optional",
@@ -487,13 +492,12 @@ Example mapping file:
 Without this mapping:
 - Hooks will fire but agent_id will be "unknown"
 - Logs will be written but not linked to your agent
-- TUI won't show hook activity for your session
 
 ═══════════════════════════════════════════════════════════════
-SUBAGENTS - Creating and Managing Child Agents
+iSUBAGENTS - Creating and Managing Child Agents
 ═══════════════════════════════════════════════════════════════
 
-Subagents are child agents spawned by a parent agent to handle specific tasks.
+iSubagents are child agents spawned by a parent agent to handle specific tasks.
 They maintain a hierarchical relationship with their parent for tracking.
 
 Creating a Subagent:
@@ -557,62 +561,11 @@ i-end - End session with summary
   Example: i-end({"agent_id": "your-uuid-from-start-session", "summary": "Completed TUI implementation", "final_status": "completed"})
 
 ═══════════════════════════════════════════════════════════════
-COMPACTION TRACKING
-═══════════════════════════════════════════════════════════════
-
-When Claude detects a conversation compaction (indicated by system message
-'This session is being continued from a previous conversation'), call:
-
-═══════════════════════════════════════════════════════════════
 ADDITIONAL TOOLS
 ═══════════════════════════════════════════════════════════════
 
 i-save-context - Save session state for resumption
 i-note-add - Add contextual notes to session
-
-═══════════════════════════════════════════════════════════════
-DASHBOARD & TUI
-═══════════════════════════════════════════════════════════════
-
-Web Dashboard: http://localhost:8080 (if web server running)
-TUI: Run 'bin/dashboard' for terminal interface
-
-TUI KEYBINDINGS:
-Agent List View (Overview Page):
-  [q] Quit          [r] Refresh         [a] Toggle filter (active/all)
-  [j/k] Navigate    [Enter] View details
-  [n] New session   [c] Continue        [s] Start session   [w] Window
-  [L] Logs          [D] Archive
-
-Agent Detail View (Individual Agent Page):
-  [q] Back to list  [r] Refresh         [j/k] Scroll
-  [s] Start session [w] Go to window    [L] View all logs
-
-  Tabs (navigate with letter keys):
-  [O] Overview      [C] Commits         [L] Logs
-  [N] Notes         [A] Actions         [T] Tasks
-  [P] Project tickets (Note: Known issue - may not work when pressed)
-
-STATUS INDICATORS:
-  Active Sessions (shown by default):
-    ● ACTIVE   - Ready for work (green)
-    ● WORKING  - Currently working (blue)
-    ● IDLE     - Waiting for next task (yellow)
-    ● STALE    - Inactive 30min-1hr (gray) - needs attention
-    ? UNKNOWN  - Inactive >1hr (gray) - possibly dead/disconnected
-
-  Completed Sessions (shown with 'a' toggle):
-    ✓ COMPLETE - Finished successfully (cyan)
-    ✗ FAILED   - Ended with error (red)
-
-ACTIVE FILTER:
-  Default view shows: active, working, idle, stale, unknown
-  Press 'a' to toggle between active sessions and all sessions (including completed/failed/archived)
-
-COMMANDS:
-  'n' New Session   - Creates new session with marker file, runs 'claude --session-id <id>' and exits
-  's' Start Session - Runs 'claude -s <session-id>' and exits dashboard
-  'c' Continue      - Runs 'claude --resume <session-id>' and returns to dashboard
 
 ═══════════════════════════════════════════════════════════════`
 
@@ -1501,6 +1454,54 @@ func (t *Tools) ChatSend(args ChatSendArgs) (ChatSendResult, error) {
 		Success:   true,
 		Message:   "Message sent to channel",
 		MessageID: messageID,
+	}, nil
+}
+
+// AddProject implements the i-project-add MCP tool
+func (t *Tools) AddProject(args ProjectAddArgs) (ProjectAddResult, error) {
+	// Generate project ID
+	projectID := uuid.New().String()
+
+	// Set default active value
+	active := true
+	if args.Active != nil {
+		active = *args.Active
+	}
+
+	// Insert project into database
+	query := `
+		INSERT INTO projects (
+			id, name, slug, path, remote_url, git_remote, repo_url,
+			branch, created_at, updated_at, active
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
+
+	now := nowString()
+	_, err := t.db.Exec(query,
+		projectID,
+		args.Name,
+		args.Slug,
+		args.Path,
+		args.RemoteURL,
+		args.GitRemote,
+		args.RepoURL,
+		args.Branch,
+		now,
+		now,
+		active,
+	)
+
+	if err != nil {
+		return ProjectAddResult{
+			Success: false,
+			Message: fmt.Sprintf("Failed to create project: %v", err),
+		}, nil
+	}
+
+	return ProjectAddResult{
+		Success:   true,
+		Message:   fmt.Sprintf("Project '%s' created successfully", args.Name),
+		ProjectID: projectID,
 	}, nil
 }
 

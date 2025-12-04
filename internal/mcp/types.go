@@ -394,3 +394,22 @@ type ChatSendResult struct {
 	Message   string `json:"message"`
 	MessageID string `json:"message_id,omitempty"`
 }
+
+// ProjectAddArgs represents the arguments for i-project-add tool
+type ProjectAddArgs struct {
+	Name      string  `json:"name" jsonschema:"description:Project name (required)"`
+	Slug      *string `json:"slug,omitempty" jsonschema:"description:URL-friendly slug"`
+	Path      *string `json:"path,omitempty" jsonschema:"description:Local filesystem path"`
+	RemoteURL *string `json:"remote_url,omitempty" jsonschema:"description:Git remote URL"`
+	GitRemote *string `json:"git_remote,omitempty" jsonschema:"description:Git remote name (e.g., origin)"`
+	RepoURL   *string `json:"repo_url,omitempty" jsonschema:"description:Repository URL"`
+	Branch    *string `json:"branch,omitempty" jsonschema:"description:Git branch name"`
+	Active    *bool   `json:"active,omitempty" jsonschema:"description:Active status (default: true)"`
+}
+
+// ProjectAddResult represents the result for i-project-add tool
+type ProjectAddResult struct {
+	Success   bool   `json:"success"`
+	Message   string `json:"message"`
+	ProjectID string `json:"project_id,omitempty"`
+}

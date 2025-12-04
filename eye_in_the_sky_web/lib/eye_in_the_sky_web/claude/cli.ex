@@ -297,7 +297,7 @@ defmodule EyeInTheSkyWeb.Claude.CLI do
     end
   end
 
-  defp build_args(prompt, model, output_format, skip_permissions) do
+  defp build_args(prompt, _model, output_format, skip_permissions) do
     base = [
       "-p", prompt,
       "--output-format", output_format,
@@ -319,8 +319,8 @@ defmodule EyeInTheSkyWeb.Claude.CLI do
 
     # Force non-interactive mode for Claude (disable TTY requirements)
     [
-      {'CI', 'true'},  # Tell Claude it's running in CI (no TTY)
-      {'TERM', 'dumb'} # Disable terminal features
+      {~c"CI", ~c"true"},  # Tell Claude it's running in CI (no TTY)
+      {~c"TERM", ~c"dumb"} # Disable terminal features
       | base_env
     ]
   end

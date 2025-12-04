@@ -351,6 +351,12 @@ Parameters:
 Example:
 {"channel_id": "channel-uuid", "session_id": "session-uuid", "body": "Task completed successfully"}`,
 	}, s.handleChatSend)
+
+	// Project Management Tools
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "i-project-add",
+		Description: "Create a new project in Eye in the Sky for tracking agents and tasks",
+	}, s.handleProjectAdd)
 }
 
 // Tool handlers using the generic AddTool pattern
@@ -838,6 +844,19 @@ func (s *Server) handleNATSListen(ctx context.Context, req *mcp.CallToolRequest,
 
 func (s *Server) handleChatSend(ctx context.Context, req *mcp.CallToolRequest, args ChatSendArgs) (*mcp.CallToolResult, any, error) {
 	result, err := s.tools.ChatSend(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: result.Message},
+		},
+	}, result, nil
+}
+
+func (s *Server) handleProjectAdd(ctx context.Context, req *mcp.CallToolRequest, args ProjectAddArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.AddProject(args)
 	if err != nil {
 		return nil, nil, err
 	}

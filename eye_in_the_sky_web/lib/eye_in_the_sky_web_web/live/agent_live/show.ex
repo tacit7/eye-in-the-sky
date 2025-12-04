@@ -264,7 +264,7 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Show do
       {:ok, _} ->
         # Message published to NATS successfully
         # Get session and agent to get project path (using safe versions)
-        with {:ok, session} <- Sessions.get_session(session_id),
+        with {:ok, _session} <- Sessions.get_session(session_id),
              {:ok, agent} <- Agents.get_agent(socket.assigns.agent_id) do
           # Use git_worktree_path as project_path for Claude
           project_path = agent.git_worktree_path || File.cwd!()
@@ -439,22 +439,6 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Show do
   end
   defp serialize_notes(_), do: []
 
-  defp serialize_messages(messages) when is_list(messages) do
-    Enum.map(messages, fn message ->
-      %{
-        id: to_string(message.id),  # Convert to string to prevent JavaScript precision loss
-        sender_role: message.sender_role,
-        recipient_role: message.recipient_role,
-        direction: message.direction,
-        body: message.body,
-        status: message.status,
-        provider: message.provider,
-        inserted_at: message.inserted_at
-      }
-    end)
-  end
-  defp serialize_messages(_), do: []
-
   defp serialize_claude_messages(messages) when is_list(messages) do
     # Convert Claude messages to flat format for UI
     messages
@@ -486,15 +470,6 @@ defmodule EyeInTheSkyWebWeb.AgentLive.Show do
     end)
   end
   defp serialize_claude_messages(_), do: []
-
-  defp parse_date_from_timestamp(timestamp) when is_binary(timestamp) do
-    case DateTime.from_iso8601(timestamp) do
-      {:ok, dt, _} -> DateTime.to_date(dt)
-      _ -> Date.utc_today()
-    end
-  end
-  defp parse_date_from_timestamp(%DateTime{} = dt), do: DateTime.to_date(dt)
-  defp parse_date_from_timestamp(_), do: Date.utc_today()
 
   defp group_and_serialize_messages(messages) when is_list(messages) do
     messages
