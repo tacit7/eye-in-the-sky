@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// SubagentPrompt represents a reusable prompt template
+// Prompt represents a reusable prompt template
 type SubagentPrompt struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
@@ -38,7 +38,7 @@ func ValidateSlug(slug string) error {
 	return nil
 }
 
-// CreateSubagentPrompt inserts a new prompt
+// CreatePrompt inserts a new prompt
 func (db *DB) CreateSubagentPrompt(prompt *SubagentPrompt) error {
 	// Validate slug
 	if err := ValidateSlug(prompt.Slug); err != nil {
@@ -91,7 +91,7 @@ func (db *DB) CreateSubagentPrompt(prompt *SubagentPrompt) error {
 			}
 			return fmt.Errorf("prompt with slug '%s' already exists for project %s", prompt.Slug, prompt.ProjectID)
 		}
-		return fmt.Errorf("failed to create subagent prompt: %w", err)
+		return fmt.Errorf("failed to create prompt: %w", err)
 	}
 
 	return nil
@@ -123,7 +123,7 @@ func (db *DB) GetSubagentPromptByID(id string) (*SubagentPrompt, error) {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("prompt not found: %s", id)
 		}
-		return nil, fmt.Errorf("failed to get subagent prompt: %w", err)
+		return nil, fmt.Errorf("failed to get prompt: %w", err)
 	}
 	return &prompt, nil
 }
@@ -192,13 +192,13 @@ func (db *DB) GetSubagentPromptBySlug(slug string, projectID string) (*SubagentP
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("prompt not found: %s", slug)
 		}
-		return nil, fmt.Errorf("failed to get subagent prompt: %w", err)
+		return nil, fmt.Errorf("failed to get prompt: %w", err)
 	}
 
 	return &prompt, nil
 }
 
-// ListSubagentPromptsOptions contains filtering options
+// ListPromptsOptions contains filtering options
 type ListSubagentPromptsOptions struct {
 	ProjectID   string
 	Active      *bool
@@ -209,7 +209,7 @@ type ListSubagentPromptsOptions struct {
 	Offset      int
 }
 
-// ListSubagentPrompts retrieves prompts with filtering
+// ListPrompts retrieves prompts with filtering
 func (db *DB) ListSubagentPrompts(opts ListSubagentPromptsOptions) ([]SubagentPrompt, error) {
 	query := "SELECT id, name, slug, description, %s, COALESCE(project_id, ''), active, version, tags, created_at, updated_at, COALESCE(created_by, '') FROM subagent_prompts WHERE 1=1"
 	args := []interface{}{}
@@ -264,7 +264,7 @@ func (db *DB) ListSubagentPrompts(opts ListSubagentPromptsOptions) ([]SubagentPr
 
 	rows, err := db.conn.Query(query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list subagent prompts: %w", err)
+		return nil, fmt.Errorf("failed to list prompts: %w", err)
 	}
 	defer rows.Close()
 
@@ -309,7 +309,7 @@ func (db *DB) ListSubagentPrompts(opts ListSubagentPromptsOptions) ([]SubagentPr
 	return prompts, nil
 }
 
-// UpdateSubagentPrompt updates a prompt with optimistic locking
+// UpdatePrompt updates a prompt with optimistic locking
 func (db *DB) UpdateSubagentPrompt(id string, updates map[string]interface{}, expectedVersion int) error {
 	if len(updates) == 0 {
 		return fmt.Errorf("no fields to update")
@@ -365,7 +365,7 @@ func (db *DB) UpdateSubagentPrompt(id string, updates map[string]interface{}, ex
 
 	result, err := db.conn.Exec(query, args...)
 	if err != nil {
-		return fmt.Errorf("failed to update subagent prompt: %w", err)
+		return fmt.Errorf("failed to update prompt: %w", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
@@ -380,7 +380,7 @@ func (db *DB) UpdateSubagentPrompt(id string, updates map[string]interface{}, ex
 	return nil
 }
 
-// DeactivateSubagentPrompt soft deletes a prompt
+// DeactivatePrompt soft deletes a prompt
 func (db *DB) DeactivateSubagentPrompt(id string) error {
 	query := "UPDATE subagent_prompts SET active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
 	result, err := db.conn.Exec(query, id)
@@ -400,7 +400,7 @@ func (db *DB) DeactivateSubagentPrompt(id string) error {
 	return nil
 }
 
-// DeleteSubagentPrompt permanently deletes a prompt (use with caution)
+// DeletePrompt permanently deletes a prompt (use with caution)
 func (db *DB) DeleteSubagentPrompt(id string) error {
 	query := "DELETE FROM subagent_prompts WHERE id = ?"
 	result, err := db.conn.Exec(query, id)
