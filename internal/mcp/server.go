@@ -292,6 +292,11 @@ func (s *Server) registerTools() {
 		Description: "Delete a subagent prompt (soft delete by default)",
 	}, s.handlePromptDelete)
 
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "i-agent-import",
+		Description: "Import Claude Code agent definitions from .claude/agents/ directory into subagent_prompts table",
+	}, s.handleAgentImport)
+
 	// NATS Messaging Tools
 	mcp.AddTool(s.mcp, &mcp.Tool{
 		Name: "i-nats-send",
@@ -794,6 +799,19 @@ func (s *Server) handlePromptDelete(ctx context.Context, req *mcp.CallToolReques
 
 func (s *Server) handleNATSSend(ctx context.Context, req *mcp.CallToolRequest, args NATSSendArgs) (*mcp.CallToolResult, any, error) {
 	result, err := s.tools.NATSSend(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: result.Message},
+		},
+	}, result, nil
+}
+
+func (s *Server) handleAgentImport(ctx context.Context, req *mcp.CallToolRequest, args ImportAgentsArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.ImportAgents(args)
 	if err != nil {
 		return nil, nil, err
 	}

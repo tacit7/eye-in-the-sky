@@ -347,17 +347,35 @@ type DeletePromptArgs struct {
 
 // PromptResult represents the result for prompt operations
 type PromptResult struct {
-	Success bool                        `json:"success"`
-	Message string                      `json:"message"`
-	Prompt  *database.SubagentPrompt    `json:"prompt,omitempty"`
+	Success bool              `json:"success"`
+	Message string            `json:"message"`
+	Prompt  *database.SubagentPrompt  `json:"prompt,omitempty"`
 }
 
 // ListPromptsResult represents the result for list operation
 type ListPromptsResult struct {
-	Success bool                       `json:"success"`
-	Message string                     `json:"message"`
-	Prompts []database.SubagentPrompt  `json:"prompts,omitempty"`
-	Count   int                        `json:"count"`
+	Success bool             `json:"success"`
+	Message string           `json:"message"`
+	Prompts []database.SubagentPrompt `json:"prompts,omitempty"`
+	Count   int              `json:"count"`
+}
+
+// ImportAgentsArgs represents the arguments for i-agent-import tool
+type ImportAgentsArgs struct {
+	AgentsDir  string `json:"agents_dir,omitempty" jsonschema:"description:Path to agents directory (default: .claude/agents)"`
+	ProjectID  string `json:"project_id,omitempty" jsonschema:"description:Project ID to scope imported agents (optional)"`
+	Overwrite  bool   `json:"overwrite,omitempty" jsonschema:"description:Overwrite existing prompts with same slug (default: false)"`
+	CreatedBy  string `json:"created_by,omitempty" jsonschema:"description:Who is importing (optional)"`
+}
+
+// ImportAgentsResult represents the result of agent import operation
+type ImportAgentsResult struct {
+	Success  bool     `json:"success"`
+	Message  string   `json:"message"`
+	Imported []string `json:"imported,omitempty"`
+	Skipped  []string `json:"skipped,omitempty"`
+	Errors   []string `json:"errors,omitempty"`
+	Count    int      `json:"count"`
 }
 
 // ChatSendArgs represents the arguments for i-chat-send tool
