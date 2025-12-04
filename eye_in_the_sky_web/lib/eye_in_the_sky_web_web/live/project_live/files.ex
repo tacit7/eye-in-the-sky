@@ -191,9 +191,10 @@ defmodule EyeInTheSkyWebWeb.ProjectLive.Files do
   end
 
   defp render_file_tree(items, project_id) do
-    for item <- items do
+    Enum.map(items, fn item ->
       case item.type do
         :directory ->
+          assigns = %{item: item, project_id: project_id}
           ~H"""
           <li>
             <details>
@@ -201,31 +202,32 @@ defmodule EyeInTheSkyWebWeb.ProjectLive.Files do
                 <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
                   <path d="M1.75 1A1.75 1.75 0 0 0 0 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0 0 16 13.25v-8.5A1.75 1.75 0 0 0 14.25 3H7.5a.25.25 0 0 1-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75Z" />
                 </svg>
-                <%= item.name %>
+                <%= @item.name %>
               </summary>
               <ul>
-                <%= render_file_tree(item.children, project_id) %>
+                <%= render_file_tree(@item.children, @project_id) %>
               </ul>
             </details>
           </li>
           """
 
         :file ->
+          assigns = %{item: item, project_id: project_id}
           ~H"""
           <li>
-            <a href={~p"/projects/#{project_id}/files?path=#{item.path}"}>
+            <a href={~p"/projects/#{@project_id}/files?path=#{@item.path}"}>
               <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
                 <path d="M4 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2H4zm0 1h8a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1z"/>
               </svg>
-              <%= item.name %>
-              <%= if item.size do %>
-                <span class="badge badge-ghost badge-xs ml-auto"><%= item.size %></span>
+              <%= @item.name %>
+              <%= if @item.size do %>
+                <span class="badge badge-ghost badge-xs ml-auto"><%= @item.size %></span>
               <% end %>
             </a>
           </li>
           """
       end
-    end
+    end)
   end
 
   @impl true
