@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -14,6 +16,7 @@ import (
 	"github.com/tacit7/eye-in-the-sky/internal/database"
 	"github.com/tacit7/eye-in-the-sky/internal/utils"
 	"github.com/tacit7/eye-in-the-sky/internal/window"
+	"gopkg.in/yaml.v3"
 )
 
 type Tools struct {
@@ -1088,7 +1091,7 @@ func (t *Tools) ISpeak(args ISpeakArgs) (ISpeakResult, error) {
 	}, nil
 }
 
-// CreateSubagentPrompt implements the i-prompt-create MCP tool
+// CreatePrompt implements the i-prompt-create MCP tool
 func (t *Tools) CreateSubagentPrompt(args CreatePromptArgs) (PromptResult, error) {
 	prompt := &database.SubagentPrompt{
 		Name:        args.Name,
@@ -1101,7 +1104,7 @@ func (t *Tools) CreateSubagentPrompt(args CreatePromptArgs) (PromptResult, error
 		CreatedBy:   args.CreatedBy,
 	}
 
-	if err := t.db.CreateSubagentPrompt(prompt); err != nil {
+	if err := t.db.CreateSubagentPrompt(prompt); err != nil{
 		return PromptResult{
 			Success: false,
 			Message: fmt.Sprintf("Failed to create prompt: %v", err),
@@ -1115,7 +1118,7 @@ func (t *Tools) CreateSubagentPrompt(args CreatePromptArgs) (PromptResult, error
 	}, nil
 }
 
-// GetSubagentPrompt implements the i-prompt-get MCP tool
+// GetPrompt implements the i-prompt-get MCP tool
 func (t *Tools) GetSubagentPrompt(args GetPromptArgs) (PromptResult, error) {
 	var prompt *database.SubagentPrompt
 	var err error
@@ -1150,7 +1153,7 @@ func (t *Tools) GetSubagentPrompt(args GetPromptArgs) (PromptResult, error) {
 	}, nil
 }
 
-// ListSubagentPrompts implements the i-prompt-list MCP tool
+// ListPrompts implements the i-prompt-list MCP tool
 func (t *Tools) ListSubagentPrompts(args ListPromptsArgs) (ListPromptsResult, error) {
 	opts := database.ListSubagentPromptsOptions{
 		ProjectID:   args.ProjectID,
@@ -1178,7 +1181,7 @@ func (t *Tools) ListSubagentPrompts(args ListPromptsArgs) (ListPromptsResult, er
 	}, nil
 }
 
-// UpdateSubagentPrompt implements the i-prompt-update MCP tool
+// UpdatePrompt implements the i-prompt-update MCP tool
 func (t *Tools) UpdateSubagentPrompt(args UpdatePromptArgs) (PromptResult, error) {
 	if args.ID == "" {
 		return PromptResult{
@@ -1247,7 +1250,7 @@ func (t *Tools) UpdateSubagentPrompt(args UpdatePromptArgs) (PromptResult, error
 	}, nil
 }
 
-// DeleteSubagentPrompt implements the i-prompt-delete MCP tool
+// DeletePrompt implements the i-prompt-delete MCP tool
 func (t *Tools) DeleteSubagentPrompt(args DeletePromptArgs) (PromptResult, error) {
 	if args.ID == "" {
 		return PromptResult{
@@ -1278,6 +1281,159 @@ func (t *Tools) DeleteSubagentPrompt(args DeletePromptArgs) (PromptResult, error
 	return PromptResult{
 		Success: true,
 		Message: fmt.Sprintf("Prompt %s successfully", deleteType),
+	}, nil
+}
+
+// AgentFrontmatter represents the YAML frontmatter from .claude/agents/*.md files
+type AgentFrontmatter struct {
+	Name        string `yaml:"name"`
+	Description string `yaml:"description"`
+	Tools       string `yaml:"tools"`
+	Model       string `yaml:"model"`
+	Color       string `yaml:"color"`
+}
+
+// ImportAgents implements the i-agent-import MCP tool
+func (t *Tools) ImportAgents(args ImportAgentsArgs) (ImportAgentsResult, error) {
+	// Default agents directory
+	agentsDir := args.AgentsDir
+	if agentsDir == "" {
+		agentsDir = ".claude/agents"
+	}
+
+	// Check if directory exists
+	if _, err := os.Stat(agentsDir); os.IsNotExist(err) {
+		return ImportAgentsResult{
+			Success: false,
+			Message: fmt.Sprintf("Agents directory not found: %s", agentsDir),
+		}, nil
+	}
+
+	// Read all .md files from agents directory
+	files, err := filepath.Glob(filepath.Join(agentsDir, "*.md"))
+	if err != nil {
+		return ImportAgentsResult{
+			Success: false,
+			Message: fmt.Sprintf("Failed to read agents directory: %v", err),
+		}, nil
+	}
+
+	if len(files) == 0 {
+		return ImportAgentsResult{
+			Success: true,
+			Message: "No agent files found in directory",
+			Count:   0,
+		}, nil
+	}
+
+	var imported []string
+	var skipped []string
+	var errors []string
+
+	// Regex to split frontmatter from body
+	frontmatterRegex := regexp.MustCompile(`(?s)^---\n(.*?)\n---\n(.*)$`)
+
+	for _, file := range files {
+		filename := filepath.Base(file)
+
+		// Read file content
+		content, err := os.ReadFile(file)
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("%s: failed to read file: %v", filename, err))
+			continue
+		}
+
+		// Parse frontmatter and body
+		matches := frontmatterRegex.FindStringSubmatch(string(content))
+		if matches == nil || len(matches) < 3 {
+			errors = append(errors, fmt.Sprintf("%s: invalid format (missing YAML frontmatter)", filename))
+			continue
+		}
+
+		frontmatterYAML := matches[1]
+		promptBody := strings.TrimSpace(matches[2])
+
+		// Parse YAML frontmatter
+		var fm AgentFrontmatter
+		if err := yaml.Unmarshal([]byte(frontmatterYAML), &fm); err != nil {
+			errors = append(errors, fmt.Sprintf("%s: failed to parse YAML: %v", filename, err))
+			continue
+		}
+
+		// Validate required fields
+		if fm.Name == "" {
+			errors = append(errors, fmt.Sprintf("%s: missing 'name' in frontmatter", filename))
+			continue
+		}
+
+		// Use name as slug (already in kebab-case format)
+		slug := fm.Name
+
+		// Check if prompt already exists
+		existing, err := t.db.GetSubagentPromptBySlug(slug, args.ProjectID)
+		if err == nil && existing != nil && !args.Overwrite {
+			skipped = append(skipped, fmt.Sprintf("%s (already exists with slug: %s)", filename, slug))
+			continue
+		}
+
+		// Build tags from model, color, and tools metadata
+		tags := []string{}
+		if fm.Model != "" {
+			tags = append(tags, "model:"+fm.Model)
+		}
+		if fm.Color != "" {
+			tags = append(tags, "color:"+fm.Color)
+		}
+		if fm.Tools != "" {
+			tags = append(tags, "source:claude-agents")
+		}
+		tagsStr := strings.Join(tags, ",")
+
+		// Create or update the prompt
+		if existing != nil && args.Overwrite {
+			// Update existing prompt
+			updates := map[string]interface{}{
+				"description": fm.Description,
+				"prompt_text": promptBody,
+				"tags":        tagsStr,
+			}
+			if err := t.db.UpdateSubagentPrompt(existing.ID, updates, existing.Version); err != nil {
+				errors = append(errors, fmt.Sprintf("%s: failed to update: %v", filename, err))
+				continue
+			}
+			imported = append(imported, fmt.Sprintf("%s (updated slug: %s)", filename, slug))
+		} else {
+			// Create new prompt
+			prompt := &database.SubagentPrompt{
+				Name:        fm.Name,
+				Slug:        slug,
+				Description: fm.Description,
+				PromptText:  promptBody,
+				ProjectID:   args.ProjectID,
+				Active:      true,
+				Tags:        tagsStr,
+				CreatedBy:   args.CreatedBy,
+			}
+
+			if err := t.db.CreateSubagentPrompt(prompt); err != nil {
+				errors = append(errors, fmt.Sprintf("%s: failed to create: %v", filename, err))
+				continue
+			}
+			imported = append(imported, fmt.Sprintf("%s (slug: %s, id: %s)", filename, slug, prompt.ID))
+		}
+	}
+
+	// Build result message
+	message := fmt.Sprintf("Processed %d agent files: %d imported, %d skipped, %d errors",
+		len(files), len(imported), len(skipped), len(errors))
+
+	return ImportAgentsResult{
+		Success:  len(errors) == 0,
+		Message:  message,
+		Imported: imported,
+		Skipped:  skipped,
+		Errors:   errors,
+		Count:    len(imported),
 	}, nil
 }
 
@@ -1348,9 +1504,15 @@ func (t *Tools) ChatSend(args ChatSendArgs) (ChatSendResult, error) {
 	}, nil
 }
 
-// now returns the current time formatted for SQLite/Ecto compatibility.
+// now returns the current time for use in Go structs.
 // Returns UTC time without timezone or monotonic clock reading.
-// Format: "2006-01-02 15:04:05.999999" (naive datetime)
 func now() time.Time {
 	return time.Now().UTC().Truncate(time.Microsecond)
+}
+
+// nowString returns the current time formatted for SQLite/Ecto compatibility.
+// Returns UTC time as string without timezone or monotonic clock reading.
+// Format: "2006-01-02 15:04:05.999999" (naive datetime)
+func nowString() string {
+	return now().Format("2006-01-02 15:04:05.999999")
 }
