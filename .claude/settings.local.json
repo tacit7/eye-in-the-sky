@@ -27,7 +27,9 @@
       "Bash(jq:*)",
       "mcp__eye-in-the-sky__i-todo-create",
       "Bash(npm install:*)",
-      "mcp__eye-in-the-sky__i-note-add"
+      "mcp__eye-in-the-sky__i-note-add",
+      "mcp__eye-in-the-sky__i-agent-import",
+      "mcp__eye-in-the-sky__i-save-session-context"
     ],
     "deny": [],
     "ask": []
