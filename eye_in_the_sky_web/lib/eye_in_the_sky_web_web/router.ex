@@ -28,6 +28,7 @@ defmodule EyeInTheSkyWebWeb.Router do
     live "/projects/:id/agents", ProjectLive.Agents, :show
     live "/projects/:id/prompts", ProjectLive.Prompts, :show
     live "/projects/:id/tasks", ProjectLive.Tasks, :show
+    live "/projects/:id/kanban", ProjectLive.Kanban, :show
     live "/projects/:id/notes", ProjectLive.Notes, :show
     live "/projects/:id/files", ProjectLive.Files, :show
     live "/chat", ChatLive, :index

@@ -127,6 +127,15 @@ defmodule EyeInTheSkyWebWeb.ProjectLive.Show do
             Tasks
           </a>
           <a
+            href={~p"/projects/#{@project.id}/kanban"}
+            class="flex items-center gap-2 px-4 py-2 border-b-2 border-transparent hover:border-base-content/20 text-sm text-base-content/60 hover:text-base-content transition-colors"
+          >
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
+              <path d="M0 1.75C0 .784.784 0 1.75 0h2.5C5.216 0 6 .784 6 1.75v12.5A1.75 1.75 0 0 1 4.25 16h-2.5A1.75 1.75 0 0 1 0 14.25ZM7 1.75C7 .784 7.784 0 8.75 0h2.5C12.216 0 13 .784 13 1.75v7.5A1.75 1.75 0 0 1 11.25 11h-2.5A1.75 1.75 0 0 1 7 9.25ZM14 1.75C14 .784 14.784 0 15.75 0h.5c.966 0 1.75.784 1.75 1.75v4.5A1.75 1.75 0 0 1 16.25 8h-.5A1.75 1.75 0 0 1 14 6.25Z" />
+            </svg>
+            Kanban
+          </a>
+          <a
             href={~p"/projects/#{@project.id}/notes"}
             class="flex items-center gap-2 px-4 py-2 border-b-2 border-transparent hover:border-base-content/20 text-sm text-base-content/60 hover:text-base-content transition-colors"
           >
