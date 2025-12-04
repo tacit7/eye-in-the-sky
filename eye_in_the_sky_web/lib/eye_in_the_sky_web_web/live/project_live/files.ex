@@ -13,6 +13,13 @@ defmodule EyeInTheSkyWebWeb.ProjectLive.Files do
     # Load tasks manually due to type mismatch
     tasks = Projects.get_project_tasks(project_id)
 
+    # Build file tree
+    file_tree = if project.path do
+      build_file_tree(project.path, project.path)
+    else
+      []
+    end
+
     socket =
       socket
       |> assign(:page_title, "Files - #{project.name}")
@@ -22,7 +29,7 @@ defmodule EyeInTheSkyWebWeb.ProjectLive.Files do
       |> assign(:file_content, nil)
       |> assign(:rendered_content, nil)
       |> assign(:file_type, nil)
-      |> assign(:files, [])
+      |> assign(:file_tree, file_tree)
       |> assign(:error, nil)
 
     {:ok, socket}
@@ -35,79 +42,84 @@ defmodule EyeInTheSkyWebWeb.ProjectLive.Files do
     if project.path do
       full_path = Path.join(project.path, path)
 
-      cond do
-        File.dir?(full_path) ->
-          # List directory contents
-          case File.ls(full_path) do
-            {:ok, files} ->
-              file_list = files
-              |> Enum.map(fn file ->
-                file_path = Path.join(full_path, file)
-                %{
-                  name: file,
-                  path: Path.join(path, file),
-                  is_dir: File.dir?(file_path),
-                  size: get_file_size(file_path)
-                }
-              end)
-              |> Enum.sort_by(&{!&1.is_dir, &1.name})
+      if File.regular?(full_path) do
+        # Read file contents
+        case File.read(full_path) do
+          {:ok, content} ->
+            file_type = detect_file_type(path)
+            rendered_content = render_content(content, file_type)
 
-              {:noreply,
-               socket
-               |> assign(:file_path, path)
-               |> assign(:file_content, nil)
-               |> assign(:files, file_list)
-               |> assign(:error, nil)}
+            {:noreply,
+             socket
+             |> assign(:file_path, path)
+             |> assign(:file_content, content)
+             |> assign(:rendered_content, rendered_content)
+             |> assign(:file_type, file_type)
+             |> assign(:error, nil)}
 
-            {:error, reason} ->
-              {:noreply,
-               socket
-               |> assign(:error, "Failed to read directory: #{reason}")
-               |> assign(:files, [])}
-          end
-
-        File.regular?(full_path) ->
-          # Read file contents
-          case File.read(full_path) do
-            {:ok, content} ->
-              file_type = detect_file_type(path)
-              rendered_content = render_content(content, file_type)
-
-              {:noreply,
-               socket
-               |> assign(:file_path, path)
-               |> assign(:file_content, content)
-               |> assign(:rendered_content, rendered_content)
-               |> assign(:file_type, file_type)
-               |> assign(:files, [])
-               |> assign(:error, nil)}
-
-            {:error, reason} ->
-              {:noreply,
-               socket
-               |> assign(:error, "Failed to read file: #{reason}")
-               |> assign(:file_content, nil)
-               |> assign(:rendered_content, nil)}
-          end
-
-        true ->
-          {:noreply,
-           socket
-           |> assign(:error, "File not found: #{path}")
-           |> assign(:file_content, nil)
-           |> assign(:files, [])}
+          {:error, reason} ->
+            {:noreply,
+             socket
+             |> assign(:error, "Failed to read file: #{reason}")
+             |> assign(:file_content, nil)
+             |> assign(:rendered_content, nil)}
+        end
+      else
+        {:noreply,
+         socket
+         |> assign(:error, "File not found: #{path}")
+         |> assign(:file_content, nil)}
       end
     else
       {:noreply,
        socket
        |> assign(:error, "Project path not configured")
-       |> assign(:file_content, nil)
-       |> assign(:files, [])}
+       |> assign(:file_content, nil)}
     end
   end
 
   def handle_params(_params, _uri, socket) do
     {:noreply, socket}
+  end
+
+  defp build_file_tree(base_path, current_path, max_depth \\ 5, current_depth \\ 0) do
+    if current_depth >= max_depth do
+      []
+    else
+      case File.ls(current_path) do
+        {:ok, files} ->
+          files
+          |> Enum.filter(fn file ->
+            # Filter out common ignored directories/files
+            !String.starts_with?(file, ".") or file in [".claude", ".git"]
+          end)
+          |> Enum.map(fn file ->
+            full_path = Path.join(current_path, file)
+            relative_path = Path.relative_to(full_path, base_path)
+
+            if File.dir?(full_path) do
+              children = build_file_tree(base_path, full_path, max_depth, current_depth + 1)
+              %{
+                name: file,
+                path: relative_path,
+                type: :directory,
+                children: Enum.sort_by(children, &{&1.type != :directory, &1.name})
+              }
+            else
+              %{
+                name: file,
+                path: relative_path,
+                type: :file,
+                size: get_file_size(full_path)
+              }
+            end
+          end)
+          |> Enum.sort_by(&{&1.type != :directory, &1.name})
+
+        {:error, _reason} ->
+          []
+      end
+    end
   end
 
   defp get_file_size(path) do
@@ -175,6 +187,44 @@ defmodule EyeInTheSkyWebWeb.ProjectLive.Files do
       :sql -> "sql"
       :xml -> "xml"
       _ -> "plaintext"
+    end
+  end
+
+  defp render_file_tree(items, project_id) do
+    for item <- items do
+      case item.type do
+        :directory ->
+          ~H"""
+          <li>
+            <details>
+              <summary>
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
+                  <path d="M1.75 1A1.75 1.75 0 0 0 0 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0 0 16 13.25v-8.5A1.75 1.75 0 0 0 14.25 3H7.5a.25.25 0 0 1-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75Z" />
+                </svg>
+                <%= item.name %>
+              </summary>
+              <ul>
+                <%= render_file_tree(item.children, project_id) %>
+              </ul>
+            </details>
+          </li>
+          """
+
+        :file ->
+          ~H"""
+          <li>
+            <a href={~p"/projects/#{project_id}/files?path=#{item.path}"}>
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
+                <path d="M4 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2H4zm0 1h8a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1z"/>
+              </svg>
+              <%= item.name %>
+              <%= if item.size do %>
+                <span class="badge badge-ghost badge-xs ml-auto"><%= item.size %></span>
+              <% end %>
+            </a>
+          </li>
+          """
+      end
     end
   end
 
@@ -254,92 +304,59 @@ defmodule EyeInTheSkyWebWeb.ProjectLive.Files do
       </div>
     </div>
 
-    <div class="px-4 sm:px-6 lg:px-8 py-8">
-      <div class="max-w-6xl mx-auto">
-        <!-- Breadcrumbs -->
-        <%= if @file_path do %>
-          <div class="flex items-center gap-2 mb-4 text-sm">
-            <a href={~p"/projects/#{@project.id}"} class="link link-primary">Project</a>
-            <span class="text-base-content/40">/</span>
-            <%= for {part, index} <- Enum.with_index(Path.split(@file_path)) do %>
-              <%= if index < length(Path.split(@file_path)) - 1 do %>
-                <a href={~p"/projects/#{@project.id}/files?path=#{Enum.take(Path.split(@file_path), index + 1) |> Path.join()}"} class="link link-primary">
-                  <%= part %>
-                </a>
-                <span class="text-base-content/40">/</span>
-              <% else %>
-                <span class="text-base-content"><%= part %></span>
-              <% end %>
-            <% end %>
-          </div>
-        <% end %>
+    <div class="h-[calc(100vh-8rem)] flex">
+      <!-- File Tree Sidebar -->
+      <div class="w-80 border-r border-base-300 bg-base-100 overflow-y-auto">
+        <div class="p-4">
+          <h2 class="text-sm font-semibold text-base-content/80 mb-2">Files</h2>
+          <ul class="menu menu-sm bg-base-200 rounded-lg">
+            <%= render_file_tree(@file_tree, @project.id) %>
+          </ul>
+        </div>
+      </div>
 
+      <!-- File Content Viewer -->
+      <div class="flex-1 overflow-y-auto">
         <%= if @error do %>
           <!-- Error Message -->
-          <div class="alert alert-error mb-6">
-            <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span><%= @error %></span>
-          </div>
-        <% end %>
-
-        <%= if @file_content do %>
-          <!-- File Content Viewer -->
-          <div class="card bg-base-100 border border-base-300 shadow-sm">
-            <div class="card-body">
-              <div class="flex items-center justify-between mb-4">
-                <h2 class="card-title text-base"><%= Path.basename(@file_path) %></h2>
-                <a href={~p"/projects/#{@project.id}"} class="btn btn-sm btn-ghost">
-                  ← Back to Files
-                </a>
-              </div>
-              <%= if @rendered_content do %>
-                <!-- Rendered Markdown -->
-                <div class="prose prose-sm max-w-none dark:prose-invert bg-base-200 rounded-lg p-6 overflow-x-auto">
-                  <%= @rendered_content %>
-                </div>
-              <% else %>
-                <!-- Syntax Highlighted Code -->
-                <div class="bg-base-200 rounded-lg overflow-x-auto">
-                  <pre class="text-sm"><code id="code-viewer" class={"language-#{language_class(@file_type)}"} phx-hook="Highlight"><%= @file_content %></code></pre>
-                </div>
-              <% end %>
+          <div class="p-4">
+            <div class="alert alert-error">
+              <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span><%= @error %></span>
             </div>
           </div>
         <% end %>
 
-        <%= if length(@files) > 0 do %>
-          <!-- Directory Listing -->
-          <div class="card bg-base-100 border border-base-300 shadow-sm">
-            <div class="card-body">
-              <h2 class="card-title text-base mb-4">
-                <%= if @file_path, do: Path.basename(@file_path), else: "Files" %>
-              </h2>
-              <div class="space-y-2">
-                <%= for file <- @files do %>
-                  <a href={~p"/projects/#{@project.id}/files?path=#{file.path}"} class="flex items-center gap-3 p-3 rounded-lg hover:bg-base-200 transition-colors">
-                    <%= if file.is_dir do %>
-                      <svg class="w-5 h-5 text-primary" fill="currentColor" viewBox="0 0 16 16">
-                        <path d="M1.75 1A1.75 1.75 0 0 0 0 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0 0 16 13.25v-8.5A1.75 1.75 0 0 0 14.25 3H7.5a.25.25 0 0 1-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1H1.75Z" />
-                      </svg>
-                    <% else %>
-                      <svg class="w-5 h-5 text-base-content/60" fill="currentColor" viewBox="0 0 16 16">
-                        <path d="M4 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2H4zm0 1h8a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1z"/>
-                      </svg>
-                    <% end %>
-                    <div class="flex-1">
-                      <p class="text-sm font-medium text-base-content"><%= file.name %></p>
-                    </div>
-                    <%= if !file.is_dir do %>
-                      <span class="text-xs text-base-content/60"><%= file.size %></span>
-                    <% end %>
-                    <svg class="w-4 h-4 text-base-content/40" fill="currentColor" viewBox="0 0 20 20">
-                      <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
-                    </svg>
-                  </a>
-                <% end %>
+        <%= if @file_content do %>
+          <!-- File Content -->
+          <div class="p-6">
+            <div class="mb-4">
+              <h2 class="text-lg font-semibold text-base-content"><%= Path.basename(@file_path) %></h2>
+              <p class="text-sm text-base-content/60"><%= @file_path %></p>
+            </div>
+            <%= if @rendered_content do %>
+              <!-- Rendered Markdown -->
+              <div class="prose prose-sm max-w-none dark:prose-invert bg-base-200 rounded-lg p-6 overflow-x-auto">
+                <%= @rendered_content %>
               </div>
+            <% else %>
+              <!-- Syntax Highlighted Code -->
+              <div class="bg-base-200 rounded-lg overflow-x-auto">
+                <pre class="text-sm"><code id="code-viewer" class={"language-#{language_class(@file_type)}"} phx-hook="Highlight"><%= @file_content %></code></pre>
+              </div>
+            <% end %>
+          </div>
+        <% else %>
+          <!-- Empty State -->
+          <div class="flex items-center justify-center h-full">
+            <div class="text-center">
+              <svg class="w-16 h-16 mx-auto text-base-content/20 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <h3 class="text-lg font-semibold text-base-content/60 mb-2">Select a file</h3>
+              <p class="text-sm text-base-content/40">Choose a file from the tree to view its contents</p>
             </div>
           </div>
         <% end %>
