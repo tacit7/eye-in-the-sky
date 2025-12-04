@@ -96,12 +96,15 @@ defmodule EyeInTheSkyWebWeb.ProjectLive.Tasks do
                         <%= task.title %>
                       </h3>
                     </div>
-                    <%= if task.priority >= 70 do %>
-                      <span class="badge badge-error badge-sm flex-shrink-0">High</span>
-                    <% else if task.priority >= 40 do %>
-                      <span class="badge badge-warning badge-sm flex-shrink-0">Med</span>
-                    <% else if task.priority >= 20 do %>
-                      <span class="badge badge-info badge-sm flex-shrink-0">Low</span>
+                    <%= cond do %>
+                      <% task.priority >= 70 -> %>
+                        <span class="badge badge-error badge-sm flex-shrink-0">High</span>
+                      <% task.priority >= 40 -> %>
+                        <span class="badge badge-warning badge-sm flex-shrink-0">Med</span>
+                      <% task.priority >= 20 -> %>
+                        <span class="badge badge-info badge-sm flex-shrink-0">Low</span>
+                      <% true -> %>
+                        <span></span>
                     <% end %>
                   </div>
 
