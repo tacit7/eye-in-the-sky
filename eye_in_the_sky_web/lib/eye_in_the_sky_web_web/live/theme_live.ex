@@ -137,7 +137,7 @@ defmodule EyeInTheSkyWebWeb.ThemeLive do
   end
 
   @impl true
-  def handle_event("set_theme", %{"theme" => _theme}, socket) do
+  def handle_event("set_theme", %{"theme" => theme}, socket) do
     {:noreply, socket}
   end
 end

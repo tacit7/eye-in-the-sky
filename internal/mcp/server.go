@@ -299,11 +299,6 @@ func (s *Server) registerTools() {
 
 	// NATS Messaging Tools
 	mcp.AddTool(s.mcp, &mcp.Tool{
-		Name:        "i-nats-poll",
-		Description: "Start background polling that checks for NATS messages every 2 seconds and logs them to a file",
-	}, s.handleNATSPoll)
-
-	mcp.AddTool(s.mcp, &mcp.Tool{
 		Name: "i-nats-send",
 		Description: `Send a message via NATS JetStream messaging system
 
@@ -850,19 +845,6 @@ func (s *Server) handleAgentImport(ctx context.Context, req *mcp.CallToolRequest
 
 func (s *Server) handleNATSListen(ctx context.Context, req *mcp.CallToolRequest, args NATSListenArgs) (*mcp.CallToolResult, any, error) {
 	result, err := s.tools.NATSListen(args)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return &mcp.CallToolResult{
-		Content: []mcp.Content{
-			&mcp.TextContent{Text: result.Message},
-		},
-	}, result, nil
-}
-
-func (s *Server) handleNATSPoll(ctx context.Context, req *mcp.CallToolRequest, args NATSPollArgs) (*mcp.CallToolResult, any, error) {
-	result, err := s.tools.NATSPoll(args)
 	if err != nil {
 		return nil, nil, err
 	}

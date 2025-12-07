@@ -6,6 +6,18 @@ This guide helps you configure the Eye in the Sky MCP server for Claude Code usi
 
 Eye in the Sky provides an MCP (Model Context Protocol) server for tracking Claude Code agent sessions. The server runs in stdio mode and integrates seamlessly with Claude Code.
 
+## Quick Fix: “No MCP servers configured”
+
+If Claude Code shows no MCP servers or you see “No MCP server available”, add the server with the Claude CLI (project‑scoped):
+
+```bash
+claude mcp add --transport stdio eye-in-the-sky -- /absolute/path/to/eye-in-the-sky/bin/eye-in-the-sky
+claude mcp list
+claude mcp get eye-in-the-sky
+```
+
+Expected output includes “✓ Connected” and “Scope: Local config (private to you in this project)”.
+
 ## Prerequisites
 
 1. **Build the MCP server binary:**
@@ -44,6 +56,8 @@ claude mcp add --transport stdio eits -- /Users/urielmaldonado/projects/eye-in-t
 ```
 
 **Important:** Do NOT include the `-db` flag when running in MCP stdio mode. The binary uses the default database location (`~/.config/eye-in-the-sky/eits.db`) automatically.
+
+Note on naming: You can name the server `eits` or `eye-in-the-sky`. Keep it consistent with your settings and examples.
 
 ## Step 2: Verify Installation
 
@@ -121,6 +135,17 @@ If `claude mcp list` shows "✗ Failed to connect":
 
    Should output JSON-RPC response, not "Eye in the Sky - CLI Mode"
 
+### “No MCP servers configured” or “No MCP server available”
+
+This means Claude Code doesn’t have a registered server for your current project. Fix by adding the server with the CLI (project‑scoped):
+
+```bash
+claude mcp add --transport stdio eye-in-the-sky -- /absolute/path/to/eye-in-the-sky/bin/eye-in-the-sky
+claude mcp list
+```
+
+You should then see the server listed with a ✓ Connected status.
+
 ### Common Mistakes
 
 1. **❌ Including `-db` flag:** The `-db` flag is for CLI mode only, not MCP stdio mode
@@ -135,6 +160,8 @@ If `claude mcp list` shows "✗ Failed to connect":
 2. **❌ Wrong binary:** Make sure you're using `bin/eye-in-the-sky`, not `bin/eye-in-the-sky-integrated` or other variants
 
 3. **❌ Relative paths:** Always use absolute paths, not relative paths like `./bin/eye-in-the-sky`
+
+4. **⚠️ Mixed configuration sources:** Prefer `claude mcp add` over manually editing config files. If you previously added entries in `~/.claude/mcp.json` or `~/.claude/settings.json`, they may conflict or be ignored depending on scope. The CLI stores project‑scoped configuration in `~/.claude.json` and is the recommended approach.
 
 ### Viewing Logs
 
@@ -160,6 +187,8 @@ The server provides tools prefixed with `mcp__eits__i-*`:
 - `i-instructions` - Complete workflow and initialization guide
 - `i-start-session` - Register a new agent session
 - `i-end-session` - Complete an agent session
+- `i-save-session-context` - Save session context (markdown) with history
+- `i-save-agent-context` - Save agent‑specific context (markdown) per project
 - `i-speak` - Text-to-speech notifications (macOS)
 - `i-todo-*` - Task management tools
 - `i-note-add` - Add notes to sessions

@@ -1,11 +1,16 @@
 defmodule EyeInTheSkyWeb.Messages do
   @moduledoc """
   The Messages context for managing agent-user messaging.
+
+  Supports both database storage and JSONL file storage (opcode-style).
+  JSONL files are stored in ~/.claude/projects/{projectId}/{sessionId}.jsonl
   """
 
   import Ecto.Query, warn: false
   alias EyeInTheSkyWeb.Repo
   alias EyeInTheSkyWeb.Messages.Message
+  alias EyeInTheSkyWeb.Messages.JsonlStorage
+  require Logger
 
   @doc """
   Returns the list of messages.
@@ -15,9 +20,43 @@ defmodule EyeInTheSkyWeb.Messages do
   end
 
   @doc """
-  Returns the list of messages for a specific session.
+  Returns the list of messages for a specific session from JSONL file (opcode-style).
+  Falls back to database if file doesn't exist.
   """
   def list_messages_for_session(session_id) do
+    list_messages_for_session(session_id, nil)
+  end
+
+  @doc """
+  Returns the list of messages for a specific session from JSONL file or database.
+  If project_id is provided, loads from JSONL file (~/.claude/projects/{projectId}/{sessionId}.jsonl).
+  Otherwise, falls back to database query.
+  """
+  def list_messages_for_session(session_id, project_id) when is_binary(project_id) do
+    Logger.debug("Loading messages from JSONL for session: #{session_id}, project: #{project_id}")
+
+    case JsonlStorage.read_session_messages(project_id, session_id) do
+      messages when is_list(messages) and length(messages) > 0 ->
+        Logger.debug("Loaded #{length(messages)} messages from JSONL file")
+        messages
+
+      [] ->
+        Logger.debug("No messages found in JSONL file, falling back to database")
+        list_messages_for_session_db(session_id)
+
+      nil ->
+        list_messages_for_session_db(session_id)
+    end
+  end
+
+  def list_messages_for_session(session_id, nil) do
+    list_messages_for_session_db(session_id)
+  end
+
+  @doc """
+  Internal function: Returns the list of messages for a specific session from database.
+  """
+  defp list_messages_for_session_db(session_id) do
     Message
     |> where([m], m.session_id == ^session_id)
     |> order_by([m], asc: m.inserted_at)
@@ -151,6 +190,56 @@ defmodule EyeInTheSkyWeb.Messages do
     |> offset(^offset)
     |> limit(^limit)
     |> Repo.all()
+  end
+
+  # JSONL File-based Storage Functions (opcode-style)
+
+  @doc """
+  Loads recent messages for a session from JSONL file.
+  If project_id provided, loads from JSONL file. Otherwise uses database.
+  """
+  def list_recent_messages(session_id, limit, project_id) when is_binary(project_id) do
+    Logger.debug(
+      "Loading recent messages from JSONL for session: #{session_id}, limit: #{limit}"
+    )
+
+    messages = list_messages_for_session(session_id, project_id)
+
+    messages
+    |> Enum.sort_by(fn msg -> msg.inserted_at || DateTime.utc_now() end, {:desc, DateTime})
+    |> Enum.take(limit)
+    |> Enum.reverse()
+  end
+
+  def list_recent_messages(session_id, limit) do
+    list_recent_messages(session_id, limit, nil)
+  end
+
+  @doc """
+  Appends a message to a session's JSONL file.
+  """
+  def append_to_jsonl(project_id, session_id, message_attrs) when is_binary(project_id) do
+    Logger.debug("Appending message to JSONL: session=#{session_id}")
+
+    JsonlStorage.append_message(project_id, session_id, message_attrs)
+  end
+
+  @doc """
+  Writes all messages for a session to JSONL file.
+  Useful for bulk initialization or migration from database to file storage.
+  """
+  def write_session_to_jsonl(project_id, session_id) when is_binary(project_id) do
+    Logger.info("Writing session messages to JSONL file: project=#{project_id}, session=#{session_id}")
+
+    messages = list_messages_for_session_db(session_id)
+    JsonlStorage.write_session_messages(project_id, session_id, messages)
+  end
+
+  @doc """
+  Gets the path to a session's JSONL file.
+  """
+  def get_session_jsonl_path(project_id, session_id) when is_binary(project_id) do
+    JsonlStorage.get_session_file_path(project_id, session_id)
   end
 
   @doc """

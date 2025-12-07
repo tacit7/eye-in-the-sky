@@ -27,9 +27,24 @@ defmodule EyeInTheSkyWebWeb.ChatLive do
       Phoenix.PubSub.subscribe(EyeInTheSkyWeb.PubSub, "channel:#{channel_id}:messages")
     end
 
-    # Load messages for active channel
+    # Load messages for active channel (with JSONL support)
     messages = if channel_id do
-      Messages.list_messages_for_channel(channel_id)
+      # First try to load from JSONL files (opcode-style), fall back to database
+      channel_messages = Messages.list_messages_for_channel(channel_id)
+
+      # For each session in channel, try loading from JSONL
+      channel_messages
+      |> Enum.map(fn msg ->
+        if msg.session_id && project_id do
+          # Try to load from JSONL
+          case Messages.list_messages_for_session(msg.session_id, to_string(project_id)) do
+            [] -> msg
+            session_msgs -> session_msgs |> List.last()
+          end
+        else
+          msg
+        end
+      end)
       |> serialize_messages()
     else
       []
