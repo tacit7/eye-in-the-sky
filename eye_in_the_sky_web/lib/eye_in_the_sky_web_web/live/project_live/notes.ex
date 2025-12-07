@@ -210,4 +210,16 @@ defmodule EyeInTheSkyWebWeb.ProjectLive.Notes do
     # Timestamp is stored as string, just display it as-is or format as needed
     timestamp
   end
+
+  defp extract_title(body) when is_nil(body), do: "Untitled"
+  defp extract_title(body) when is_binary(body) do
+    body
+    |> String.trim()
+    |> String.split("\n")
+    |> List.first()
+    |> String.slice(0..50)
+    |> then(fn text ->
+      if String.length(text) >= 50, do: text <> "...", else: text
+    end)
+  end
 end
