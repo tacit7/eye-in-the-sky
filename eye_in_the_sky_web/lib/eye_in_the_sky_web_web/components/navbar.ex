@@ -55,6 +55,22 @@ defmodule EyeInTheSkyWebWeb.Components.Navbar do
       </div>
 
       <script>
+        const darkThemes = new Set([
+          'abyss', 'black', 'business', 'cyberpunk', 'dark', 'dim', 'dracula',
+          'forest', 'halloween', 'luxury', 'night', 'nord', 'synthwave'
+        ]);
+
+        const lightThemes = new Set([
+          'acid', 'aqua', 'autumn', 'bumblebee', 'caramellatte', 'cmyk',
+          'coffee', 'corporate', 'cupcake', 'emerald', 'fantasy', 'garden',
+          'lemonade', 'light', 'lofi', 'pastel', 'retro', 'silk', 'sunset',
+          'valentine', 'winter', 'wireframe'
+        ]);
+
+        function isDarkTheme(theme) {
+          return darkThemes.has(theme);
+        }
+
         function setTheme(theme) {
           if (theme === 'system') {
             const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
@@ -64,12 +80,21 @@ defmodule EyeInTheSkyWebWeb.Components.Navbar do
             document.documentElement.setAttribute('data-theme', theme);
             localStorage.setItem('theme', theme);
           }
+          updateThemeIcon();
+        }
+
+        function updateThemeIcon() {
+          const currentTheme = document.documentElement.getAttribute('data-theme');
+          const icon = document.getElementById('theme-toggle-icon');
+          if (!icon) return;
+          icon.textContent = isDarkTheme(currentTheme) ? '🌙' : '☀️';
         }
 
         function toggleDarkMode() {
           const html = document.documentElement;
           const currentTheme = html.getAttribute('data-theme');
-          const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+          const isDark = isDarkTheme(currentTheme);
+          const newTheme = isDark ? 'light' : 'dark';
 
           html.setAttribute('data-theme', newTheme);
           localStorage.setItem('theme', newTheme);
@@ -78,12 +103,19 @@ defmodule EyeInTheSkyWebWeb.Components.Navbar do
           icon.textContent = newTheme === 'dark' ? '🌙' : '☀️';
         }
 
-        // Initialize icon on page load
+        // Initialize icon and watch for theme changes
         window.addEventListener('load', function() {
-          const theme = localStorage.getItem('theme') || 'light';
-          const icon = document.getElementById('theme-toggle-icon');
-          const currentTheme = document.documentElement.getAttribute('data-theme') || theme;
-          icon.textContent = currentTheme === 'dark' ? '🌙' : '☀️';
+          updateThemeIcon();
+        });
+
+        // Watch for theme changes via MutationObserver
+        const observer = new MutationObserver(function() {
+          updateThemeIcon();
+        });
+
+        observer.observe(document.documentElement, {
+          attributes: true,
+          attributeFilter: ['data-theme']
         });
       </script>
     </div>
