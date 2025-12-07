@@ -43,14 +43,10 @@ defmodule EyeInTheSkyWebWeb.Components.Navbar do
             <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-[1] w-52 p-2 shadow">
               <li><a href="/settings">Settings</a></li>
               <li>
-                <details>
-                  <summary>Theme</summary>
-                  <ul>
-                    <li><a onclick="setTheme('system')">System</a></li>
-                    <li><a onclick="setTheme('light')">Light</a></li>
-                    <li><a onclick="setTheme('dark')">Dark</a></li>
-                  </ul>
-                </details>
+                <button class="flex items-center justify-between" onclick="toggleDarkMode()">
+                  <span>Dark Mode</span>
+                  <span id="theme-toggle-icon" class="text-lg">🌙</span>
+                </button>
               </li>
             </ul>
           </div>
@@ -69,6 +65,26 @@ defmodule EyeInTheSkyWebWeb.Components.Navbar do
             localStorage.setItem('theme', theme);
           }
         }
+
+        function toggleDarkMode() {
+          const html = document.documentElement;
+          const currentTheme = html.getAttribute('data-theme');
+          const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+
+          html.setAttribute('data-theme', newTheme);
+          localStorage.setItem('theme', newTheme);
+
+          const icon = document.getElementById('theme-toggle-icon');
+          icon.textContent = newTheme === 'dark' ? '🌙' : '☀️';
+        }
+
+        // Initialize icon on page load
+        window.addEventListener('load', function() {
+          const theme = localStorage.getItem('theme') || 'light';
+          const icon = document.getElementById('theme-toggle-icon');
+          const currentTheme = document.documentElement.getAttribute('data-theme') || theme;
+          icon.textContent = currentTheme === 'dark' ? '🌙' : '☀️';
+        });
       </script>
     </div>
     """
