@@ -61,7 +61,7 @@ defmodule EyeInTheSkyWebWeb.ProjectLive.Kanban do
   @impl true
   def render(assigns) do
     ~H"""
-    <.live_component module={EyeInTheSkyWebWeb.Components.Navbar} id="navbar" />
+    <.live_component module={EyeInTheSkyWebWeb.Components.Navbar} id="navbar" current_project={@project} />
 
     <!-- GitHub-style Project Navigation -->
     <div class="border-b border-base-300 bg-base-100">

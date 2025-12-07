@@ -299,7 +299,7 @@ defmodule EyeInTheSkyWebWeb.ProjectLive.Files do
   @impl true
   def render(assigns) do
     ~H"""
-    <.live_component module={EyeInTheSkyWebWeb.Components.Navbar} id="navbar" />
+    <.live_component module={EyeInTheSkyWebWeb.Components.Navbar} id="navbar" current_project={@project} />
 
     <EyeInTheSkyWebWeb.Components.ProjectNav.render
       project={@project}

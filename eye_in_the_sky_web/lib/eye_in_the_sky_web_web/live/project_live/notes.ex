@@ -79,7 +79,7 @@ defmodule EyeInTheSkyWebWeb.ProjectLive.Notes do
         margin: 0;
       }
     </style>
-    <.live_component module={EyeInTheSkyWebWeb.Components.Navbar} id="navbar" />
+    <.live_component module={EyeInTheSkyWebWeb.Components.Navbar} id="navbar" current_project={@project} />
 
     <!-- GitHub-style Project Navigation -->
     <div class="border-b border-base-300 bg-base-100">
@@ -193,7 +193,7 @@ defmodule EyeInTheSkyWebWeb.ProjectLive.Notes do
 
                 <!-- Collapse Content -->
                 <div class="collapse-content bg-base-50">
-                  <pre class="whitespace-pre-wrap text-sm text-base-content p-0 font-mono leading-relaxed"><%= note.body %></pre>
+                  <pre phx-hook="Highlight" class="whitespace-pre-wrap text-sm text-base-content p-0 font-mono leading-relaxed"><code class="language-plaintext"><%= note.body %></code></pre>
                 </div>
               </div>
             <% end %>
