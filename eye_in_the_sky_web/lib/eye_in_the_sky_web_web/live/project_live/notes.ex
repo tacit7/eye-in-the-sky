@@ -40,13 +40,23 @@ defmodule EyeInTheSkyWebWeb.ProjectLive.Notes do
   defp load_notes(socket) do
     project = socket.assigns.project
     agent_ids = Enum.map(project.agents, & &1.id)
+
+    # Get all session IDs for agents in this project
+    session_ids =
+      from(s in EyeInTheSkyWeb.Sessions.Session,
+        where: s.agent_id in ^agent_ids,
+        select: s.id
+      )
+      |> Repo.all()
+
     query = socket.assigns.search_query
 
     notes = if query != "" and String.trim(query) != "" do
       Notes.search_notes(query, agent_ids)
     else
       from(n in EyeInTheSkyWeb.Notes.Note,
-        where: n.parent_type == "agent" and n.parent_id in ^agent_ids,
+        where: (n.parent_type == "agent" and n.parent_id in ^agent_ids) or
+               (n.parent_type == "session" and n.parent_id in ^session_ids),
         order_by: [desc: n.created_at]
       )
       |> Repo.all()
