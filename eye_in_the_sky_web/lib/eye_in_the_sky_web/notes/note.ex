@@ -6,6 +6,7 @@ defmodule EyeInTheSkyWeb.Notes.Note do
   schema "notes" do
     field :parent_type, :string
     field :parent_id, :string
+    field :title, :string, default: ""
     field :body, :string
     field :created_at, :string
     field :inserted_at, :string
@@ -15,7 +16,7 @@ defmodule EyeInTheSkyWeb.Notes.Note do
   @doc false
   def changeset(note, attrs) do
     note
-    |> cast(attrs, [:parent_type, :parent_id, :body])
+    |> cast(attrs, [:parent_type, :parent_id, :title, :body])
     |> validate_required([:parent_type, :parent_id, :body])
     |> validate_inclusion(:parent_type, ["session", "task", "agent"])
   end
