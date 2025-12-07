@@ -453,6 +453,7 @@ type ExecuteNewArgs struct {
 	Prompt      string  `json:"prompt" jsonschema:"description:Message to send to Claude Code"`
 	Model       string  `json:"model" jsonschema:"description:Model to use (haiku, sonnet, opus)"`
 	ProjectPath *string `json:"project_path,omitempty" jsonschema:"description:Working directory for Claude Code"`
+	Background  *bool   `json:"background,omitempty" jsonschema:"description:Run in background (default: false)"`
 }
 
 // ExecuteNewResult represents the result of starting a new session

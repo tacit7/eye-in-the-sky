@@ -1594,65 +1594,34 @@ Execute these steps now. Do not respond conversationally.`,
 		escapedInstructions,
 	)
 
-	// Find Claude binary
-	claudePath, err := FindClaudeBinary()
-	if err != nil {
-		return SpawnAgentResult{
-			Success: false,
-			Message: fmt.Sprintf("Failed to locate Claude binary: %v", err),
-		}, nil
-	}
-
-	// Create spawn config using the new Claude spawn functions
-	config := ClaudeSpawnConfig{
-		ClaudePath:  claudePath,
-		ProjectPath: projectPath,
+	// Delegate to ExecuteNew with the initialization prompt
+	execArgs := ExecuteNewArgs{
 		Prompt:      initPrompt,
 		Model:       model,
-		Mode:        ModeNew,
+		ProjectPath: &projectPath,
+		Background:  &background,
 	}
 
-	// Create NATS publish function
-	natsPublish := func(subject, message string) error {
-		_, err := t.NATSSend(NATSSendArgs{
-			SenderID:   "eye-in-the-sky",
-			ReceiverID: "",
-			Message:    message,
-			Subject:    subject,
-		})
-		return err
-	}
-
-	if background {
-		// Spawn in background
-		sessionInfo, err := SpawnClaudeProcess(context.Background(), config, natsPublish)
-		if err != nil {
-			return SpawnAgentResult{
-				Success: false,
-				Message: fmt.Sprintf("Failed to spawn agent: %v", err),
-			}, nil
-		}
-
-		return SpawnAgentResult{
-			Success:   true,
-			Message:   fmt.Sprintf("Agent spawned in background. Awaiting session registration (temp session: %s)", tempSessionID),
-			SessionID: sessionInfo.SessionID, // Will be populated once init message is received
-		}, nil
-	}
-
-	// Spawn in foreground (blocking)
-	sessionInfo, err := SpawnClaudeProcess(context.Background(), config, natsPublish)
+	execResult, err := t.ExecuteNew(execArgs)
 	if err != nil {
 		return SpawnAgentResult{
 			Success: false,
 			Message: fmt.Sprintf("Failed to spawn agent: %v", err),
-		}, nil
+		}, err
+	}
+
+	// Convert ExecuteNewResult to SpawnAgentResult
+	message := execResult.Message
+	if background {
+		message = fmt.Sprintf("Agent spawned in background. Awaiting session registration (temp session: %s)", tempSessionID)
+	} else {
+		message = fmt.Sprintf("Agent completed. Session ID: %s", execResult.SessionID)
 	}
 
 	return SpawnAgentResult{
-		Success:   true,
-		Message:   fmt.Sprintf("Agent completed. Session ID: %s", sessionInfo.SessionID),
-		SessionID: sessionInfo.SessionID,
+		Success:   execResult.Success,
+		Message:   message,
+		SessionID: execResult.SessionID,
 	}, nil
 }
 

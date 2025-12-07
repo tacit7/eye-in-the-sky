@@ -158,25 +158,31 @@ defmodule EyeInTheSkyWebWeb.ProjectLive.Notes do
         </div>
 
         <%= if length(@notes) > 0 do %>
-          <!-- Notes List -->
-          <div class="space-y-4">
+          <!-- Notes Accordion -->
+          <div class="join join-vertical w-full">
             <%= for note <- @notes do %>
-              <div class="card bg-base-100 border border-base-300 shadow-sm">
-                <div class="card-body p-4">
-                  <!-- Note Header -->
-                  <div class="flex items-center gap-2 mb-2 text-xs text-base-content/60">
-                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 16 16">
-                      <path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Zm7-3.25v2.992l2.028.812a.75.75 0 0 1-.557 1.392l-2.5-1A.751.751 0 0 1 7 8.25v-3.5a.75.75 0 0 1 1.5 0Z" />
+              <div class="collapse collapse-arrow join-item border border-base-300">
+                <!-- Collapse Title -->
+                <input type="checkbox" class="hidden" />
+                <div class="collapse-title flex items-center justify-between bg-base-100 hover:bg-base-100/80 transition-colors">
+                  <div class="flex items-center gap-3 flex-1">
+                    <svg class="w-4 h-4 text-base-content/60 flex-shrink-0" fill="currentColor" viewBox="0 0 16 16">
+                      <path d="M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v12.5A1.75 1.75 0 0 1 14.25 16H1.75A1.75 1.75 0 0 1 0 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25V1.75a.25.25 0 0 0-.25-.25ZM3.5 4.75A.75.75 0 0 1 4.25 4h7.5a.75.75 0 0 1 0 1.5h-7.5A.75.75 0 0 1 3.5 4.75ZM4.25 7a.75.75 0 0 0 0 1.5h7.5a.75.75 0 0 0 0-1.5ZM3.5 10.75a.75.75 0 0 1 .75-.75h7.5a.75.75 0 0 1 0 1.5h-7.5a.75.75 0 0 1-.75-.75Z" />
                     </svg>
-                    <span class="font-mono"><%= String.slice(note.parent_id, 0..7) %></span>
-                    <span>•</span>
-                    <span><%= format_timestamp(note.created_at) %></span>
+                    <div class="flex flex-col gap-1">
+                      <h3 class="font-semibold text-sm text-base-content"><%= note.title || extract_title(note.body) %></h3>
+                      <div class="flex items-center gap-2 text-xs text-base-content/60">
+                        <span class="font-mono"><%= String.slice(note.parent_id, 0..7) %></span>
+                        <span>•</span>
+                        <span><%= format_timestamp(note.created_at) %></span>
+                      </div>
+                    </div>
                   </div>
+                </div>
 
-                  <!-- Note Body -->
-                  <div class="prose prose-sm max-w-none">
-                    <pre class="whitespace-pre-wrap text-sm text-base-content bg-base-200/50 p-3 rounded"><%= note.body %></pre>
-                  </div>
+                <!-- Collapse Content -->
+                <div class="collapse-content bg-base-50">
+                  <pre class="whitespace-pre-wrap text-sm text-base-content p-0 font-mono leading-relaxed"><%= note.body %></pre>
                 </div>
               </div>
             <% end %>

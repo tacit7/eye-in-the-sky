@@ -374,21 +374,8 @@ Example:
 		Description: "Spawn a Claude Code process and capture its session ID from the init message.",
 	}, s.handleSpawnClaude)
 
-	// Claude Code Execution Tools (opcode-style three modes)
-	mcp.AddTool(s.mcp, &mcp.Tool{
-		Name:        "i-execute-new",
-		Description: "Start a new Claude Code session with a prompt",
-	}, s.handleExecuteNew)
-
-	mcp.AddTool(s.mcp, &mcp.Tool{
-		Name:        "i-execute-continue",
-		Description: "Continue the last Claude Code session in the current directory",
-	}, s.handleExecuteContinue)
-
-	mcp.AddTool(s.mcp, &mcp.Tool{
-		Name:        "i-execute-resume",
-		Description: "Resume a specific Claude Code session by ID",
-	}, s.handleExecuteResume)
+	// Note: ExecuteNew, ExecuteContinue, ExecuteResume are reusable Go functions
+	// for the MCP server, not exposed as tools to Claude Code users.
 }
 
 // Tool handlers using the generic AddTool pattern
