@@ -561,11 +561,84 @@ i-end - End session with summary
   Example: i-end({"agent_id": "your-uuid-from-start-session", "summary": "Completed TUI implementation", "final_status": "completed"})
 
 ═══════════════════════════════════════════════════════════════
+TASK MANAGEMENT - REQUIRED: Use i-todo for ALL task logging
+═══════════════════════════════════════════════════════════════
+
+CRITICAL: All agents MUST use i-todo tools for task tracking and logging.
+This is the primary system for tracking work progress across sessions.
+
+Core Task Workflow:
+
+1. CREATE tasks at the start of work:
+   i-todo-create({
+     "project_id": 1,
+     "title": "Implement user authentication",
+     "description": "Add JWT-based auth with refresh tokens",
+     "priority": 1,           // 1=high, 2=medium, 3=low
+     "tags": ["backend", "security"],
+     "session_ids": ["your-session-id"],
+     "agent_id": "your-agent-id"
+   })
+
+2. START working on a task:
+   i-todo-start({"task_id": "task-uuid"})
+   // Moves task to "doing" state
+
+3. ANNOTATE progress as you work:
+   i-todo-annotate({
+     "task_id": "task-uuid",
+     "body": "Completed JWT token generation, now working on refresh logic"
+   })
+   // Add notes throughout development to track progress
+
+4. COMPLETE tasks when done:
+   i-todo-done({"task_id": "task-uuid"})
+   // Moves task to "done" state
+
+Additional Task Operations:
+
+i-todo-status - Move task to any workflow state
+  Example: i-todo-status({"task_id": "task-uuid", "state_id": 2})
+
+i-todo-tag - Add/remove tags from task
+  Example: i-todo-tag({"task_id": "task-uuid", "add": ["tested"], "remove": ["wip"]})
+
+i-todo-list - List all tasks for a project
+  Example: i-todo-list({"project_id": 1, "filters": {"state_id": 2, "priority": 1}})
+
+i-todo-list-agent - List tasks for specific agent
+  Example: i-todo-list-agent({"agent_id": "your-uuid", "project_id": 1})
+
+i-todo-list-session - List tasks for current session
+  Example: i-todo-list-session({"session_id": "your-session", "project_id": 1})
+
+i-todo-search - Full-text search across tasks
+  Example: i-todo-search({"project_id": 1, "query": "authentication"})
+
+i-todo-add-session - Link task to session
+  Example: i-todo-add-session({"task_id": "task-uuid", "session_id": "session-uuid"})
+
+i-todo-remove-session - Unlink task from session
+  Example: i-todo-remove-session({"task_id": "task-uuid", "session_id": "session-uuid"})
+
+i-todo-delete - Permanently delete task
+  Example: i-todo-delete({"task_id": "task-uuid"})
+
+Best Practices:
+- Create tasks BEFORE starting work to establish clear goals
+- Use i-todo-annotate frequently to document progress and decisions
+- Link tasks to sessions using session_ids array in i-todo-create
+- Use priority (1=high, 2=medium, 3=low) to indicate urgency
+- Tag tasks appropriately for filtering and organization
+- Move tasks through workflow states (todo → doing → done)
+
+═══════════════════════════════════════════════════════════════
 ADDITIONAL TOOLS
 ═══════════════════════════════════════════════════════════════
 
 i-save-context - Save session state for resumption
 i-note-add - Add contextual notes to session
+i-project-add - Create new project for tracking agents and tasks
 
 ═══════════════════════════════════════════════════════════════`
 
@@ -1457,6 +1530,131 @@ func (t *Tools) ChatSend(args ChatSendArgs) (ChatSendResult, error) {
 	}, nil
 }
 
+// SpawnAgent implements the i-spawn-agent MCP tool
+func (t *Tools) SpawnAgent(args SpawnAgentArgs) (SpawnAgentResult, error) {
+	// Set defaults
+	model := "haiku"
+	if args.Model != nil {
+		model = *args.Model
+	}
+
+	projectPath, err := os.Getwd()
+	if err != nil {
+		return SpawnAgentResult{
+			Success: false,
+			Message: fmt.Sprintf("Failed to get current directory: %v", err),
+		}, nil
+	}
+	if args.ProjectPath != nil {
+		projectPath = *args.ProjectPath
+	}
+
+	background := false
+	if args.Background != nil {
+		background = *args.Background
+	}
+
+	// Get project name from path
+	projectName := filepath.Base(projectPath)
+
+	// Build parent tracking parameters
+	parentParams := ""
+	if args.ParentAgentID != nil && args.ParentSessionID != nil {
+		parentParams = fmt.Sprintf(`,
+  "parent_agent_id": "%s",
+  "parent_session_id": "%s"`, *args.ParentAgentID, *args.ParentSessionID)
+	}
+
+	// Escape instructions for JSON
+	escapedInstructions := strings.ReplaceAll(args.Instructions, `"`, `\"`)
+	escapedInstructions = strings.ReplaceAll(escapedInstructions, "\n", "\\n")
+
+	// Generate a temporary session ID for the init call
+	tempSessionID := uuid.New().String()
+
+	// Build initialization prompt that calls i-start-session
+	// The spawned agent will use this to register itself
+	initPrompt := fmt.Sprintf(`You are a spawned agent. Execute these steps immediately:
+
+STEP 1: Register with Eye in the Sky by calling i-start-session:
+i-start-session({"session_id": "%s", "description": "%s", "agent_description": "Spawned agent", "project_name": "%s", "worktree_path": "%s"%s})
+
+STEP 2: Execute your task:
+%s
+
+STEP 3: End your session by calling i-end-session:
+i-end-session({"agent_id": "your-agent-id-from-step-1"})
+
+Execute these steps now. Do not respond conversationally.`,
+		tempSessionID,
+		escapedInstructions,
+		projectName,
+		projectPath,
+		parentParams,
+		escapedInstructions,
+	)
+
+	// Find Claude binary
+	claudePath, err := FindClaudeBinary()
+	if err != nil {
+		return SpawnAgentResult{
+			Success: false,
+			Message: fmt.Sprintf("Failed to locate Claude binary: %v", err),
+		}, nil
+	}
+
+	// Create spawn config using the new Claude spawn functions
+	config := ClaudeSpawnConfig{
+		ClaudePath:  claudePath,
+		ProjectPath: projectPath,
+		Prompt:      initPrompt,
+		Model:       model,
+	}
+
+	// Create NATS publish function
+	natsPublish := func(subject, message string) error {
+		_, err := t.NATSSend(NATSSendArgs{
+			SenderID:   "eye-in-the-sky",
+			ReceiverID: "",
+			Message:    message,
+			Subject:    subject,
+		})
+		return err
+	}
+
+	if background {
+		// Spawn in background
+		sessionInfo, err := SpawnClaudeProcess(context.Background(), config, natsPublish)
+		if err != nil {
+			return SpawnAgentResult{
+				Success: false,
+				Message: fmt.Sprintf("Failed to spawn agent: %v", err),
+			}, nil
+		}
+
+		return SpawnAgentResult{
+			Success:   true,
+			Message:   fmt.Sprintf("Agent spawned in background. Awaiting session registration (temp session: %s)", tempSessionID),
+			SessionID: sessionInfo.SessionID, // Will be populated once init message is received
+		}, nil
+	}
+
+	// Spawn in foreground (blocking)
+	sessionInfo, err := SpawnClaudeProcess(context.Background(), config, natsPublish)
+	if err != nil {
+		return SpawnAgentResult{
+			Success: false,
+			Message: fmt.Sprintf("Failed to spawn agent: %v", err),
+		}, nil
+	}
+
+	return SpawnAgentResult{
+		Success:   true,
+		Message:   fmt.Sprintf("Agent completed. Session ID: %s", sessionInfo.SessionID),
+		SessionID: sessionInfo.SessionID,
+	}, nil
+}
+
 // AddProject implements the i-project-add MCP tool
 func (t *Tools) AddProject(args ProjectAddArgs) (ProjectAddResult, error) {
 	// Generate project ID
@@ -1502,6 +1700,74 @@ func (t *Tools) AddProject(args ProjectAddArgs) (ProjectAddResult, error) {
 		Success:   true,
 		Message:   fmt.Sprintf("Project '%s' created successfully", args.Name),
 		ProjectID: projectID,
+	}, nil
+}
+
+// SpawnClaude implements the Claude Code process spawning MCP tool
+func (t *Tools) SpawnClaude(args SpawnClaudeArgs) (SpawnClaudeResult, error) {
+	// Validate required arguments
+	if args.Prompt == "" {
+		return SpawnClaudeResult{
+			Success: false,
+			Message: "prompt is required",
+		}, nil
+	}
+
+	if args.Model == "" {
+		return SpawnClaudeResult{
+			Success: false,
+			Message: "model is required",
+		}, nil
+	}
+
+	// Determine project path
+	projectPath := "."
+	if args.ProjectPath != nil && *args.ProjectPath != "" {
+		projectPath = *args.ProjectPath
+	}
+
+	// Find Claude binary
+	claudePath, err := FindClaudeBinary()
+	if err != nil {
+		return SpawnClaudeResult{
+			Success: false,
+			Message: fmt.Sprintf("Failed to locate Claude binary: %v", err),
+		}, nil
+	}
+
+	// Create spawn config
+	config := ClaudeSpawnConfig{
+		ClaudePath:  claudePath,
+		ProjectPath: projectPath,
+		Prompt:      args.Prompt,
+		Model:       args.Model,
+	}
+
+	// Create NATS publish function using NATSSend
+	natsPublish := func(subject, message string) error {
+		_, err := t.NATSSend(NATSSendArgs{
+			SenderID:   "eye-in-the-sky",
+			ReceiverID: "",
+			Message:    message,
+			Subject:    subject,
+		})
+		return err
+	}
+
+	// Spawn the process
+	sessionInfo, err := SpawnClaudeProcess(context.Background(), config, natsPublish)
+	if err != nil {
+		return SpawnClaudeResult{
+			Success: false,
+			Message: fmt.Sprintf("Failed to spawn Claude process: %v", err),
+		}, nil
+	}
+
+	return SpawnClaudeResult{
+		Success:   true,
+		Message:   fmt.Sprintf("Claude Code process spawned with PID %d", sessionInfo.PID),
+		SessionID: sessionInfo.SessionID,
+		PID:       sessionInfo.PID,
 	}, nil
 }
 

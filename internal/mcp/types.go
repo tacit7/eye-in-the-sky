@@ -413,3 +413,37 @@ type ProjectAddResult struct {
 	Message   string `json:"message"`
 	ProjectID string `json:"project_id,omitempty"`
 }
+
+// SpawnAgentArgs represents the arguments for i-spawn-agent tool
+type SpawnAgentArgs struct {
+	Instructions    string  `json:"instructions" jsonschema:"description:Task instructions for the agent (required)"`
+	Model           *string `json:"model,omitempty" jsonschema:"description:Model to use (haiku, sonnet, opus). Default: haiku"`
+	ProjectPath     *string `json:"project_path,omitempty" jsonschema:"description:Working directory. Default: current directory"`
+	SkipPermissions *bool   `json:"skip_permissions,omitempty" jsonschema:"description:Skip permission prompts (default: true)"`
+	Background      *bool   `json:"background,omitempty" jsonschema:"description:Run agent in background (default: false)"`
+	ParentAgentID   *string `json:"parent_agent_id,omitempty" jsonschema:"description:Parent agent ID for tracking hierarchy"`
+	ParentSessionID *string `json:"parent_session_id,omitempty" jsonschema:"description:Parent session ID for tracking hierarchy"`
+}
+
+// SpawnAgentResult represents the result for i-spawn-agent tool
+type SpawnAgentResult struct {
+	Success   bool   `json:"success"`
+	Message   string `json:"message"`
+	SessionID string `json:"session_id,omitempty"`
+	CommandFile string `json:"command_file,omitempty"`
+}
+
+// SpawnClaudeArgs represents the arguments for spawning a Claude Code process
+type SpawnClaudeArgs struct {
+	Prompt      string  `json:"prompt" jsonschema:"description:Prompt to send to Claude Code"`
+	Model       string  `json:"model" jsonschema:"description:Model to use (haiku, sonnet, opus)"`
+	ProjectPath *string `json:"project_path,omitempty" jsonschema:"description:Working directory for Claude Code"`
+}
+
+// SpawnClaudeResult represents the result of spawning a Claude Code process
+type SpawnClaudeResult struct {
+	Success   bool   `json:"success"`
+	Message   string `json:"message"`
+	SessionID string `json:"session_id,omitempty"`
+	PID       int    `json:"pid,omitempty"`
+}

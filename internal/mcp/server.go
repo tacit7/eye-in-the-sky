@@ -299,6 +299,11 @@ func (s *Server) registerTools() {
 
 	// NATS Messaging Tools
 	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "i-nats-poll",
+		Description: "Start background polling that checks for NATS messages every 2 seconds and logs them to a file",
+	}, s.handleNATSPoll)
+
+	mcp.AddTool(s.mcp, &mcp.Tool{
 		Name: "i-nats-send",
 		Description: `Send a message via NATS JetStream messaging system
 
@@ -357,6 +362,17 @@ Example:
 		Name:        "i-project-add",
 		Description: "Create a new project in Eye in the Sky for tracking agents and tasks",
 	}, s.handleProjectAdd)
+
+	// Agent Spawning Tools
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "i-spawn-agent",
+		Description: "Spawn a new Claude Code agent with Eye in the Sky integration. Supports foreground/background execution and parent tracking.",
+	}, s.handleSpawnAgent)
+
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "i-spawn-claude",
+		Description: "Spawn a Claude Code process and capture its session ID from the init message.",
+	}, s.handleSpawnClaude)
 }
 
 // Tool handlers using the generic AddTool pattern
@@ -842,6 +858,19 @@ func (s *Server) handleNATSListen(ctx context.Context, req *mcp.CallToolRequest,
 	}, result, nil
 }
 
+func (s *Server) handleNATSPoll(ctx context.Context, req *mcp.CallToolRequest, args NATSPollArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.NATSPoll(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: result.Message},
+		},
+	}, result, nil
+}
+
 func (s *Server) handleChatSend(ctx context.Context, req *mcp.CallToolRequest, args ChatSendArgs) (*mcp.CallToolResult, any, error) {
 	result, err := s.tools.ChatSend(args)
 	if err != nil {
@@ -857,6 +886,32 @@ func (s *Server) handleChatSend(ctx context.Context, req *mcp.CallToolRequest, a
 
 func (s *Server) handleProjectAdd(ctx context.Context, req *mcp.CallToolRequest, args ProjectAddArgs) (*mcp.CallToolResult, any, error) {
 	result, err := s.tools.AddProject(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: result.Message},
+		},
+	}, result, nil
+}
+
+func (s *Server) handleSpawnAgent(ctx context.Context, req *mcp.CallToolRequest, args SpawnAgentArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.SpawnAgent(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: result.Message},
+		},
+	}, result, nil
+}
+
+func (s *Server) handleSpawnClaude(ctx context.Context, req *mcp.CallToolRequest, args SpawnClaudeArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.SpawnClaude(args)
 	if err != nil {
 		return nil, nil, err
 	}
