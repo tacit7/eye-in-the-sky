@@ -447,3 +447,46 @@ type SpawnClaudeResult struct {
 	SessionID string `json:"session_id,omitempty"`
 	PID       int    `json:"pid,omitempty"`
 }
+
+// ExecuteNewArgs starts a new Claude Code session
+type ExecuteNewArgs struct {
+	Prompt      string  `json:"prompt" jsonschema:"description:Message to send to Claude Code"`
+	Model       string  `json:"model" jsonschema:"description:Model to use (haiku, sonnet, opus)"`
+	ProjectPath *string `json:"project_path,omitempty" jsonschema:"description:Working directory for Claude Code"`
+}
+
+// ExecuteNewResult represents the result of starting a new session
+type ExecuteNewResult struct {
+	Success   bool   `json:"success"`
+	Message   string `json:"message"`
+	SessionID string `json:"session_id,omitempty"`
+}
+
+// ExecuteContinueArgs continues the last session in current directory
+type ExecuteContinueArgs struct {
+	Prompt      string  `json:"prompt" jsonschema:"description:Follow-up message to send"`
+	Model       string  `json:"model" jsonschema:"description:Model to use (haiku, sonnet, opus)"`
+	ProjectPath *string `json:"project_path,omitempty" jsonschema:"description:Working directory for Claude Code"`
+}
+
+// ExecuteContinueResult represents the result of continuing a session
+type ExecuteContinueResult struct {
+	Success   bool   `json:"success"`
+	Message   string `json:"message"`
+	SessionID string `json:"session_id,omitempty"`
+}
+
+// ExecuteResumeArgs resumes a specific session by ID
+type ExecuteResumeArgs struct {
+	SessionID   string  `json:"session_id" jsonschema:"description:Session ID to resume"`
+	Prompt      string  `json:"prompt" jsonschema:"description:Message to send"`
+	Model       string  `json:"model" jsonschema:"description:Model to use (haiku, sonnet, opus)"`
+	ProjectPath *string `json:"project_path,omitempty" jsonschema:"description:Working directory for Claude Code"`
+}
+
+// ExecuteResumeResult represents the result of resuming a session
+type ExecuteResumeResult struct {
+	Success   bool   `json:"success"`
+	Message   string `json:"message"`
+	SessionID string `json:"session_id,omitempty"`
+}

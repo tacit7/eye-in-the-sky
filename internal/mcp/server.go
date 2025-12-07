@@ -373,6 +373,22 @@ Example:
 		Name:        "i-spawn-claude",
 		Description: "Spawn a Claude Code process and capture its session ID from the init message.",
 	}, s.handleSpawnClaude)
+
+	// Claude Code Execution Tools (opcode-style three modes)
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "i-execute-new",
+		Description: "Start a new Claude Code session with a prompt",
+	}, s.handleExecuteNew)
+
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "i-execute-continue",
+		Description: "Continue the last Claude Code session in the current directory",
+	}, s.handleExecuteContinue)
+
+	mcp.AddTool(s.mcp, &mcp.Tool{
+		Name:        "i-execute-resume",
+		Description: "Resume a specific Claude Code session by ID",
+	}, s.handleExecuteResume)
 }
 
 // Tool handlers using the generic AddTool pattern
@@ -912,6 +928,45 @@ func (s *Server) handleSpawnAgent(ctx context.Context, req *mcp.CallToolRequest,
 
 func (s *Server) handleSpawnClaude(ctx context.Context, req *mcp.CallToolRequest, args SpawnClaudeArgs) (*mcp.CallToolResult, any, error) {
 	result, err := s.tools.SpawnClaude(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: result.Message},
+		},
+	}, result, nil
+}
+
+func (s *Server) handleExecuteNew(ctx context.Context, req *mcp.CallToolRequest, args ExecuteNewArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.ExecuteNew(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: result.Message},
+		},
+	}, result, nil
+}
+
+func (s *Server) handleExecuteContinue(ctx context.Context, req *mcp.CallToolRequest, args ExecuteContinueArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.ExecuteContinue(args)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: result.Message},
+		},
+	}, result, nil
+}
+
+func (s *Server) handleExecuteResume(ctx context.Context, req *mcp.CallToolRequest, args ExecuteResumeArgs) (*mcp.CallToolResult, any, error) {
+	result, err := s.tools.ExecuteResume(args)
 	if err != nil {
 		return nil, nil, err
 	}

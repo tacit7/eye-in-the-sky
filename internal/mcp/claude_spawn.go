@@ -12,12 +12,23 @@ import (
 	"time"
 )
 
+// ExecutionMode specifies how to execute Claude Code
+type ExecutionMode int
+
+const (
+	ModeNew ExecutionMode = iota
+	ModeContinue
+	ModeResume
+)
+
 // ClaudeSpawnConfig holds configuration for spawning Claude processes
 type ClaudeSpawnConfig struct {
 	ClaudePath  string
 	ProjectPath string
 	Prompt      string
 	Model       string
+	Mode        ExecutionMode // New, Continue, or Resume
+	SessionID   string        // Required for Resume mode, ignored for New/Continue
 }
 
 // ClaudeSessionInfo holds information about a spawned Claude session
@@ -26,6 +37,35 @@ type ClaudeSessionInfo struct {
 	PID       int
 	Prompt    string
 	Model     string
+}
+
+// buildClaudeArgs builds the command arguments based on execution mode
+func buildClaudeArgs(config ClaudeSpawnConfig) []string {
+	baseArgs := []string{
+		"--model", config.Model,
+		"--output-format", "stream-json",
+		"--verbose",
+		"--print",
+		"--dangerously-skip-permissions",
+	}
+
+	switch config.Mode {
+	case ModeNew:
+		// New session: prompt as first positional argument
+		return append([]string{config.Prompt}, baseArgs...)
+
+	case ModeContinue:
+		// Continue last session: -c flag, then prompt as positional argument
+		return append([]string{"-c", config.Prompt}, baseArgs...)
+
+	case ModeResume:
+		// Resume specific session: --resume <session_id>, then prompt as positional argument
+		return append([]string{"--resume", config.SessionID, config.Prompt}, baseArgs...)
+
+	default:
+		// Default to new session
+		return append([]string{config.Prompt}, baseArgs...)
+	}
 }
 
 // FindClaudeBinary locates the Claude binary in standard locations
@@ -72,14 +112,8 @@ func CreateSystemCommand(claudePath string, args []string, projectPath string) *
 
 // SpawnClaudeProcess spawns a Claude Code process and handles its output
 func SpawnClaudeProcess(ctx context.Context, config ClaudeSpawnConfig, natsPublish func(subject, message string) error) (*ClaudeSessionInfo, error) {
-	// Create command
-	args := []string{
-		"-p", config.Prompt,
-		"--model", config.Model,
-		"--output-format", "stream-json",
-		"--verbose",
-		"--dangerously-skip-permissions",
-	}
+	// Build args based on execution mode
+	args := buildClaudeArgs(config)
 
 	cmd := CreateSystemCommand(config.ClaudePath, args, config.ProjectPath)
 

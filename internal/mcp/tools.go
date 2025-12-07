@@ -1609,6 +1609,7 @@ Execute these steps now. Do not respond conversationally.`,
 		ProjectPath: projectPath,
 		Prompt:      initPrompt,
 		Model:       model,
+		Mode:        ModeNew,
 	}
 
 	// Create NATS publish function
@@ -1741,6 +1742,7 @@ func (t *Tools) SpawnClaude(args SpawnClaudeArgs) (SpawnClaudeResult, error) {
 		ProjectPath: projectPath,
 		Prompt:      args.Prompt,
 		Model:       args.Model,
+		Mode:        ModeNew,
 	}
 
 	// Create NATS publish function using NATSSend
@@ -1768,6 +1770,192 @@ func (t *Tools) SpawnClaude(args SpawnClaudeArgs) (SpawnClaudeResult, error) {
 		Message:   fmt.Sprintf("Claude Code process spawned with PID %d", sessionInfo.PID),
 		SessionID: sessionInfo.SessionID,
 		PID:       sessionInfo.PID,
+	}, nil
+}
+
+// ExecuteNew starts a new Claude Code session
+func (t *Tools) ExecuteNew(args ExecuteNewArgs) (ExecuteNewResult, error) {
+	// Set default model
+	model := "haiku"
+	if args.Model != "" {
+		model = args.Model
+	}
+
+	// Determine project path
+	projectPath := "."
+	if args.ProjectPath != nil && *args.ProjectPath != "" {
+		projectPath = *args.ProjectPath
+	}
+
+	// Find Claude binary
+	claudePath, err := FindClaudeBinary()
+	if err != nil {
+		return ExecuteNewResult{
+			Success: false,
+			Message: fmt.Sprintf("Failed to locate Claude binary: %v", err),
+		}, nil
+	}
+
+	// Create spawn config for new session
+	config := ClaudeSpawnConfig{
+		ClaudePath:  claudePath,
+		ProjectPath: projectPath,
+		Prompt:      args.Prompt,
+		Model:       model,
+		Mode:        ModeNew,
+	}
+
+	// Create NATS publish function
+	natsPublish := func(subject, message string) error {
+		_, err := t.NATSSend(NATSSendArgs{
+			SenderID:   "eye-in-the-sky",
+			ReceiverID: "",
+			Message:    message,
+			Subject:    subject,
+		})
+		return err
+	}
+
+	// Spawn Claude process
+	sessionInfo, err := SpawnClaudeProcess(context.Background(), config, natsPublish)
+	if err != nil {
+		return ExecuteNewResult{
+			Success: false,
+			Message: fmt.Sprintf("Failed to execute Claude Code: %v", err),
+		}, nil
+	}
+
+	return ExecuteNewResult{
+		Success:   true,
+		Message:   "New Claude Code session started",
+		SessionID: sessionInfo.SessionID,
+	}, nil
+}
+
+// ExecuteContinue continues the last session in the current directory
+func (t *Tools) ExecuteContinue(args ExecuteContinueArgs) (ExecuteContinueResult, error) {
+	// Set default model
+	model := "haiku"
+	if args.Model != "" {
+		model = args.Model
+	}
+
+	// Determine project path
+	projectPath := "."
+	if args.ProjectPath != nil && *args.ProjectPath != "" {
+		projectPath = *args.ProjectPath
+	}
+
+	// Find Claude binary
+	claudePath, err := FindClaudeBinary()
+	if err != nil {
+		return ExecuteContinueResult{
+			Success: false,
+			Message: fmt.Sprintf("Failed to locate Claude binary: %v", err),
+		}, nil
+	}
+
+	// Create spawn config for continue mode
+	config := ClaudeSpawnConfig{
+		ClaudePath:  claudePath,
+		ProjectPath: projectPath,
+		Prompt:      args.Prompt,
+		Model:       model,
+		Mode:        ModeContinue,
+	}
+
+	// Create NATS publish function
+	natsPublish := func(subject, message string) error {
+		_, err := t.NATSSend(NATSSendArgs{
+			SenderID:   "eye-in-the-sky",
+			ReceiverID: "",
+			Message:    message,
+			Subject:    subject,
+		})
+		return err
+	}
+
+	// Spawn Claude process
+	sessionInfo, err := SpawnClaudeProcess(context.Background(), config, natsPublish)
+	if err != nil {
+		return ExecuteContinueResult{
+			Success: false,
+			Message: fmt.Sprintf("Failed to continue Claude Code session: %v", err),
+		}, nil
+	}
+
+	return ExecuteContinueResult{
+		Success:   true,
+		Message:   "Continued Claude Code session",
+		SessionID: sessionInfo.SessionID,
+	}, nil
+}
+
+// ExecuteResume resumes a specific Claude Code session by ID
+func (t *Tools) ExecuteResume(args ExecuteResumeArgs) (ExecuteResumeResult, error) {
+	// Validate required arguments
+	if args.SessionID == "" {
+		return ExecuteResumeResult{
+			Success: false,
+			Message: "session_id is required",
+		}, nil
+	}
+
+	// Set default model
+	model := "haiku"
+	if args.Model != "" {
+		model = args.Model
+	}
+
+	// Determine project path
+	projectPath := "."
+	if args.ProjectPath != nil && *args.ProjectPath != "" {
+		projectPath = *args.ProjectPath
+	}
+
+	// Find Claude binary
+	claudePath, err := FindClaudeBinary()
+	if err != nil {
+		return ExecuteResumeResult{
+			Success: false,
+			Message: fmt.Sprintf("Failed to locate Claude binary: %v", err),
+		}, nil
+	}
+
+	// Create spawn config for resume mode
+	config := ClaudeSpawnConfig{
+		ClaudePath:  claudePath,
+		ProjectPath: projectPath,
+		Prompt:      args.Prompt,
+		Model:       model,
+		Mode:        ModeResume,
+		SessionID:   args.SessionID,
+	}
+
+	// Create NATS publish function
+	natsPublish := func(subject, message string) error {
+		_, err := t.NATSSend(NATSSendArgs{
+			SenderID:   "eye-in-the-sky",
+			ReceiverID: "",
+			Message:    message,
+			Subject:    subject,
+		})
+		return err
+	}
+
+	// Spawn Claude process
+	sessionInfo, err := SpawnClaudeProcess(context.Background(), config, natsPublish)
+	if err != nil {
+		return ExecuteResumeResult{
+			Success: false,
+			Message: fmt.Sprintf("Failed to resume Claude Code session: %v", err),
+		}, nil
+	}
+
+	return ExecuteResumeResult{
+		Success:   true,
+		Message:   fmt.Sprintf("Resumed Claude Code session %s", args.SessionID),
+		SessionID: sessionInfo.SessionID,
 	}, nil
 }
 
