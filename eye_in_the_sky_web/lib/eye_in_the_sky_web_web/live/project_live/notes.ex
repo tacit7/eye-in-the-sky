@@ -68,6 +68,17 @@ defmodule EyeInTheSkyWebWeb.ProjectLive.Notes do
   @impl true
   def render(assigns) do
     ~H"""
+    <style>
+      .collapse input[type="checkbox"] {
+        appearance: none;
+        cursor: pointer;
+        width: 100%;
+        height: 100%;
+        position: absolute;
+        opacity: 0;
+        margin: 0;
+      }
+    </style>
     <.live_component module={EyeInTheSkyWebWeb.Components.Navbar} id="navbar" />
 
     <!-- GitHub-style Project Navigation -->
@@ -163,8 +174,8 @@ defmodule EyeInTheSkyWebWeb.ProjectLive.Notes do
             <%= for note <- @notes do %>
               <div class="collapse collapse-arrow join-item border border-base-300">
                 <!-- Collapse Title -->
-                <input type="checkbox" class="hidden" />
-                <div class="collapse-title flex items-center justify-between bg-base-100 hover:bg-base-100/80 transition-colors">
+                <input type="checkbox" />
+                <div class="collapse-title flex items-center justify-between bg-base-100 hover:bg-base-100/80 transition-colors cursor-pointer">
                   <div class="flex items-center gap-3 flex-1">
                     <svg class="w-4 h-4 text-base-content/60 flex-shrink-0" fill="currentColor" viewBox="0 0 16 16">
                       <path d="M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v12.5A1.75 1.75 0 0 1 14.25 16H1.75A1.75 1.75 0 0 1 0 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25V1.75a.25.25 0 0 0-.25-.25ZM3.5 4.75A.75.75 0 0 1 4.25 4h7.5a.75.75 0 0 1 0 1.5h-7.5A.75.75 0 0 1 3.5 4.75ZM4.25 7a.75.75 0 0 0 0 1.5h7.5a.75.75 0 0 0 0-1.5ZM3.5 10.75a.75.75 0 0 1 .75-.75h7.5a.75.75 0 0 1 0 1.5h-7.5a.75.75 0 0 1-.75-.75Z" />
