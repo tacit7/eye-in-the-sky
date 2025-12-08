@@ -178,7 +178,9 @@ defmodule EyeInTheSkyWebWeb.ProjectLive.Show do
     end
   end
 
-  defp format_relative_time(datetime) do
+  defp format_relative_time(datetime) when is_nil(datetime), do: "—"
+
+  defp format_relative_time(%DateTime{} = datetime) do
     now = DateTime.utc_now()
     seconds = DateTime.diff(now, datetime)
 
@@ -190,4 +192,14 @@ defmodule EyeInTheSkyWebWeb.ProjectLive.Show do
       true -> "#{div(seconds, 604800)}w ago"
     end
   end
+
+  defp format_relative_time(%NaiveDateTime{} = naive_datetime) do
+    # Convert NaiveDateTime to DateTime assuming UTC
+    case DateTime.from_naive(naive_datetime, "Etc/UTC") do
+      {:ok, datetime} -> format_relative_time(datetime)
+      :error -> "—"
+    end
+  end
+
+  defp format_relative_time(_), do: "—"
 end
