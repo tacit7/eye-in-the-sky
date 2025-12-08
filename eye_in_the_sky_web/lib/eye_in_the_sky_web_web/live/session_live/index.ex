@@ -110,8 +110,9 @@ defmodule EyeInTheSkyWebWeb.SessionLive.Index do
                   </div>
                   <div class="flex items-center justify-between text-xs text-base-content/70">
                     <span>Status:</span>
-                    <span class={"badge badge-xs #{if format_duration(session.started_at, session.ended_at) == "Active", do: "badge-success", else: "badge-ghost"}"}">
-                      <%= format_duration(session.started_at, session.ended_at) %>
+                    <% status = format_duration(session.started_at, session.ended_at) %>
+                    <span class={"badge badge-xs #{if status == "Active", do: "badge-success", else: "badge-ghost"}"}>
+                      <%= status %>
                     </span>
                   </div>
                 </div>
