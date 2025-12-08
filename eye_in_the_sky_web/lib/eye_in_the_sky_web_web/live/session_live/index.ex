@@ -61,70 +61,76 @@ defmodule EyeInTheSkyWebWeb.SessionLive.Index do
         </div>
       </div>
 
-      <div class="mt-8 overflow-x-auto">
-        <table class="table table-zebra table-pin-rows">
-          <thead>
-            <tr>
-              <th>Session ID</th>
-              <th>Project</th>
-              <th>Session Name</th>
-              <th>Started</th>
-              <th>Duration</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            <%= for session <- @sessions do %>
-              <tr class="hover">
-                <td class="font-mono">
-                  <.link
-                    navigate={~p"/agents/#{session.agent_id}?s=#{session.session_id}"}
-                    class="link link-primary"
-                  >
-                    <%= String.slice(session.session_id, 0..11) %>...
-                  </.link>
-                </td>
-
-                <td>
-                  <%= session.project_name || "—" %>
-                </td>
-
-                <td>
-                  <%= session.session_name || "—" %>
-                </td>
-
-                <td>
-                  <%= format_timestamp(session.started_at) %>
-                </td>
-
-                <td>
-                  <%= format_duration(session.started_at, session.ended_at) %>
-                </td>
-
-                <td>
-                  <div class="flex gap-2 justify-end">
-                    <button
-                      phx-hook="CopyToClipboard"
-                      id={"copy-#{session.session_id}"}
-                      data-session-id={session.session_id}
-                      class="btn btn-ghost btn-xs"
-                    >
-                      Copy ID
-                    </button>
-
-                    <button
-                      phx-click="start_session"
-                      phx-value-agent_id={session.agent_id}
-                      class="btn btn-ghost btn-xs"
-                    >
-                      New Session
-                    </button>
+      <div class="mt-8">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <%= for session <- @sessions do %>
+            <.link
+              navigate={~p"/agents/#{session.agent_id}?s=#{session.session_id}"}
+              class="card bg-base-100 shadow-sm hover:shadow-md transition-shadow border border-base-300 hover:border-primary"
+            >
+              <div class="card-body p-4">
+                <!-- Header with Session ID and Actions -->
+                <div class="flex items-start justify-between gap-2 mb-3">
+                  <div class="flex-1 min-w-0">
+                    <p class="text-xs text-base-content/60 mb-1">Session ID</p>
+                    <code class="text-sm font-mono font-semibold text-base-content break-all">
+                      <%= String.slice(session.session_id, 0..11) %>...
+                    </code>
                   </div>
-                </td>
-              </tr>
-            <% end %>
-          </tbody>
-        </table>
+                  <button
+                    phx-hook="CopyToClipboard"
+                    id={"copy-#{session.session_id}"}
+                    data-session-id={session.session_id}
+                    class="btn btn-ghost btn-xs flex-shrink-0"
+                    onclick="event.preventDefault(); event.stopPropagation();"
+                  >
+                    Copy
+                  </button>
+                </div>
+
+                <!-- Session Name -->
+                <%= if session.session_name do %>
+                  <div class="mb-3">
+                    <p class="text-xs text-base-content/60 mb-1">Session Name</p>
+                    <p class="text-sm font-medium text-base-content line-clamp-2">
+                      <%= session.session_name %>
+                    </p>
+                  </div>
+                <% end %>
+
+                <!-- Project and Timing Info -->
+                <div class="space-y-2 mb-4 pt-3 border-t border-base-300">
+                  <div class="flex items-center justify-between text-xs text-base-content/70">
+                    <span>Project:</span>
+                    <span class="font-medium"><%= session.project_name || "—" %></span>
+                  </div>
+                  <div class="flex items-center justify-between text-xs text-base-content/70">
+                    <span>Started:</span>
+                    <span><%= format_timestamp(session.started_at) %></span>
+                  </div>
+                  <div class="flex items-center justify-between text-xs text-base-content/70">
+                    <span>Status:</span>
+                    <span class={"badge badge-xs #{if format_duration(session.started_at, session.ended_at) == "Active", do: "badge-success", else: "badge-ghost"}"}">
+                      <%= format_duration(session.started_at, session.ended_at) %>
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Footer Action -->
+                <div class="pt-3 border-t border-base-300">
+                  <button
+                    phx-click="start_session"
+                    phx-value-agent_id={session.agent_id}
+                    class="btn btn-primary btn-sm w-full"
+                    onclick="event.preventDefault(); event.stopPropagation();"
+                  >
+                    New Session
+                  </button>
+                </div>
+              </div>
+            </.link>
+          <% end %>
+        </div>
       </div>
     </div>
     """
