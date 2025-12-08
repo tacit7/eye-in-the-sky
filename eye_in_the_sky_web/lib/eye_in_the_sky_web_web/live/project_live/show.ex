@@ -86,38 +86,44 @@ defmodule EyeInTheSkyWebWeb.ProjectLive.Show do
 
           <!-- Recent Agents -->
           <%= if length(@project.agents) > 0 do %>
-            <div class="card bg-base-100 shadow-sm">
-              <div class="card-body p-4">
-                <h2 class="card-title text-base mb-2">Recent Agents</h2>
-                <div class="overflow-x-auto">
-                  <table class="table table-xs">
-                    <thead>
-                      <tr>
-                        <th class="text-xs">Agent ID</th>
-                        <th class="text-xs">Status</th>
-                        <th class="text-xs">Description</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <%= for agent <- @project.agents |> Enum.sort_by(& &1.created_at, :desc) |> Enum.take(5) do %>
-                        <tr>
-                          <td>
-                            <a href={"/agents/#{agent.id}"} class="link link-primary font-mono text-xs">
-                              <%= String.slice(agent.id, 0..7) %>
-                            </a>
-                          </td>
-                          <td>
-                            <span class={"badge badge-xs #{status_badge_class(agent.status)}"}>
-                              <%= agent.status %>
-                            </span>
-                          </td>
-                          <td class="text-xs text-base-content/70 truncate max-w-xs">
-                            <%= agent.feature_description || agent.description || "—" %>
-                          </td>
-                        </tr>
-                      <% end %>
-                    </tbody>
-                  </table>
+            <div class="col-span-1 lg:col-span-2">
+              <div class="mb-4">
+                <h2 class="text-lg font-semibold text-base-content mb-4">Recent Agents</h2>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <%= for agent <- @project.agents |> Enum.sort_by(& &1.created_at, :desc) |> Enum.take(6) do %>
+                    <a href={"/agents/#{agent.id}"} class="card bg-base-100 shadow-sm hover:shadow-md transition-shadow cursor-pointer group">
+                      <div class="card-body p-4">
+                        <!-- Agent ID and Status -->
+                        <div class="flex items-start justify-between gap-2">
+                          <a href={"/agents/#{agent.id}"} class="link link-primary font-mono text-sm group-hover:link-hover">
+                            <%= String.slice(agent.id, 0..7) %>
+                          </a>
+                          <span class={"badge badge-sm #{status_badge_class(agent.status)}"}>
+                            <%= agent.status %>
+                          </span>
+                        </div>
+
+                        <!-- Description -->
+                        <%= if agent.feature_description || agent.description do %>
+                          <p class="text-sm text-base-content/80 line-clamp-2 mt-2">
+                            <%= agent.feature_description || agent.description %>
+                          </p>
+                        <% else %>
+                          <p class="text-sm text-base-content/50 italic mt-2">No description</p>
+                        <% end %>
+
+                        <!-- Meta -->
+                        <div class="text-xs text-base-content/60 mt-3 pt-3 border-t border-base-300">
+                          <%= if agent.session_id do %>
+                            <p>Session: <span class="font-mono"><%= String.slice(agent.session_id, 0..7) %></span></p>
+                          <% end %>
+                          <%= if agent.last_activity_at do %>
+                            <p><%= format_relative_time(agent.last_activity_at) %></p>
+                          <% end %>
+                        </div>
+                      </div>
+                    </a>
+                  <% end %>
                 </div>
               </div>
             </div>
@@ -169,6 +175,19 @@ defmodule EyeInTheSkyWebWeb.ProjectLive.Show do
       "completed" -> "badge-ghost"
       "failed" -> "badge-error"
       _ -> "badge-ghost"
+    end
+  end
+
+  defp format_relative_time(datetime) do
+    now = DateTime.utc_now()
+    seconds = DateTime.diff(now, datetime)
+
+    cond do
+      seconds < 60 -> "just now"
+      seconds < 3600 -> "#{div(seconds, 60)}m ago"
+      seconds < 86400 -> "#{div(seconds, 3600)}h ago"
+      seconds < 604800 -> "#{div(seconds, 86400)}d ago"
+      true -> "#{div(seconds, 604800)}w ago"
     end
   end
 end
