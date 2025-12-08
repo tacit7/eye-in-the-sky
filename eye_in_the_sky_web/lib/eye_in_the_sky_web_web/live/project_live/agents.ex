@@ -6,14 +6,19 @@ defmodule EyeInTheSkyWebWeb.ProjectLive.Agents do
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do
-    project_id = String.to_integer(id)
-    project = Projects.get_project!(project_id)
-    |> Repo.preload([:agents, :commits])
+    # Parse project ID safely, handling both integer and UUID inputs
+    project_id = case Integer.parse(id) do
+      {int, ""} -> int
+      _ -> nil
+    end
 
-    # Load tasks manually due to type mismatch
-    tasks = Projects.get_project_tasks(project_id)
+    socket = if project_id do
+      project = Projects.get_project!(project_id)
+      |> Repo.preload([:agents, :commits])
 
-    socket =
+      # Load tasks manually due to type mismatch
+      tasks = Projects.get_project_tasks(project_id)
+
       socket
       |> assign(:page_title, "Agents - #{project.name}")
       |> assign(:project, project)
@@ -21,6 +26,16 @@ defmodule EyeInTheSkyWebWeb.ProjectLive.Agents do
       |> assign(:search_query, "")
       |> assign(:status_filter, "all")
       |> assign(:filtered_agents, project.agents)
+    else
+      socket
+      |> assign(:page_title, "Project Not Found")
+      |> assign(:project, nil)
+      |> assign(:tasks, [])
+      |> assign(:search_query, "")
+      |> assign(:status_filter, "all")
+      |> assign(:filtered_agents, [])
+      |> put_flash(:error, "Invalid project ID")
+    end
 
     {:ok, socket}
   end
@@ -174,9 +189,9 @@ defmodule EyeInTheSkyWebWeb.ProjectLive.Agents do
                         </div>
 
                         <!-- Description -->
-                        <%= if agent.description || agent.feature_description do %>
+                        <%= if agent.feature_description || agent.description do %>
                           <p class="text-sm text-base-content/80 mb-2">
-                            <%= agent.description || agent.feature_description %>
+                            <%= agent.feature_description || agent.description %>
                           </p>
                         <% end %>
 

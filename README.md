@@ -49,6 +49,17 @@ In Claude Code, use the MCP tool:
 
 **📖 [Read the Quick Start Guide →](QUICKSTART.md)**
 
+### 4. MCP Setup (Claude CLI)
+
+If Claude Code says there’s no MCP server available, add the Eye in the Sky server for this project using the Claude CLI:
+
+```bash
+claude mcp add --transport stdio eye-in-the-sky -- /absolute/path/to/eye-in-the-sky/bin/eye-in-the-sky
+claude mcp list
+```
+
+You should see a ✓ Connected status and “Scope: Local config (private to you in this project)”. See MCP_SETUP_GUIDE.md for details and troubleshooting.
+
 ---
 
 ## 📚 Documentation

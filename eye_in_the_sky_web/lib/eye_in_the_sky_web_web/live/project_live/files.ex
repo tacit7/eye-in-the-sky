@@ -6,21 +6,26 @@ defmodule EyeInTheSkyWebWeb.ProjectLive.Files do
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do
-    project_id = String.to_integer(id)
-    project = Projects.get_project!(project_id)
-    |> Repo.preload([:agents, :commits])
-
-    # Load tasks manually due to type mismatch
-    tasks = Projects.get_project_tasks(project_id)
-
-    # Build file tree
-    file_tree = if project.path do
-      build_file_tree(project.path, project.path)
-    else
-      []
+    # Parse project ID safely
+    project_id = case Integer.parse(id) do
+      {int, ""} -> int
+      _ -> nil
     end
 
-    socket =
+    socket = if project_id do
+      project = Projects.get_project!(project_id)
+      |> Repo.preload([:agents, :commits])
+
+      # Load tasks manually due to type mismatch
+      tasks = Projects.get_project_tasks(project_id)
+
+      # Build file tree
+      file_tree = if project.path do
+        build_file_tree(project.path, project.path)
+      else
+        []
+      end
+
       socket
       |> assign(:page_title, "Files - #{project.name}")
       |> assign(:project, project)
@@ -33,6 +38,21 @@ defmodule EyeInTheSkyWebWeb.ProjectLive.Files do
       |> assign(:files, [])
       |> assign(:view_mode, :list)
       |> assign(:error, nil)
+    else
+      socket
+      |> assign(:page_title, "Project Not Found")
+      |> assign(:project, nil)
+      |> assign(:tasks, [])
+      |> assign(:file_path, nil)
+      |> assign(:file_content, nil)
+      |> assign(:rendered_content, nil)
+      |> assign(:file_type, nil)
+      |> assign(:file_tree, [])
+      |> assign(:files, [])
+      |> assign(:view_mode, :list)
+      |> assign(:error, "Invalid project ID")
+      |> put_flash(:error, "Invalid project ID")
+    end
 
     {:ok, socket}
   end

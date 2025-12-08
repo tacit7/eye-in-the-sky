@@ -7,14 +7,19 @@ defmodule EyeInTheSkyWebWeb.ProjectLive.Kanban do
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do
-    project_id = String.to_integer(id)
-    project = Projects.get_project!(project_id)
-    |> Repo.preload([:agents, :commits])
+    # Parse project ID safely
+    project_id = case Integer.parse(id) do
+      {int, ""} -> int
+      _ -> nil
+    end
 
-    # Load workflow states
-    workflow_states = Tasks.list_workflow_states()
+    socket = if project_id do
+      project = Projects.get_project!(project_id)
+      |> Repo.preload([:agents, :commits])
 
-    socket =
+      # Load workflow states
+      workflow_states = Tasks.list_workflow_states()
+
       socket
       |> assign(:page_title, "Kanban - #{project.name}")
       |> assign(:project, project)
@@ -24,6 +29,18 @@ defmodule EyeInTheSkyWebWeb.ProjectLive.Kanban do
       |> assign(:tasks, [])
       |> assign(:tasks_by_state, %{})
       |> load_tasks()
+    else
+      workflow_states = Tasks.list_workflow_states()
+      socket
+      |> assign(:page_title, "Project Not Found")
+      |> assign(:project, nil)
+      |> assign(:project_id, nil)
+      |> assign(:search_query, "")
+      |> assign(:workflow_states, workflow_states)
+      |> assign(:tasks, [])
+      |> assign(:tasks_by_state, %{})
+      |> put_flash(:error, "Invalid project ID")
+    end
 
     {:ok, socket}
   end

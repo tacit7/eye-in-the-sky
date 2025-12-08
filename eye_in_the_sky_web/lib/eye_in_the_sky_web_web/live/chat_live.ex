@@ -13,8 +13,11 @@ defmodule EyeInTheSkyWebWeb.ChatLive do
     # Get project_id from params or default to first project
     project_id = get_project_id(params)
 
-    # Load channels for this project
-    channels = Channels.list_channels_for_project(project_id)
+    # Load channels for this project (with error handling for invalid IDs)
+    channels = case Channels.list_channels_for_project(project_id) do
+      channels when is_list(channels) -> channels
+      _ -> []
+    end
 
     # Determine active channel (from URL or first channel)
     channel_id = params["channel_id"] || get_default_channel_id(channels, project_id)
@@ -32,19 +35,9 @@ defmodule EyeInTheSkyWebWeb.ChatLive do
       # First try to load from JSONL files (opcode-style), fall back to database
       channel_messages = Messages.list_messages_for_channel(channel_id)
 
-      # For each session in channel, try loading from JSONL
+      # For JSONL storage, get project_id as string (will be set in socket in handle_params)
+      # For now, just use database messages
       channel_messages
-      |> Enum.map(fn msg ->
-        if msg.session_id && project_id do
-          # Try to load from JSONL
-          case Messages.list_messages_for_session(msg.session_id, to_string(project_id)) do
-            [] -> msg
-            session_msgs -> session_msgs |> List.last()
-          end
-        else
-          msg
-        end
-      end)
       |> serialize_messages()
     else
       []
@@ -56,8 +49,11 @@ defmodule EyeInTheSkyWebWeb.ChatLive do
     # Load active thread if specified
     active_thread = load_thread(params["thread_id"])
 
-    # Get agent status counts for the project
-    agent_status_counts = Agents.get_agent_status_counts(project_id)
+    # Get agent status counts for the project (with error handling)
+    agent_status_counts = case Agents.get_agent_status_counts(project_id) do
+      counts when is_map(counts) -> counts
+      _ -> %{}
+    end
 
     # Load available prompts for agent creation
     # Convert project_id to string since prompts table uses string project_id
@@ -98,6 +94,21 @@ defmodule EyeInTheSkyWebWeb.ChatLive do
       body: body
     }) do
       {:ok, message} ->
+        # Also append to JSONL file (opcode-style)
+        if target_session_id && socket.assigns.project_id do
+          project_id_str = get_project_id_for_jsonl(socket)
+          Messages.append_to_jsonl(project_id_str, target_session_id, %{
+            id: message.id,
+            session_id: target_session_id,
+            sender_role: "user",
+            recipient_role: "agent",
+            provider: "claude",
+            body: body,
+            direction: "outbound",
+            inserted_at: DateTime.to_iso8601(message.inserted_at)
+          })
+        end
+
         # Broadcast to channel subscribers
         Phoenix.PubSub.broadcast(
           EyeInTheSkyWeb.PubSub,
@@ -152,6 +163,21 @@ defmodule EyeInTheSkyWebWeb.ChatLive do
       body: body
     }) do
       {:ok, message} ->
+        # Also append to JSONL file (opcode-style)
+        if session_id && socket.assigns.project_id do
+          project_id_str = get_project_id_for_jsonl(socket)
+          Messages.append_to_jsonl(project_id_str, session_id, %{
+            id: message.id,
+            session_id: session_id,
+            sender_role: "user",
+            recipient_role: "agent",
+            provider: "claude",
+            body: body,
+            direction: "outbound",
+            inserted_at: DateTime.to_iso8601(message.inserted_at)
+          })
+        end
+
         # Broadcast to channel subscribers (including sender)
         Phoenix.PubSub.broadcast(
           EyeInTheSkyWeb.PubSub,
@@ -371,8 +397,11 @@ defmodule EyeInTheSkyWebWeb.ChatLive do
     messages = Messages.list_messages_for_channel(socket.assigns.active_channel_id)
                |> serialize_messages()
 
-    # Update unread counts
-    channels = Channels.list_channels_for_project(socket.assigns.project_id)
+    # Update unread counts (with error handling)
+    channels = case Channels.list_channels_for_project(socket.assigns.project_id) do
+      channels when is_list(channels) -> channels
+      _ -> []
+    end
     unread_counts = calculate_unread_counts(channels, get_session_id(socket))
 
     socket =
@@ -409,10 +438,30 @@ defmodule EyeInTheSkyWebWeb.ChatLive do
 
   defp get_project_id(params) do
     case params["project_id"] do
-      nil -> 1  # Default project ID
-      project_id when is_binary(project_id) -> String.to_integer(project_id)
-      project_id -> project_id
+      nil ->
+        1  # Default project ID
+      project_id when is_binary(project_id) ->
+        # Try to parse as integer, otherwise use default
+        try do
+          case Integer.parse(project_id) do
+            {int, ""} -> int
+            {_int, _rest} -> 1  # Partial parse (e.g., "123abc"), use default
+            :error -> 1  # Not a number at all, use default
+          end
+        rescue
+          _ -> 1  # Any exception, use default
+        end
+      project_id when is_integer(project_id) ->
+        project_id  # Already an integer
+      _project_id ->
+        1  # Any other type, use default
     end
+  end
+
+  defp get_project_id_for_jsonl(socket) do
+    # For JSONL storage, use channel_id as the project identifier
+    # (Claude Code uses path-based project IDs, not database IDs)
+    socket.assigns.active_channel_id || "default"
   end
 
   defp get_default_channel_id(channels, _project_id) do

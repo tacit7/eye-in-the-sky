@@ -6,18 +6,32 @@ defmodule EyeInTheSkyWebWeb.ProjectLive.Show do
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do
-    project_id = String.to_integer(id)
-    project = Projects.get_project!(project_id)
-    |> Repo.preload([:agents, :commits])
+    # Parse project ID safely, handling both integer and UUID inputs
+    project_id = case Integer.parse(id) do
+      {int, ""} -> int
+      _ -> nil  # Not a valid integer
+    end
 
-    # Load tasks manually due to type mismatch (projects.id is INT, tasks.project_id is TEXT)
-    tasks = Projects.get_project_tasks(project_id)
+    # Load project only if ID is valid
+    socket = if project_id do
+      project = Projects.get_project!(project_id)
+      |> Repo.preload([:agents, :commits])
 
-    socket =
+      # Load tasks manually due to type mismatch (projects.id is INT, tasks.project_id is TEXT)
+      tasks = Projects.get_project_tasks(project_id)
+
       socket
       |> assign(:page_title, "Project: #{project.name}")
       |> assign(:project, project)
       |> assign(:tasks, tasks)
+    else
+      # Invalid project ID - show error
+      socket
+      |> assign(:page_title, "Project Not Found")
+      |> assign(:project, nil)
+      |> assign(:tasks, [])
+      |> put_flash(:error, "Invalid project ID")
+    end
 
     {:ok, socket}
   end
@@ -98,7 +112,7 @@ defmodule EyeInTheSkyWebWeb.ProjectLive.Show do
                             </span>
                           </td>
                           <td class="text-xs text-base-content/70 truncate max-w-xs">
-                            <%= agent.description || agent.feature_description || "—" %>
+                            <%= agent.feature_description || agent.description || "—" %>
                           </td>
                         </tr>
                       <% end %>

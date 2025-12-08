@@ -1,44 +1,71 @@
 # 🔧 Installation Guide
 
-## Quick Install (Recommended)
-
-**One-line install for macOS/Linux:**
-```bash
-curl -fsSL https://raw.githubusercontent.com/yourusername/eye-in-the-sky/main/install.sh | bash
-```
-
-## Manual Installation
-
-### 1. Prerequisites
+## Prerequisites
 - Go 1.21 or later
 - Git
 - Claude Code CLI or Claude Desktop
+- NATS server running (for message queue operations)
 
-### 2. Clone and Build
+## Installation Steps
+
+### 1. Clone the Repository
 ```bash
 git clone https://github.com/yourusername/eye-in-the-sky.git
 cd eye-in-the-sky
-chmod +x install.sh
-./install.sh
 ```
 
-### 3. Manual Setup (Alternative)
+### 2. Build Binaries
 
-If you prefer manual setup:
-
+Create directories and build the applications:
 ```bash
-# Build the applications
+mkdir -p ~/.eye-in-the-sky/data
+mkdir -p ~/.local/bin
+
+cd ~/projects/eye-in-the-sky
 go build -o ~/.local/bin/eye-in-the-sky ./cmd/server/main.go
 go build -o ~/.local/bin/eye-in-the-sky-integrated ./main.go
-
-# Create data directory
-mkdir -p ~/.eye-in-the-sky/data
-
-# Add to PATH (add to ~/.zshrc or ~/.bashrc)
-export PATH="$HOME/.local/bin:$PATH"
 ```
 
-### 4. Configure Claude Desktop
+### 3. Create Start Script
+
+```bash
+cat > ~/.local/bin/eye-in-the-sky-start << 'EOF'
+#!/bin/bash
+
+INSTALL_DIR="$HOME/.eye-in-the-sky"
+PORT=${1:-8080}
+
+echo "🔍 Starting Eye in the Sky Dashboard..."
+echo "📊 Dashboard will be available at: http://localhost:$PORT"
+echo ""
+echo "Press Ctrl+C to stop"
+
+cd "$INSTALL_DIR"
+exec "$HOME/.local/bin/eye-in-the-sky-integrated" -port "$PORT"
+EOF
+
+chmod +x ~/.local/bin/eye-in-the-sky-start
+```
+
+### 4. Configure Claude Code (Per Project)
+
+For each project using eye-in-the-sky, use the Claude Code CLI to register it:
+
+```bash
+cd /path/to/your/project
+claude mcp add --transport stdio eye-in-the-sky --scope project \
+  -- ~/.local/bin/eye-in-the-sky
+```
+
+This creates `.mcp.json` in your project root with the proper configuration.
+
+Alternatively, configure it globally (available in all projects):
+```bash
+claude mcp add --transport stdio eye-in-the-sky --scope user \
+  -- ~/.local/bin/eye-in-the-sky
+```
+
+### 5. Configure Claude Desktop (Optional)
 
 Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
@@ -47,10 +74,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
   "mcpServers": {
     "eye-in-the-sky": {
       "command": "/Users/YOUR_USERNAME/.local/bin/eye-in-the-sky",
-      "args": [
-        "-db",
-        "/Users/YOUR_USERNAME/.eye-in-the-sky/data/agents.db"
-      ],
+      "args": [],
       "env": {
         "PATH": "/usr/local/bin:/usr/bin:/bin",
         "HOME": "/Users/YOUR_USERNAME"
@@ -60,9 +84,9 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 }
 ```
 
-Replace `YOUR_USERNAME` with your actual username.
+Replace `YOUR_USERNAME` with your actual username, then restart Claude Desktop.
 
-### 5. Start the Dashboard
+### 6. Start the Dashboard
 
 ```bash
 eye-in-the-sky-start
@@ -72,41 +96,69 @@ Visit: http://localhost:8080
 
 ## Verification
 
-1. **Check MCP server** (for Claude Code):
-   ```bash
-   claude mcp list
-   ```
-   Should show `eye-in-the-sky` in the list.
+### Claude Code
+```bash
+# List all configured MCP servers
+claude mcp list
+```
+Should show `eye-in-the-sky` in the list.
 
-2. **Test dashboard:**
-   ```bash
-   curl -I http://localhost:8080
-   ```
-   Should return `200 OK`.
+### Dashboard
+```bash
+# Test if dashboard responds
+curl -I http://localhost:8080
+```
+Should return `200 OK`.
 
-3. **Register test agent:**
-   ```bash
-   # In Claude Code or Claude Desktop
-   Register as Claude Code agent working on test project
-   ```
+### MCP Server
+Once registered, you can use eye-in-the-sky tools:
+```bash
+# In Claude Code
+/mcp  # Lists loaded MCP servers
+```
 
-## What the Install Script Does
+## What Gets Installed
 
-1. ✅ Checks Go installation
-2. ✅ Creates `~/.eye-in-the-sky/` directory
-3. ✅ Builds MCP and integrated servers
-4. ✅ Installs binaries to `~/.local/bin/`
-5. ✅ Configures Claude Desktop MCP integration
-6. ✅ Creates start script and desktop shortcut
-7. ✅ Updates your shell PATH
-8. ✅ Tests the installation
+- **eye-in-the-sky** - MCP server binary (~17 MB)
+- **eye-in-the-sky-integrated** - Dashboard server binary (~16 MB)
+- **eye-in-the-sky-start** - Convenience script to start the dashboard
+- **~/.eye-in-the-sky/data** - Data directory for SQLite database
 
 ## Troubleshooting
 
-### MCP Server Not Found
-- Restart Claude Desktop after installation
-- Check `claude_desktop_config.json` configuration
-- Verify binary exists: `ls ~/.local/bin/eye-in-the-sky`
+### MCP Server Not Showing in Claude Code
+1. Verify the binary exists and is executable:
+   ```bash
+   ls -lh ~/.local/bin/eye-in-the-sky
+   ```
+
+2. Verify the `.mcp.json` file exists in your project:
+   ```bash
+   cat /path/to/project/.mcp.json
+   ```
+
+3. Exit and restart Claude Code for the configuration to load
+
+4. Check if it's registered:
+   ```bash
+   claude mcp list
+   ```
+   If you see “No MCP servers configured”, add it:
+   ```bash
+   claude mcp add --transport stdio eye-in-the-sky -- ~/.local/bin/eye-in-the-sky
+   claude mcp list
+   ```
+
+### Binary Not Found
+```bash
+# Check if binaries were built
+ls ~/.local/bin/eye-in-the-sky*
+
+# Rebuild if missing
+cd ~/projects/eye-in-the-sky
+go build -o ~/.local/bin/eye-in-the-sky ./cmd/server/main.go
+go build -o ~/.local/bin/eye-in-the-sky-integrated ./main.go
+```
 
 ### Port Already in Use
 ```bash
@@ -114,37 +166,48 @@ Visit: http://localhost:8080
 eye-in-the-sky-start 8081
 ```
 
-### Permission Denied
+### NATS Connection Issues
+eye-in-the-sky requires NATS to be running for full functionality:
 ```bash
-# Fix permissions
-chmod +x ~/.local/bin/eye-in-the-sky*
-```
+# Check if NATS is running
+nats-server --version
 
-### PATH Issues
-```bash
-# Reload shell configuration
-source ~/.zshrc  # or ~/.bashrc
+# Start NATS if not running
+nats-server
 ```
 
 ## Uninstall
+
+### Remove MCP Server from Projects
+
+For each project:
+```bash
+cd /path/to/project
+claude mcp remove eye-in-the-sky
+```
+
+Or remove globally:
+```bash
+claude mcp remove eye-in-the-sky --scope user
+```
+
+### Remove Binaries and Data
 
 ```bash
 # Remove binaries
 rm ~/.local/bin/eye-in-the-sky*
 
-# Remove installation directory
+# Remove data directory
 rm -rf ~/.eye-in-the-sky
-
-# Remove from PATH (edit ~/.zshrc or ~/.bashrc)
-# Remove this line: export PATH="$HOME/.local/bin:$PATH"
 
 # Remove Claude Desktop config (optional)
 # Edit: ~/Library/Application Support/Claude/claude_desktop_config.json
 ```
 
-## Support
+## Documentation
 
-- 📖 Full documentation: [README.md](README.md)
-- 🚀 Quick start: [QUICKSTART.md](QUICKSTART.md)
-- 🛠️ Technical details: [CLAUDE.md](CLAUDE.md)
-- 🐛 Issues: [GitHub Issues](https://github.com/yourusername/eye-in-the-sky/issues)
+- 📖 [README.md](README.md) - Project overview and features
+- 🚀 [QUICKSTART.md](QUICKSTART.md) - Quick start guide
+- 🛠️ [CLAUDE.md](CLAUDE.md) - Technical architecture details
+- 📊 [MCP_SETUP_GUIDE.md](MCP_SETUP_GUIDE.md) - MCP integration guide
+- 🐛 [GitHub Issues](https://github.com/yourusername/eye-in-the-sky/issues) - Report issues
